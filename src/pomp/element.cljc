@@ -3,9 +3,9 @@
   (:require [clojure.string :as str]))
 
 (def elements
-  [::table ::thead ::tbody ::tr ::td ::th
-   ::div
-   ::button
+  [::table ::thead ::tbody ::tr ::td ::th ::tfoot
+   ::div ::span ::p ::h1 ::h2 ::h3 ::h4 ::h5 ::h6
+   ::button ::dialog
    ;; non-html elements
    ::list ::list-row
    ::menu ::menu-title ::menu-dropdown ::menu-dropdown-toggle
@@ -90,9 +90,9 @@
   (fn [attrs & children]
     [(html-element el)
      (process-properties el (process-properties
-                              el
-                              (default-attrs el)
-                              attrs))
+                             el
+                             (default-attrs el)
+                             attrs))
      children]))
 
 (def button
@@ -101,11 +101,41 @@
 (comment
   (button {:class "btn-large"} "hi"))
 
+(def div
+  (make-element ::div))
+
+(def span
+  (make-element ::span))
+
+(def p
+  (make-element ::p))
+
+(def h1
+  (make-element ::h1))
+
+(def h2
+  (make-element ::h2))
+
+(def h3
+  (make-element ::h3))
+
+(def h4
+  (make-element ::h4))
+
+(def h5
+  (make-element ::h5))
+
+(def h6
+  (make-element ::h6))
+
 (def table
   (make-element ::table))
 
 (def thead
   (make-element ::thead))
+
+(def tfoot
+  (make-element ::tfoot))
 
 (def tr
   (make-element ::tr))
@@ -115,9 +145,6 @@
 
 (def tbody
   (make-element ::tbody))
-
-(def div
-  (make-element ::div))
 
 (def list
   (make-element ::list))
@@ -158,3 +185,6 @@
 
 (def label-text
   (make-element ::label-text))
+
+(def dialog
+  (make-element ::dialog))
