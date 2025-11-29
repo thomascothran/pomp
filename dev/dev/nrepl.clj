@@ -3,7 +3,7 @@
 
 (defn start-nrepl!
   [{:keys [port]
-    :or {port 7888}
+    :or {port 7999}
     :as c}]
   (spit ".nrepl-port" port)
   (println "starting nrepl on port " port)
