@@ -7,10 +7,11 @@
   env.GREET = "devenv";
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.git pkgs.clojure ];
+  packages = [ pkgs.git pkgs.clojure pkgs.nodejs ];
 
   # https://devenv.sh/processes/
-  processes.dev.exec = "clj -A:test -X:dev";
+  processes.dev.exec = "clj -X:test:dev";
+  processes.tailwind.exec = "npm run build:css";
 
   # https://devenv.sh/services/
   # services.postgres.enable = true;
