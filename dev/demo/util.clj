@@ -15,7 +15,7 @@
             :rel "stylesheet"}]
     [:script {:type "module"
               :src "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"}]]
-   [:body
+   [:body.min-h-screen.m-0
     children]])
 
 (comment

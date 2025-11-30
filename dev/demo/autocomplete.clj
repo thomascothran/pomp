@@ -13,8 +13,8 @@
    :headers {"Content-Type" "text/html"}
    :body (->html
           (page
-           [:div {:style "display: flex; align-items: start; justify-content: center; min-height: 100vh; width: 100%; padding-top: 20vh;"}
-            [:div#autocomplete-component {:style "width: 400px;"}
+           [:div {:class "flex items-start justify-center min-h-screen w-full pt-[20vh]"}
+            [:div#autocomplete-component {:class "w-[400px]"}
              [:input.input.w-full
               {:type "text"
                :placeholder "Type a fruit name..."
