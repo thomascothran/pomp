@@ -1,6 +1,30 @@
 (ns demo.util
-  (:require [dev.onionpancakes.chassis.core :as c]))
+  (:require [dev.onionpancakes.chassis.core :as c]
+            [jsonista.core :as j]
+            [starfederation.datastar.clojure.api :as d*]))
 
 (defn ->html
   [hiccup]
   (c/html hiccup))
+
+(defn page
+  [& children]
+  [:html
+   [:head
+    [:link {:href "/assets/output.css"
+            :rel "stylesheet"}]
+    [:script {:type "module"
+              :src "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"}]]
+   [:body
+    children]])
+
+(comment
+  (page [:div [:h1 "Hello"] [:p "World"]])
+  (println (page [:div#app [:h1 "Test Page"]])))
+
+(defn get-signals
+  [req]
+  (if (get-in req [:headers "datastar-request"])
+    (some-> (d*/get-signals req)
+            (j/read-value j/keyword-keys-object-mapper))
+    req))
