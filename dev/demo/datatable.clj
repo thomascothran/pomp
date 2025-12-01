@@ -130,6 +130,9 @@
     (->sse-response req
                     {on-open
                      (fn [sse]
+                       (when-not clicked-column
+                         (d*/patch-elements! sse (->html (render-skeleton-table "datatable" columns 10)))
+                         (Thread/sleep 300))
                        (when clicked-column
                          (d*/patch-signals! sse (j/write-value-as-string {:datatable {:sort new-sort}})))
                        (d*/patch-elements! sse (->html (render-table "datatable" columns sorted-data new-sort)))
