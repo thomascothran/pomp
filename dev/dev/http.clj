@@ -2,6 +2,7 @@
   (:require [ring.adapter.jetty9 :refer [run-jetty]]
             [reitit.ring :as ring]
             [demo.autocomplete :as dac]
+            [demo.datatable :as ddt]
             [reitit.ring.middleware.dev :as dev]
             [muuntaja.core :as m]
             [reitit.ring.coercion :as coercion]
@@ -19,7 +20,8 @@
    ["/hello-world" (constantly {:body "hi"
                                 :status 200})]
    ["/demo"
-    (dac/make-routes config)]
+    (dac/make-routes config)
+    (ddt/make-routes config)]
    ["/assets/*" (ring/create-resource-handler)]])
 
 (defn make-middleware
