@@ -2,7 +2,8 @@
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.ring
              :refer [->sse-response on-open]]
-            [demo.util :refer [->html page get-signals]]))
+            [demo.util :refer [->html page get-signals]]
+            [jsonista.core :as j]))
 
 (def columns
   [{:key :name :label "Name"}
@@ -37,32 +38,38 @@
                        #(compare %2 %1))]
       (sort-by #(get % col-key) comparator rows))))
 
-(defn sort-click-expression [column-key]
-  (let [col-name (name column-key)]
-    (str "(() => {"
-         "const sort = $datatable.sort;"
-         "const current = sort[0];"
-         (format "if (!current || current.column !== '%s') { $datatable.sort = [{column: '%s', direction: 'asc'}]; }"
-                 col-name col-name)
-         (format "else if (current.direction === 'asc') { $datatable.sort = [{column: '%s', direction: 'desc'}]; }"
-                 col-name)
-         "else { $datatable.sort = []; }"
-         "})(); @get('/demo/datatable/data')")))
+(defn next-sort-state [current-sort clicked-column]
+  (if (nil? clicked-column)
+    current-sort
+    (let [current (first current-sort)
+          current-col (:column current)
+          current-dir (:direction current)]
+      (cond
+        (not= current-col clicked-column)
+        [{:column clicked-column :direction "asc"}]
 
-(defn sort-indicator-expression [column-key]
-  (let [col-name (name column-key)]
-    (format "((() => { const s = $datatable.sort[0]; if (s && s.column === '%s') return s.direction === 'asc' ? '▲' : '▼'; return ''; })())"
-            col-name)))
+        (= current-dir "asc")
+        [{:column clicked-column :direction "desc"}]
 
-(defn render-sortable-header [cols]
+        :else
+        []))))
+
+(defn sort-indicator [sort-state column-key]
+  (let [current (first sort-state)
+        col-name (name column-key)]
+    (when (= (:column current) col-name)
+      (if (= (:direction current) "asc") "▲" "▼"))))
+
+(defn render-sortable-header [cols sort-state]
   [:thead
    [:tr
     (for [{:keys [key label]} cols]
       [:th.cursor-pointer.select-none.hover:bg-base-200
-       {:data-on:click (sort-click-expression key)}
+       {:data-on:click (format "@get('/demo/datatable/data?clicked=%s')" (name key))}
        [:span.flex.items-center.gap-1
         label
-        [:span.text-xs {:data-text (sort-indicator-expression key)}]]])]])
+        (when-let [indicator (sort-indicator sort-state key)]
+          [:span.text-xs indicator])]])]])
 
 (defn render-table-header [cols]
   [:thead
@@ -80,10 +87,10 @@
    (for [row rows]
      (render-table-row cols row))])
 
-(defn render-table [id cols rows]
+(defn render-table [id cols rows sort-state]
   [:div {:id id :class "overflow-x-auto"}
    [:table.table.table-sm
-    (render-sortable-header cols)
+    (render-sortable-header cols sort-state)
     (render-table-body cols rows)]])
 
 (defn render-skeleton-row [cols]
@@ -116,14 +123,16 @@
 
 (defn data-handler [req]
   (let [signals (get-signals req)
-        sort-spec (get-in signals [:datatable :sort] [])]
+        current-sort (get-in signals [:datatable :sort] [])
+        clicked-column (get-in req [:query-params "clicked"])
+        new-sort (next-sort-state current-sort clicked-column)
+        sorted-data (sort-data philosophers new-sort)]
     (->sse-response req
                     {on-open
                      (fn [sse]
-                       (d*/patch-elements! sse (->html (render-skeleton-table "datatable" columns 10)))
-                       (Thread/sleep 300)
-                       (let [sorted-data (sort-data philosophers sort-spec)]
-                         (d*/patch-elements! sse (->html (render-table "datatable" columns sorted-data))))
+                       (when clicked-column
+                         (d*/patch-signals! sse (j/write-value-as-string {:datatable {:sort new-sort}})))
+                       (d*/patch-elements! sse (->html (render-table "datatable" columns sorted-data new-sort)))
                        (d*/close-sse! sse))})))
 
 (defn make-routes [_]
@@ -134,23 +143,32 @@
   (require '[demo.datatable :as dt] :reload)
   (require '[demo.util :refer [->html]])
 
+  ;; Test next-sort-state
+  (next-sort-state [] nil)
+  (next-sort-state [] "name")
+  (next-sort-state [{:column "name" :direction "asc"}] "name")
+  (next-sort-state [{:column "name" :direction "desc"}] "name")
+  (next-sort-state [{:column "name" :direction "asc"}] "region")
+
+  ;; Test sort-indicator
+  (sort-indicator [] :name)
+  (sort-indicator [{:column "name" :direction "asc"}] :name)
+  (sort-indicator [{:column "name" :direction "desc"}] :name)
+  (sort-indicator [{:column "name" :direction "asc"}] :region)
+
   ;; Test sort-data
   (map :name (sort-data philosophers []))
   (map :name (sort-data philosophers [{:column "name" :direction "asc"}]))
   (map :name (sort-data philosophers [{:column "name" :direction "desc"}]))
-  (map :region (sort-data philosophers [{:column "region" :direction "asc"}]))
-
-  ;; Test sort-click-expression
-  (sort-click-expression :name)
-
-  ;; Test sort-indicator-expression  
-  (sort-indicator-expression :name)
 
   ;; Test render-sortable-header
-  (->html (render-sortable-header columns))
+  (->html (render-sortable-header columns []))
+  (->html (render-sortable-header columns [{:column "name" :direction "asc"}]))
 
-  ;; Test render-table with sorted data
-  (->html (render-table "test" columns (take 3 (sort-data philosophers [{:column "name" :direction "asc"}]))))
+  ;; Test render-table with sort state
+  (->html (render-table "test" columns (take 3 philosophers) []))
+  (->html (render-table "test" columns (take 3 (sort-data philosophers [{:column "name" :direction "asc"}]))
+                        [{:column "name" :direction "asc"}]))
 
   ;; Test page-handler
   (:body (page-handler {})))
