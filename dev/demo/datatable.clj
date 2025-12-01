@@ -28,6 +28,8 @@
    {:name "Immanuel Kant" :century "18th" :school "German Idealism" :region "Germany"}
    {:name "Friedrich Nietzsche" :century "19th" :school "Existentialism" :region "Germany"}])
 
+(def page-sizes [10 25 100 250])
+
 (defn sort-data [rows sort-spec]
   (if (empty? sort-spec)
     rows
@@ -37,6 +39,14 @@
                        compare
                        #(compare %2 %1))]
       (sort-by #(get % col-key) comparator rows))))
+
+(defn paginate-data [rows page-size page-current]
+  (->> rows
+       (drop (* page-current page-size))
+       (take page-size)))
+
+(defn total-pages [total-rows page-size]
+  (int (Math/ceil (/ total-rows page-size))))
 
 (defn next-sort-state [current-sort clicked-column]
   (if (nil? clicked-column)
@@ -53,6 +63,18 @@
 
         :else
         []))))
+
+(defn next-page-state [current-page current-size total-rows page-action new-size]
+  (let [size (if new-size (parse-long new-size) current-size)
+        total-pgs (total-pages total-rows size)
+        page (cond
+               new-size 0
+               (= page-action "first") 0
+               (= page-action "prev") (max 0 (dec current-page))
+               (= page-action "next") (min (dec total-pgs) (inc current-page))
+               (= page-action "last") (dec total-pgs)
+               :else (min current-page (max 0 (dec total-pgs))))]
+    {:size size :current page}))
 
 (defn sort-indicator [sort-state column-key]
   (let [current (first sort-state)
@@ -87,11 +109,46 @@
    (for [row rows]
      (render-table-row cols row))])
 
-(defn render-table [id cols rows sort-state]
-  [:div {:id id :class "overflow-x-auto"}
-   [:table.table.table-sm
-    (render-sortable-header cols sort-state)
-    (render-table-body cols rows)]])
+(defn render-pagination-controls [total-rows page-size page-current]
+  (let [total-pgs (total-pages total-rows page-size)
+        start (+ 1 (* page-current page-size))
+        end (min (* (+ page-current 1) page-size) total-rows)
+        on-first? (= page-current 0)
+        on-last? (>= (+ page-current 1) total-pgs)]
+    [:div.flex.items-center.justify-between.mt-4
+     [:div.flex.items-center.gap-2
+      [:span.text-sm "Rows per page:"]
+      [:select.select.select-sm.select-bordered
+       {:data-on:change "@get('/demo/datatable/data?pageSize=' + evt.target.value)"}
+       (for [size page-sizes]
+         [:option {:value size :selected (= size page-size)} size])]]
+     [:div.text-sm
+      (format "Showing %d-%d of %d" start end total-rows)]
+     [:div.join
+      [:button.join-item.btn.btn-sm
+       {:data-on:click "@get('/demo/datatable/data?page=first')"
+        :disabled on-first?}
+       "«"]
+      [:button.join-item.btn.btn-sm
+       {:data-on:click "@get('/demo/datatable/data?page=prev')"
+        :disabled on-first?}
+       "‹"]
+      [:button.join-item.btn.btn-sm
+       {:data-on:click "@get('/demo/datatable/data?page=next')"
+        :disabled on-last?}
+       "›"]
+      [:button.join-item.btn.btn-sm
+       {:data-on:click "@get('/demo/datatable/data?page=last')"
+        :disabled on-last?}
+       "»"]]]))
+
+(defn render-table [id cols rows sort-state total-rows page-size page-current]
+  [:div {:id id}
+   [:div.overflow-x-auto
+    [:table.table.table-sm
+     (render-sortable-header cols sort-state)
+     (render-table-body cols rows)]]
+   (render-pagination-controls total-rows page-size page-current)])
 
 (defn render-skeleton-row [cols]
   [:tr
@@ -104,10 +161,11 @@
      (render-skeleton-row cols))])
 
 (defn render-skeleton-table [id cols n]
-  [:div {:id id :class "overflow-x-auto"}
-   [:table.table.table-sm
-    (render-table-header cols)
-    (render-skeleton-body cols n)]])
+  [:div {:id id}
+   [:div.overflow-x-auto
+    [:table.table.table-sm
+     (render-table-header cols)
+     (render-skeleton-body cols n)]]])
 
 (defn page-handler [_req]
   {:status 200
@@ -115,7 +173,7 @@
    :body (->html
           (page
            [:div.p-8
-            {:data-signals "{datatable: {sort: []}}"}
+            {:data-signals "{datatable: {sort: [], page: {size: 10, current: 0}}}"}
             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
             [:div#datatable-container
              {:data-init "@get('/demo/datatable/data')"}
@@ -124,18 +182,30 @@
 (defn data-handler [req]
   (let [signals (get-signals req)
         current-sort (get-in signals [:datatable :sort] [])
+        current-page (get-in signals [:datatable :page :current] 0)
+        current-size (get-in signals [:datatable :page :size] 10)
         clicked-column (get-in req [:query-params "clicked"])
+        page-action (get-in req [:query-params "page"])
+        new-page-size (get-in req [:query-params "pageSize"])
         new-sort (next-sort-state current-sort clicked-column)
-        sorted-data (sort-data philosophers new-sort)]
+        total-rows (count philosophers)
+        {:keys [size current]} (next-page-state current-page current-size total-rows page-action new-page-size)
+        new-page (if clicked-column 0 current)
+        sorted-data (sort-data philosophers new-sort)
+        paginated-data (paginate-data sorted-data size new-page)
+        is-initial-load? (and (nil? clicked-column) (nil? page-action) (nil? new-page-size))]
     (->sse-response req
                     {on-open
                      (fn [sse]
-                       (when-not clicked-column
+                       (when is-initial-load?
                          (d*/patch-elements! sse (->html (render-skeleton-table "datatable" columns 10)))
                          (Thread/sleep 300))
-                       (when clicked-column
-                         (d*/patch-signals! sse (j/write-value-as-string {:datatable {:sort new-sort}})))
-                       (d*/patch-elements! sse (->html (render-table "datatable" columns sorted-data new-sort)))
+                       (when (or clicked-column page-action new-page-size)
+                         (d*/patch-signals! sse (j/write-value-as-string
+                                                 {:datatable {:sort new-sort
+                                                              :page {:size size :current new-page}}})))
+                       (d*/patch-elements! sse (->html (render-table "datatable" columns paginated-data new-sort
+                                                                     total-rows size new-page)))
                        (d*/close-sse! sse))})))
 
 (defn make-routes [_]
@@ -146,32 +216,34 @@
   (require '[demo.datatable :as dt] :reload)
   (require '[demo.util :refer [->html]])
 
+  ;; Test pagination
+  (paginate-data philosophers 5 0)
+  (paginate-data philosophers 5 1)
+  (paginate-data philosophers 5 2)
+  (total-pages 15 5)
+  (total-pages 15 10)
+
+  ;; Test next-page-state
+  (next-page-state 0 5 15 "next" nil)
+  (next-page-state 1 5 15 "next" nil)
+  (next-page-state 2 5 15 "next" nil)
+  (next-page-state 2 5 15 "prev" nil)
+  (next-page-state 2 5 15 "first" nil)
+  (next-page-state 0 5 15 "last" nil)
+  (next-page-state 2 5 15 nil "10")
+
   ;; Test next-sort-state
   (next-sort-state [] nil)
   (next-sort-state [] "name")
   (next-sort-state [{:column "name" :direction "asc"}] "name")
-  (next-sort-state [{:column "name" :direction "desc"}] "name")
-  (next-sort-state [{:column "name" :direction "asc"}] "region")
 
-  ;; Test sort-indicator
-  (sort-indicator [] :name)
-  (sort-indicator [{:column "name" :direction "asc"}] :name)
-  (sort-indicator [{:column "name" :direction "desc"}] :name)
-  (sort-indicator [{:column "name" :direction "asc"}] :region)
+  ;; Test render-pagination-controls
+  (->html (render-pagination-controls 15 5 0))
+  (->html (render-pagination-controls 15 5 1))
+  (->html (render-pagination-controls 15 5 2))
 
-  ;; Test sort-data
-  (map :name (sort-data philosophers []))
-  (map :name (sort-data philosophers [{:column "name" :direction "asc"}]))
-  (map :name (sort-data philosophers [{:column "name" :direction "desc"}]))
-
-  ;; Test render-sortable-header
-  (->html (render-sortable-header columns []))
-  (->html (render-sortable-header columns [{:column "name" :direction "asc"}]))
-
-  ;; Test render-table with sort state
-  (->html (render-table "test" columns (take 3 philosophers) []))
-  (->html (render-table "test" columns (take 3 (sort-data philosophers [{:column "name" :direction "asc"}]))
-                        [{:column "name" :direction "asc"}]))
+  ;; Test render-table with pagination
+  (->html (render-table "test" columns (take 5 philosophers) [] 15 5 0))
 
   ;; Test page-handler
   (:body (page-handler {})))
