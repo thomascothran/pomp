@@ -110,19 +110,20 @@
 (defn render-filter-dropdown [col-key current-filter-value]
   (let [col-name (name col-key)]
     [:div.relative
+     {:data-on:click__outside (format "if ($datatable.openFilter === '%s') $datatable.openFilter = ''" col-name)}
      [:button.btn.btn-ghost.btn-xs
       {:data-on:click (format "$datatable.openFilter = $datatable.openFilter === '%s' ? '' : '%s'" col-name col-name)
        :class (if (not (str/blank? current-filter-value)) "text-primary" "")}
       "⏥"]
      [:div.absolute.right-0.top-full.mt-1.z-50.bg-base-100.shadow-lg.rounded-box.p-3.w-52
       {:data-show (format "$datatable.openFilter === '%s'" col-name)}
-      [:div.form-control
+      [:form.form-control
+       {:data-on:submit__prevent (format "@get('/demo/datatable/data?filterCol=%s&filterVal=' + evt.target.elements[0].value); $datatable.openFilter = ''" col-name)}
        [:label.label [:span.label-text (str "Filter " col-name)]]
        [:input.input.input-sm.input-bordered.w-full
         {:type "text"
-         :placeholder "Type to filter..."
-         :value (or current-filter-value "")
-         :data-on:input__debounce.300ms (format "@get('/demo/datatable/data?filterCol=%s&filterVal=' + evt.target.value)" col-name)}]]]]))
+         :placeholder "Type and press Enter..."
+         :value (or current-filter-value "")}]]]]))
 
 (defn render-sortable-header [cols sort-state filters]
   [:thead
@@ -244,6 +245,9 @@
         clear-filters? (some? (get-in req [:query-params "clearFilters"]))
         new-sort (next-sort-state current-sort clicked-column)
         new-filters (update-filters current-filters filter-col filter-val clear-filters?)
+        filters-to-patch (if clear-filters?
+                           (into {} (map (fn [[k _]] [k nil]) current-filters))
+                           new-filters)
         filtered-data (apply-filters philosophers new-filters)
         sorted-data (sort-data filtered-data new-sort)
         total-rows (count sorted-data)
@@ -265,7 +269,7 @@
                          (d*/patch-signals! sse (j/write-value-as-string
                                                  {:datatable {:sort new-sort
                                                               :page {:size size :current new-page}
-                                                              :filters new-filters
+                                                              :filters filters-to-patch
                                                               :openFilter ""}})))
                        (d*/patch-elements! sse (->html (render-table "datatable" columns paginated-data new-sort
                                                                      new-filters total-rows size new-page)))
