@@ -12,6 +12,7 @@
   # https://devenv.sh/processes/
   processes.dev.exec = "clj -X:test:dev";
   processes.tailwind.exec = "npm run build:css";
+  processes.tailwind.process-compose.is_tty = true;
 
   # https://devenv.sh/services/
   # services.postgres.enable = true;
