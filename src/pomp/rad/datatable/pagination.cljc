@@ -1,0 +1,40 @@
+(ns pomp.rad.datatable.pagination
+  (:require [pomp.rad.datatable.util :as util]))
+
+(defn render
+  [{:keys [total-rows page-size page-current filters page-sizes data-url]}]
+  (let [total-pgs (util/total-pages total-rows page-size)
+        start (if (zero? total-rows) 0 (+ 1 (* page-current page-size)))
+        end (min (* (+ page-current 1) page-size) total-rows)
+        on-first? (= page-current 0)
+        on-last? (or (zero? total-rows) (>= (+ page-current 1) total-pgs))]
+    [:div.flex.items-center.justify-between.mt-4.text-sm.opacity-70
+     [:div.flex.items-center.gap-4
+      (when (util/has-active-filters? filters)
+        [:button.btn.btn-sm.btn-ghost.text-error.opacity-100
+         {:data-on:click (str "@get('" data-url "?clearFilters=1')")}
+         "✕ Clear filters"])
+      [:div.flex.items-center.gap-1
+       [:select.select.select-ghost.select-sm.font-medium
+        {:data-on:change (str "@get('" data-url "?pageSize=' + evt.target.value)")}
+        (for [size page-sizes]
+          [:option {:value size :selected (= size page-size)} size])]
+       [:span.whitespace-nowrap "per page"]]]
+     [:div (str start "–" end " of " total-rows)]
+     [:div.flex.items-center.gap-1
+      [:button.btn.btn-ghost.btn-sm.btn-square
+       {:data-on:click (str "@get('" data-url "?page=first')")
+        :disabled on-first?}
+       "«"]
+      [:button.btn.btn-ghost.btn-sm.btn-square
+       {:data-on:click (str "@get('" data-url "?page=prev')")
+        :disabled on-first?}
+       "‹"]
+      [:button.btn.btn-ghost.btn-sm.btn-square
+       {:data-on:click (str "@get('" data-url "?page=next')")
+        :disabled on-last?}
+       "›"]
+      [:button.btn.btn-ghost.btn-sm.btn-square
+       {:data-on:click (str "@get('" data-url "?page=last')")
+        :disabled on-last?}
+       "»"]]]))
