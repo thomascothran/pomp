@@ -122,13 +122,22 @@
   (let [col-name (name col-key)
         current-op (or current-filter-op "contains")
         has-filter? (or (not (str/blank? current-filter-value)) (= current-op "is-empty"))
-        use-dropdown-end? (>= col-idx (/ total-cols 2))]
+        use-dropdown-end? (>= col-idx (/ total-cols 2))
+        funnel-icon [:svg {:xmlns "http://www.w3.org/2000/svg"
+                           :fill "none"
+                           :viewBox "0 0 24 24"
+                           :stroke-width "1.5"
+                           :stroke "currentColor"
+                           :class "w-4 h-4"}
+                     [:path {:stroke-linecap "round"
+                             :stroke-linejoin "round"
+                             :d "M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z"}]]]
     [:div {:class (str "dropdown" (when use-dropdown-end? " dropdown-end"))}
-     [:div.btn.btn-ghost.btn-xs
+     [:div.btn.btn-ghost.btn-xs.px-1
       {:tabindex "0"
        :role "button"
-       :class (if has-filter? "text-primary" "")}
-      "⏥"]
+       :class (if has-filter? "text-primary" "opacity-50 hover:opacity-100")}
+      funnel-icon]
      [:div.dropdown-content.z-50.bg-base-100.shadow-lg.rounded-box.p-4.w-64
       {:tabindex "0"}
       [:form.flex.flex-col.gap-3
@@ -151,21 +160,53 @@
        [:button.btn.btn-sm.btn-primary.w-full {:type "submit"} "Apply"]]]]))
 
 (defn render-sortable-header [cols sort-state filters]
-  (let [total-cols (count cols)]
+  (let [total-cols (count cols)
+        sort-icon [:svg {:xmlns "http://www.w3.org/2000/svg"
+                         :fill "none"
+                         :viewBox "0 0 24 24"
+                         :stroke-width "1.5"
+                         :stroke "currentColor"
+                         :class "w-3 h-3"}
+                   [:path {:stroke-linecap "round"
+                           :stroke-linejoin "round"
+                           :d "M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5"}]]]
     [:thead
      [:tr
       (for [[idx {:keys [key label]}] (map-indexed vector cols)]
         (let [col-name (name key)
               current-filter (get filters key)
               current-filter-op (:op current-filter)
-              current-filter-val (:value current-filter)]
+              current-filter-val (:value current-filter)
+              current-sort (first sort-state)
+              is-sorted? (= (:column current-sort) col-name)
+              sort-dir (:direction current-sort)]
           [:th
-           [:div.flex.items-center.gap-1
-            [:span.cursor-pointer.select-none.hover:bg-base-200.px-1.rounded
+           [:div.flex.items-center.justify-between.gap-2
+            [:button.flex.items-center.gap-1.hover:text-primary.transition-colors
              {:data-on:click (format "@get('/demo/datatable/data?clicked=%s')" col-name)}
-             label
-             (when-let [indicator (sort-indicator sort-state key)]
-               [:span.text-xs.ml-1 indicator])]
+             [:span {:class (if is-sorted? "opacity-100" "opacity-30")}
+              (if is-sorted?
+                (if (= sort-dir "asc")
+                  [:svg {:xmlns "http://www.w3.org/2000/svg"
+                         :fill "none"
+                         :viewBox "0 0 24 24"
+                         :stroke-width "2"
+                         :stroke "currentColor"
+                         :class "w-3 h-3"}
+                   [:path {:stroke-linecap "round"
+                           :stroke-linejoin "round"
+                           :d "M4.5 15.75l7.5-7.5 7.5 7.5"}]]
+                  [:svg {:xmlns "http://www.w3.org/2000/svg"
+                         :fill "none"
+                         :viewBox "0 0 24 24"
+                         :stroke-width "2"
+                         :stroke "currentColor"
+                         :class "w-3 h-3"}
+                   [:path {:stroke-linecap "round"
+                           :stroke-linejoin "round"
+                           :d "M19.5 8.25l-7.5 7.5-7.5-7.5"}]])
+                sort-icon)]
+             [:span.font-semibold label]]
             (render-filter-dropdown key label current-filter-op current-filter-val idx total-cols)]]))]]))
 
 (defn render-table-header [cols]
@@ -190,34 +231,33 @@
         end (min (* (+ page-current 1) page-size) total-rows)
         on-first? (= page-current 0)
         on-last? (or (zero? total-rows) (>= (+ page-current 1) total-pgs))]
-    [:div.flex.items-center.justify-between.mt-4
+    [:div.flex.items-center.justify-between.mt-4.text-sm.opacity-70
      [:div.flex.items-center.gap-4
       (when (has-active-filters? filters)
-        [:button.btn.btn-sm.btn-ghost.text-error
+        [:button.btn.btn-sm.btn-ghost.text-error.opacity-100
          {:data-on:click "@get('/demo/datatable/data?clearFilters=1')"}
          "✕ Clear filters"])
-      [:div.flex.items-center.gap-2
-       [:span.text-sm "Rows per page:"]
-       [:select.select.select-sm.select-bordered
+      [:div.flex.items-center.gap-1
+       [:select.select.select-ghost.select-sm.font-medium
         {:data-on:change "@get('/demo/datatable/data?pageSize=' + evt.target.value)"}
         (for [size page-sizes]
-          [:option {:value size :selected (= size page-size)} size])]]]
-     [:div.text-sm
-      (format "Showing %d-%d of %d" start end total-rows)]
-     [:div.join
-      [:button.join-item.btn.btn-sm
+          [:option {:value size :selected (= size page-size)} size])]
+       [:span.whitespace-nowrap "per page"]]]
+     [:div (format "%d–%d of %d" start end total-rows)]
+     [:div.flex.items-center.gap-1
+      [:button.btn.btn-ghost.btn-sm.btn-square
        {:data-on:click "@get('/demo/datatable/data?page=first')"
         :disabled on-first?}
        "«"]
-      [:button.join-item.btn.btn-sm
+      [:button.btn.btn-ghost.btn-sm.btn-square
        {:data-on:click "@get('/demo/datatable/data?page=prev')"
         :disabled on-first?}
        "‹"]
-      [:button.join-item.btn.btn-sm
+      [:button.btn.btn-ghost.btn-sm.btn-square
        {:data-on:click "@get('/demo/datatable/data?page=next')"
         :disabled on-last?}
        "›"]
-      [:button.join-item.btn.btn-sm
+      [:button.btn.btn-ghost.btn-sm.btn-square
        {:data-on:click "@get('/demo/datatable/data?page=last')"
         :disabled on-last?}
        "»"]]]))
