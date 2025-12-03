@@ -41,26 +41,37 @@
                        #(compare %2 %1))]
       (sort-by #(get % col-key) comparator rows))))
 
-(defn apply-text-filter [rows col-key filter-value]
-  (if (str/blank? filter-value)
-    rows
-    (let [search-term (str/lower-case filter-value)]
-      (filter #(str/includes? (str/lower-case (str (get % col-key))) search-term) rows))))
+(defn apply-text-filter [rows col-key filter-op filter-value]
+  (let [search-term (str/lower-case (or filter-value ""))
+        get-cell-val #(str/lower-case (str (get % col-key)))]
+    (case filter-op
+      "contains" (if (str/blank? filter-value)
+                   rows
+                   (filter #(str/includes? (get-cell-val %) search-term) rows))
+      "not-contains" (if (str/blank? filter-value)
+                       rows
+                       (remove #(str/includes? (get-cell-val %) search-term) rows))
+      "equals" (filter #(= (get-cell-val %) search-term) rows)
+      "not-equals" (remove #(= (get-cell-val %) search-term) rows)
+      "starts-with" (filter #(str/starts-with? (get-cell-val %) search-term) rows)
+      "ends-with" (filter #(str/ends-with? (get-cell-val %) search-term) rows)
+      "is-empty" (filter #(str/blank? (str (get % col-key))) rows)
+      rows)))
 
 (defn apply-filters [rows filters]
   (reduce (fn [filtered-rows [col-key filter-spec]]
             (case (:type filter-spec)
-              "text" (apply-text-filter filtered-rows col-key (:value filter-spec))
+              "text" (apply-text-filter filtered-rows col-key (:op filter-spec) (:value filter-spec))
               filtered-rows))
           rows
           filters))
 
-(defn update-filters [current-filters filter-col filter-val clear-filters?]
+(defn update-filters [current-filters filter-col filter-op filter-val clear-filters?]
   (cond
     clear-filters? {}
     (nil? filter-col) current-filters
-    (str/blank? filter-val) (dissoc current-filters (keyword filter-col))
-    :else (assoc current-filters (keyword filter-col) {:type "text" :value filter-val})))
+    (and (str/blank? filter-val) (not= filter-op "is-empty")) (dissoc current-filters (keyword filter-col))
+    :else (assoc current-filters (keyword filter-col) {:type "text" :op (or filter-op "contains") :value filter-val})))
 
 (defn paginate-data [rows page-size page-current]
   (->> rows
@@ -107,38 +118,55 @@
 (defn has-active-filters? [filters]
   (seq filters))
 
-(defn render-filter-dropdown [col-key current-filter-value]
-  (let [col-name (name col-key)]
-    [:div.relative
-     {:data-on:click__outside (format "if ($datatable.openFilter === '%s') $datatable.openFilter = ''" col-name)}
-     [:button.btn.btn-ghost.btn-xs
-      {:data-on:click (format "$datatable.openFilter = $datatable.openFilter === '%s' ? '' : '%s'" col-name col-name)
-       :class (if (not (str/blank? current-filter-value)) "text-primary" "")}
+(defn render-filter-dropdown [col-key col-label current-filter-op current-filter-value col-idx total-cols]
+  (let [col-name (name col-key)
+        current-op (or current-filter-op "contains")
+        has-filter? (or (not (str/blank? current-filter-value)) (= current-op "is-empty"))
+        use-dropdown-end? (>= col-idx (/ total-cols 2))]
+    [:div {:class (str "dropdown" (when use-dropdown-end? " dropdown-end"))}
+     [:div.btn.btn-ghost.btn-xs
+      {:tabindex "0"
+       :role "button"
+       :class (if has-filter? "text-primary" "")}
       "⏥"]
-     [:div.absolute.right-0.top-full.mt-1.z-50.bg-base-100.shadow-lg.rounded-box.p-3.w-52
-      {:data-show (format "$datatable.openFilter === '%s'" col-name)}
-      [:form.form-control
-       {:data-on:submit__prevent (format "@get('/demo/datatable/data?filterCol=%s&filterVal=' + evt.target.elements[0].value); $datatable.openFilter = ''" col-name)}
-       [:label.label [:span.label-text (str "Filter " col-name)]]
+     [:div.dropdown-content.z-50.bg-base-100.shadow-lg.rounded-box.p-4.w-64
+      {:tabindex "0"}
+      [:form.flex.flex-col.gap-3
+       {:data-on:submit__prevent (format "@get('/demo/datatable/data?filterCol=%s&filterOp=' + evt.target.elements['filterOp'].value + '&filterVal=' + evt.target.elements['filterVal'].value)" col-name)}
+       [:div.text-sm.font-semibold (str "Filter " col-label)]
+       [:select.select.select-sm.select-bordered.w-full
+        {:name "filterOp"}
+        [:option {:value "contains" :selected (= current-op "contains")} "contains"]
+        [:option {:value "not-contains" :selected (= current-op "not-contains")} "does not contain"]
+        [:option {:value "equals" :selected (= current-op "equals")} "equals"]
+        [:option {:value "not-equals" :selected (= current-op "not-equals")} "does not equal"]
+        [:option {:value "starts-with" :selected (= current-op "starts-with")} "starts with"]
+        [:option {:value "ends-with" :selected (= current-op "ends-with")} "ends with"]
+        [:option {:value "is-empty" :selected (= current-op "is-empty")} "is empty"]]
        [:input.input.input-sm.input-bordered.w-full
         {:type "text"
-         :placeholder "Type and press Enter..."
-         :value (or current-filter-value "")}]]]]))
+         :name "filterVal"
+         :placeholder "Value..."
+         :value (or current-filter-value "")}]
+       [:button.btn.btn-sm.btn-primary.w-full {:type "submit"} "Apply"]]]]))
 
 (defn render-sortable-header [cols sort-state filters]
-  [:thead
-   [:tr
-    (for [{:keys [key label]} cols]
-      (let [col-name (name key)
-            current-filter (get-in filters [key :value])]
-        [:th
-         [:div.flex.items-center.gap-1
-          [:span.cursor-pointer.select-none.hover:bg-base-200.px-1.rounded
-           {:data-on:click (format "@get('/demo/datatable/data?clicked=%s')" col-name)}
-           label
-           (when-let [indicator (sort-indicator sort-state key)]
-             [:span.text-xs.ml-1 indicator])]
-          (render-filter-dropdown key current-filter)]]))]])
+  (let [total-cols (count cols)]
+    [:thead
+     [:tr
+      (for [[idx {:keys [key label]}] (map-indexed vector cols)]
+        (let [col-name (name key)
+              current-filter (get filters key)
+              current-filter-op (:op current-filter)
+              current-filter-val (:value current-filter)]
+          [:th
+           [:div.flex.items-center.gap-1
+            [:span.cursor-pointer.select-none.hover:bg-base-200.px-1.rounded
+             {:data-on:click (format "@get('/demo/datatable/data?clicked=%s')" col-name)}
+             label
+             (when-let [indicator (sort-indicator sort-state key)]
+               [:span.text-xs.ml-1 indicator])]
+            (render-filter-dropdown key label current-filter-op current-filter-val idx total-cols)]]))]]))
 
 (defn render-table-header [cols]
   [:thead
@@ -241,10 +269,11 @@
         page-action (get-in req [:query-params "page"])
         new-page-size (get-in req [:query-params "pageSize"])
         filter-col (get-in req [:query-params "filterCol"])
+        filter-op (get-in req [:query-params "filterOp"])
         filter-val (get-in req [:query-params "filterVal"])
         clear-filters? (some? (get-in req [:query-params "clearFilters"]))
         new-sort (next-sort-state current-sort clicked-column)
-        new-filters (update-filters current-filters filter-col filter-val clear-filters?)
+        new-filters (update-filters current-filters filter-col filter-op filter-val clear-filters?)
         filters-to-patch (if clear-filters?
                            (into {} (map (fn [[k _]] [k nil]) current-filters))
                            new-filters)
@@ -284,23 +313,12 @@
   (require '[demo.util :refer [->html]])
 
   ;; Test filtering
-  (apply-text-filter philosophers :name "soc")
   (apply-filters philosophers {:name {:type "text" :value "a"}})
   (apply-filters philosophers {:name {:type "text" :value "a"} :century {:type "text" :value "4th"}})
-
-  ;; Test update-filters
-  (update-filters {} "name" "socr" false)
-  (update-filters {:name {:type "text" :value "socr"}} "century" "5th" false)
-  (update-filters {:name {:type "text" :value "socr"}} "name" "" false)
-  (update-filters {:name {:type "text" :value "socr"}} nil nil true)
 
   ;; Test pagination
   (paginate-data philosophers 5 0)
   (total-pages 15 5)
-
-  ;; Test render-filter-dropdown
-  (->html (render-filter-dropdown :name ""))
-  (->html (render-filter-dropdown :name "socr"))
 
   ;; Test render-sortable-header with filters
   (->html (render-sortable-header columns [] {}))
