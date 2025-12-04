@@ -2,8 +2,10 @@
 
 (defn render-row [cols row]
   [:tr
-   (for [{:keys [key]} cols]
-     [:td (get row key)])])
+   (for [{:keys [key render]} cols]
+     [:td (if render
+            (render (get row key) row)
+            (get row key))])])
 
 (defn render [cols rows]
   [:tbody
