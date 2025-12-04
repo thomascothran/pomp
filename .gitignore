@@ -12,3 +12,7 @@ devenv.local.nix
 node_modules/
 
 .nrepl-port
+.clj-kondo/
+.lsp/.cache
+
+dev-resources/public/output.css
