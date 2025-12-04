@@ -1,6 +1,32 @@
 (ns pomp.rad.datatable.pagination
   (:require [pomp.rad.datatable.util :as util]))
 
+(defn paginate-data [rows signals]
+  (let [{:keys [size current]} signals]
+    (->> rows
+         (drop (* current size))
+         (take size))))
+
+(defn next-state
+  [signals query-params total-rows]
+  (let [page-action (get query-params "page")
+        new-size-str (get query-params "pageSize")
+        current-size (:size signals 10)
+        current-page (:current signals 0)
+        size (if new-size-str
+               #?(:clj (parse-long new-size-str)
+                  :cljs (js/parseInt new-size-str 10))
+               current-size)
+        total-pgs (util/total-pages total-rows size)
+        page (cond
+               new-size-str 0
+               (= page-action "first") 0
+               (= page-action "prev") (max 0 (dec current-page))
+               (= page-action "next") (min (dec total-pgs) (inc current-page))
+               (= page-action "last") (dec total-pgs)
+               :else (min current-page (max 0 (dec total-pgs))))]
+    {:size size :current page}))
+
 (defn render
   [{:keys [total-rows page-size page-current filters page-sizes data-url]}]
   (let [total-pgs (util/total-pages total-rows page-size)

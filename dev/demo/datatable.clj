@@ -4,8 +4,7 @@
              :refer [->sse-response on-open]]
             [demo.util :refer [->html page get-signals]]
             [jsonista.core :as j]
-            [pomp.rad.datatable.util :as dt-util]
-            [pomp.rad.datatable.state :as dt-state]
+            [pomp.rad.datatable.filter-menu :as dt-filter]
             [pomp.rad.datatable.table :as dt-table]))
 
 (def columns
@@ -48,56 +47,34 @@
              [:div#datatable]]]))})
 
 (defn data-handler [req]
-  (let [signals (get-signals req)
-        current-sort (get-in signals [:datatable :sort] [])
-        current-page (get-in signals [:datatable :page :current] 0)
-        current-size (get-in signals [:datatable :page :size] 10)
-        current-filters (get-in signals [:datatable :filters] {})
-        clicked-column (get-in req [:query-params "clicked"])
-        page-action (get-in req [:query-params "page"])
-        new-page-size (get-in req [:query-params "pageSize"])
-        filter-col (get-in req [:query-params "filterCol"])
-        filter-op (get-in req [:query-params "filterOp"])
-        filter-val (get-in req [:query-params "filterVal"])
-        clear-filters? (some? (get-in req [:query-params "clearFilters"]))
-        new-sort (dt-state/next-sort-state current-sort clicked-column)
-        new-filters (dt-state/update-filters current-filters filter-col filter-op filter-val clear-filters?)
-        filters-to-patch (if clear-filters?
-                           (into {} (map (fn [[k _]] [k nil]) current-filters))
-                           new-filters)
-        filtered-data (dt-util/apply-filters philosophers new-filters)
-        sorted-data (dt-util/sort-data filtered-data new-sort)
-        total-rows (count sorted-data)
-        {:keys [size current]} (dt-state/next-page-state current-page current-size total-rows page-action new-page-size)
-        new-page (cond
-                   clicked-column 0
-                   (or filter-col clear-filters?) 0
-                   :else current)
-        paginated-data (dt-util/paginate-data sorted-data size new-page)
-        is-initial-load? (and (nil? clicked-column) (nil? page-action) (nil? new-page-size)
-                              (nil? filter-col) (not clear-filters?))]
+  (let [query-params (:query-params req)
+        current-signals (get-in (get-signals req) [:datatable] {})
+        initial-load? (empty? query-params)
+        {:keys [signals total-rows]} (dt-table/next-state current-signals query-params philosophers)
+        rows (dt-table/process-data philosophers signals)
+        filters-patch (dt-filter/compute-patch (:filters current-signals) (:filters signals))]
     (->sse-response req
                     {on-open
                      (fn [sse]
-                       (when is-initial-load?
+                       (when initial-load?
                          (d*/patch-elements! sse (->html (dt-table/render-skeleton {:id "datatable"
                                                                                     :cols columns
                                                                                     :n 10})))
                          (Thread/sleep 300))
-                       (when-not is-initial-load?
+                       (when-not initial-load?
                          (d*/patch-signals! sse (j/write-value-as-string
-                                                 {:datatable {:sort new-sort
-                                                              :page {:size size :current new-page}
-                                                              :filters filters-to-patch
+                                                 {:datatable {:sort (:sort signals)
+                                                              :page (:page signals)
+                                                              :filters filters-patch
                                                               :openFilter ""}})))
                        (d*/patch-elements! sse (->html (dt-table/render {:id "datatable"
                                                                          :cols columns
-                                                                         :rows paginated-data
-                                                                         :sort-state new-sort
-                                                                         :filters new-filters
+                                                                         :rows rows
+                                                                         :sort-state (:sort signals)
+                                                                         :filters (:filters signals)
                                                                          :total-rows total-rows
-                                                                         :page-size size
-                                                                         :page-current new-page
+                                                                         :page-size (get-in signals [:page :size])
+                                                                         :page-current (get-in signals [:page :current])
                                                                          :page-sizes page-sizes
                                                                          :data-url data-url})))
                        (d*/close-sse! sse))})))

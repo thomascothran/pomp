@@ -21,6 +21,49 @@
    {:value "ends-with" :label "ends with"}
    {:value "is-empty" :label "is empty"}])
 
+(defn- apply-text-filter [rows col-key filter-op filter-value]
+  (let [search-term (str/lower-case (or filter-value ""))
+        get-cell-val #(str/lower-case (str (get % col-key)))]
+    (case filter-op
+      "contains" (if (str/blank? filter-value)
+                   rows
+                   (filter #(str/includes? (get-cell-val %) search-term) rows))
+      "not-contains" (if (str/blank? filter-value)
+                       rows
+                       (remove #(str/includes? (get-cell-val %) search-term) rows))
+      "equals" (filter #(= (get-cell-val %) search-term) rows)
+      "not-equals" (remove #(= (get-cell-val %) search-term) rows)
+      "starts-with" (filter #(str/starts-with? (get-cell-val %) search-term) rows)
+      "ends-with" (filter #(str/ends-with? (get-cell-val %) search-term) rows)
+      "is-empty" (filter #(str/blank? (str (get % col-key))) rows)
+      rows)))
+
+(defn apply-filters [rows signals]
+  (reduce (fn [filtered-rows [col-key filter-spec]]
+            (case (:type filter-spec)
+              "text" (apply-text-filter filtered-rows col-key (:op filter-spec) (:value filter-spec))
+              filtered-rows))
+          rows
+          signals))
+
+(defn next-state
+  [signals query-params]
+  (let [{:keys [filter-col filter-op filter-val clear-filters?]}
+        {:filter-col (get query-params "filterCol")
+         :filter-op (get query-params "filterOp")
+         :filter-val (get query-params "filterVal")
+         :clear-filters? (some? (get query-params "clearFilters"))}]
+    (cond
+      clear-filters? {}
+      (nil? filter-col) signals
+      (and (str/blank? filter-val) (not= filter-op "is-empty")) (dissoc signals (keyword filter-col))
+      :else (assoc signals (keyword filter-col) {:type "text" :op (or filter-op "contains") :value filter-val}))))
+
+(defn compute-patch
+  [old-signals new-signals]
+  (let [removed-keys (clojure.set/difference (set (keys old-signals)) (set (keys new-signals)))]
+    (merge new-signals (into {} (map (fn [k] [k nil]) removed-keys)))))
+
 (defn render
   [{:keys [col-key col-label current-filter-op current-filter-value col-idx total-cols data-url]}]
   (let [col-name (name col-key)
