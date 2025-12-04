@@ -1,0 +1,60 @@
+(ns pomp.rad.datatable.in-memory-query
+  (:require [clojure.string :as str]))
+
+(defn- apply-text-filter [rows col-key filter-op filter-value]
+  (let [search-term (str/lower-case (or filter-value ""))
+        get-cell-val #(str/lower-case (str (get % col-key)))]
+    (case filter-op
+      "contains" (if (str/blank? filter-value)
+                   rows
+                   (filter #(str/includes? (get-cell-val %) search-term) rows))
+      "not-contains" (if (str/blank? filter-value)
+                       rows
+                       (remove #(str/includes? (get-cell-val %) search-term) rows))
+      "equals" (filter #(= (get-cell-val %) search-term) rows)
+      "not-equals" (remove #(= (get-cell-val %) search-term) rows)
+      "starts-with" (filter #(str/starts-with? (get-cell-val %) search-term) rows)
+      "ends-with" (filter #(str/ends-with? (get-cell-val %) search-term) rows)
+      "is-empty" (filter #(str/blank? (str (get % col-key))) rows)
+      rows)))
+
+(defn apply-filters [rows filters]
+  (reduce (fn [filtered-rows [col-key filter-spec]]
+            (case (:type filter-spec)
+              "text" (apply-text-filter filtered-rows col-key (:op filter-spec) (:value filter-spec))
+              filtered-rows))
+          rows
+          filters))
+
+(defn sort-data [rows sort-spec]
+  (if (empty? sort-spec)
+    rows
+    (let [{:keys [column direction]} (first sort-spec)
+          col-key (keyword column)
+          comparator (if (= direction "asc")
+                       compare
+                       #(compare %2 %1))]
+      (sort-by #(get % col-key) comparator rows))))
+
+(defn paginate-data [rows page]
+  (let [{:keys [size current]} page
+        total-rows (count rows)
+        total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
+        clamped-current (cond
+                          (nil? current) (max 0 (dec total-pgs))
+                          (>= current total-pgs) (max 0 (dec total-pgs))
+                          :else current)]
+    {:rows (->> rows
+                (drop (* clamped-current size))
+                (take size))
+     :current clamped-current}))
+
+(defn query-fn
+  [rows]
+  (fn [{:keys [filters sort page]}]
+    (let [filtered (apply-filters rows filters)
+          sorted (sort-data filtered sort)
+          {:keys [rows current]} (paginate-data sorted page)]
+      {:rows rows
+       :total-rows (count filtered)
+       :page {:size (:size page) :current current}})))

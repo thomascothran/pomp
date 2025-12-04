@@ -6,20 +6,19 @@
             [pomp.rad.datatable.sort :as sort]))
 
 (defn next-state
-  [signals query-params rows]
+  [signals query-params]
   (let [new-filters (or (filter-menu/next-state (:filters signals) query-params) {})
         new-sort (or (sort/next-state (:sort signals) query-params) [])
-        total-rows (count (filter-menu/apply-filters rows new-filters))
-        new-page (pagination/next-state (:page signals) query-params total-rows)]
-    {:signals {:filters new-filters :sort new-sort :page new-page}
-     :total-rows total-rows}))
+        new-page (pagination/next-state (:page signals) query-params)]
+    {:filters new-filters :sort new-sort :page new-page}))
 
-(defn process-data
-  [rows signals]
-  (-> rows
-      (filter-menu/apply-filters (:filters signals))
-      (sort/sort-data (:sort signals))
-      (pagination/paginate-data (:page signals))))
+(defn query
+  [signals query-params query-fn]
+  (let [new-signals (next-state signals query-params)
+        {:keys [rows total-rows page]} (query-fn new-signals)]
+    {:signals (assoc new-signals :page page)
+     :rows rows
+     :total-rows total-rows}))
 
 (defn render
   [{:keys [id cols rows sort-state filters total-rows page-size page-current page-sizes data-url]}]

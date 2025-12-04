@@ -1,15 +1,5 @@
 (ns pomp.rad.datatable.sort)
 
-(defn sort-data [rows signals]
-  (if (empty? signals)
-    rows
-    (let [{:keys [column direction]} (first signals)
-          col-key (keyword column)
-          comparator (if (= direction "asc")
-                       compare
-                       #(compare %2 %1))]
-      (sort-by #(get % col-key) comparator rows))))
-
 (defn next-state
   [signals query-params]
   (let [clicked-column (get query-params "clicked")]

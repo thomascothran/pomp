@@ -5,7 +5,8 @@
             [demo.util :refer [->html page get-signals]]
             [jsonista.core :as j]
             [pomp.rad.datatable.filter-menu :as dt-filter]
-            [pomp.rad.datatable.table :as dt-table]))
+            [pomp.rad.datatable.table :as dt-table]
+            [pomp.rad.datatable.in-memory-query :as dt-imq]))
 
 (def columns
   [{:key :name :label "Name" :type :text}
@@ -50,8 +51,8 @@
   (let [query-params (:query-params req)
         current-signals (get-in (get-signals req) [:datatable] {})
         initial-load? (empty? query-params)
-        {:keys [signals total-rows]} (dt-table/next-state current-signals query-params philosophers)
-        rows (dt-table/process-data philosophers signals)
+        query-fn (dt-imq/query-fn philosophers)
+        {:keys [signals rows total-rows]} (dt-table/query current-signals query-params query-fn)
         filters-patch (dt-filter/compute-patch (:filters current-signals) (:filters signals))]
     (->sse-response req
                     {on-open
