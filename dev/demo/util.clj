@@ -9,7 +9,7 @@
 
 (defn page
   [& children]
-  [:html
+  [:html {:data-theme "dracula"}
    [:head
     [:link {:href "/assets/output.css"
             :rel "stylesheet"}]
