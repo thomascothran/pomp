@@ -45,8 +45,12 @@
         popover-id (str "filter-" col-name)
         anchor-name (str "--filter-" col-name)
         current-op (or current-filter-op "contains")
-        has-filter? (or (not (str/blank? current-filter-value)) (= current-op "is-empty"))
-        use-dropdown-end? (>= col-idx (/ total-cols 2))]
+        current-label (or (->> filter-operations
+                               (filter #(= (:value %) current-op))
+                               first
+                               :label)
+                          "contains")
+        has-filter? (or (not (str/blank? current-filter-value)) (= current-op "is-empty"))]
     (list
      [:button.btn.btn-ghost.btn-xs.px-1
       {:popovertarget popover-id
@@ -59,19 +63,27 @@
        :style {:position-anchor anchor-name
                :position "absolute"
                :top "anchor(bottom)"
-               :left (if use-dropdown-end? "anchor(right)" "anchor(left)")
-               :translate (when use-dropdown-end? "-100% 0")
-               :margin "0"}}
+               :left "anchor(right)"
+               :translate "-100% 0"
+               :overflow "visible"}}
       [:form.flex.flex-col.gap-3
        {:data-on:submit__prevent
         (str "@get('" data-url "?filterCol=" col-name
              "&filterOp=' + evt.target.elements['filterOp'].value + "
              "'&filterVal=' + evt.target.elements['filterVal'].value)")}
        [:div.text-sm.font-semibold (str "Filter " col-label)]
-       [:select.select.select-sm.select-bordered.w-full
-        {:name "filterOp"}
-        (for [{:keys [value label]} filter-operations]
-          [:option {:value value :selected (= current-op value)} label])]
+       [:input {:type "hidden" :name "filterOp" :value current-op}]
+       [:details.dropdown.w-full
+        [:summary.select.select-sm.select-bordered.w-full.flex.items-center
+         {:style {:padding-right "2rem"}}
+         [:span current-label]]
+        [:ul.dropdown-content.menu.bg-base-100.rounded-field.w-full.shadow-lg.mt-1.text-xs.py-1
+         {:style {:position "absolute" :z-index 9999}}
+         (for [{:keys [value label]} filter-operations]
+           [:li {:data-on:click (str "evt.target.closest('form').elements['filterOp'].value = '" value "'; "
+                                     "evt.target.closest('details').querySelector('summary span').textContent = '" label "'; "
+                                     "evt.target.closest('details').removeAttribute('open')")}
+            [:a.py-1 {:class (when (= current-op value) "active")} label]])]]
        [:input.input.input-sm.input-bordered.w-full
         {:type "text"
          :name "filterVal"
@@ -84,3 +96,7 @@
           :data-on:click (str "@get('" data-url "?filterCol=" col-name "&filterVal=')")}
          "Clear"]
         [:button.btn.btn-sm.btn-primary.flex-1 {:type "submit"} "Apply"]]]])))
+
+
+
+
