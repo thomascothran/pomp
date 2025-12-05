@@ -21,15 +21,20 @@
      :total-rows total-rows}))
 
 (defn render
-  [{:keys [id cols rows sort-state filters total-rows page-size page-current page-sizes data-url]}]
+  [{:keys [id cols rows sort-state filters total-rows page-size page-current page-sizes data-url selectable? row-id-fn]}]
   [:div {:id id}
    [:div.overflow-x-auto
     [:table.table.table-sm
      (header/render-sortable {:cols cols
                               :sort-state sort-state
                               :filters filters
-                              :data-url data-url})
-     (body/render cols rows)]]
+                              :data-url data-url
+                              :selectable? selectable?})
+     (body/render {:cols cols
+                   :rows rows
+                   :selectable? selectable?
+                   :row-id-fn row-id-fn
+                   :table-id id})]]
    (pagination/render {:total-rows total-rows
                        :page-size page-size
                        :page-current page-current
@@ -38,9 +43,9 @@
                        :data-url data-url})])
 
 (defn render-skeleton
-  [{:keys [id cols n]}]
+  [{:keys [id cols n selectable?]}]
   [:div {:id id}
    [:div.overflow-x-auto
     [:table.table.table-sm
-     (header/render-simple cols)
-     (body/render-skeleton cols n)]]])
+     (header/render-simple {:cols cols :selectable? selectable?})
+     (body/render-skeleton {:cols cols :n n :selectable? selectable?})]]])

@@ -35,17 +35,27 @@
            :d "M19.5 8.25l-7.5 7.5-7.5-7.5"}]])
 
 (defn render-simple
-  [cols]
+  [{:keys [cols selectable? table-id]}]
   [:thead
    [:tr
+    (when selectable?
+      [:th
+       [:input.checkbox.checkbox-sm
+        {:type "checkbox"
+         :data-on:click (str "evt.target.checked ? @setAll(true, { include: '" table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: '" table-id "\\\\.selections\\\\..*' })")}]])
     (for [{:keys [label]} cols]
       [:th label])]])
 
 (defn render-sortable
-  [{:keys [cols sort-state filters data-url]}]
+  [{:keys [cols sort-state filters data-url selectable? table-id]}]
   (let [total-cols (count cols)]
     [:thead
      [:tr
+      (when selectable?
+        [:th
+         [:input.checkbox.checkbox-sm
+          {:type "checkbox"
+           :data-on:click (str "evt.target.checked ? @setAll(true, { include: '" table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: '" table-id "\\\\.selections\\\\..*' })")}]])
       (for [[idx {:keys [key label]}] (map-indexed vector cols)]
         (let [col-name (name key)
               current-filter (get filters key)

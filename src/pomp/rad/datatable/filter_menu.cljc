@@ -42,17 +42,26 @@
 (defn render
   [{:keys [col-key col-label current-filter-op current-filter-value col-idx total-cols data-url]}]
   (let [col-name (name col-key)
+        popover-id (str "filter-" col-name)
+        anchor-name (str "--filter-" col-name)
         current-op (or current-filter-op "contains")
         has-filter? (or (not (str/blank? current-filter-value)) (= current-op "is-empty"))
         use-dropdown-end? (>= col-idx (/ total-cols 2))]
-    [:div {:class (str "dropdown" (when use-dropdown-end? " dropdown-end"))}
-     [:div.btn.btn-ghost.btn-xs.px-1
-      {:tabindex "0"
-       :role "button"
+    (list
+     [:button.btn.btn-ghost.btn-xs.px-1
+      {:popovertarget popover-id
+       :style {:anchor-name anchor-name}
        :class (if has-filter? "text-primary" "opacity-50 hover:opacity-100")}
       funnel-icon]
-     [:div.dropdown-content.z-50.bg-base-100.shadow-lg.rounded-box.p-4.w-64
-      {:tabindex "0"}
+     [:div.bg-base-100.shadow-lg.rounded-box.p-4.w-64
+      {:popover "auto"
+       :id popover-id
+       :style {:position-anchor anchor-name
+               :position "absolute"
+               :top "anchor(bottom)"
+               :left (if use-dropdown-end? "anchor(right)" "anchor(left)")
+               :translate (when use-dropdown-end? "-100% 0")
+               :margin "0"}}
       [:form.flex.flex-col.gap-3
        {:data-on:submit__prevent
         (str "@get('" data-url "?filterCol=" col-name
@@ -68,4 +77,10 @@
          :name "filterVal"
          :placeholder "Value..."
          :value (or current-filter-value "")}]
-       [:button.btn.btn-sm.btn-primary.w-full {:type "submit"} "Apply"]]]]))
+       [:div.flex.gap-2
+        [:button.btn.btn-sm.btn-ghost.flex-1
+         {:type "button"
+          :disabled (not has-filter?)
+          :data-on:click (str "@get('" data-url "?filterCol=" col-name "&filterVal=')")}
+         "Clear"]
+        [:button.btn.btn-sm.btn-primary.flex-1 {:type "submit"} "Apply"]]]])))
