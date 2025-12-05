@@ -65,6 +65,13 @@
               is-sorted? (= (:column current-sort) col-name)
               sort-dir (:direction current-sort)]
           [:th
+           {:draggable "true"
+            :data-on:dragstart (str "$" table-id ".dragging = '" col-name "'")
+            :data-on:dragend (str "$" table-id ".dragging = null; $" table-id ".dragOver = null")
+            :data-on:dragover__prevent (str "$" table-id ".dragOver = '" col-name "'")
+            :data-on:dragleave (str "if ($" table-id ".dragOver === '" col-name "') $" table-id ".dragOver = null")
+            :data-on:drop (str "@get('" data-url "?moveCol=' + $" table-id ".dragging + '&beforeCol=" col-name "')")
+            :data-class (str "{'border-l-4 border-primary': $" table-id ".dragOver === '" col-name "' && $" table-id ".dragging !== '" col-name "'}")}
            [:div.flex.items-center.justify-between.gap-2
             [:button.flex.items-center.gap-1.hover:text-primary.transition-colors
              {:data-on:click (str "@get('" data-url "?clicked=" col-name "')")}

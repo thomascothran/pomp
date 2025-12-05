@@ -6,6 +6,7 @@
             [jsonista.core :as j]
             [pomp.rad.datatable.filter-menu :as dt-filter]
             [pomp.rad.datatable.table :as dt-table]
+            [pomp.rad.datatable.column :as dt-column]
             [pomp.rad.datatable.in-memory-query :as dt-imq]))
 
 (def columns
@@ -41,7 +42,7 @@
    :body (->html
           (page
            [:div.p-8
-            {:data-signals "{datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, openFilter: ''}}"}
+            {:data-signals "{datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], dragging: null, dragOver: null}}"}
             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
             [:div#datatable-container
              {:data-init (str "@get('" data-url "')")}
@@ -51,6 +52,8 @@
   (let [query-params (:query-params req)
         current-signals (get-in (get-signals req) [:datatable] {})
         initial-load? (empty? query-params)
+        column-order (dt-column/next-state (:columnOrder current-signals) columns query-params)
+        ordered-cols (dt-column/reorder columns column-order)
         query-fn (dt-imq/query-fn philosophers)
         {:keys [signals rows total-rows]} (dt-table/query current-signals query-params query-fn)
         filters-patch (dt-filter/compute-patch (:filters current-signals) (:filters signals))]
@@ -59,18 +62,20 @@
                      (fn [sse]
                        (when initial-load?
                          (d*/patch-elements! sse (->html (dt-table/render-skeleton {:id "datatable"
-                                                                                    :cols columns
+                                                                                    :cols ordered-cols
                                                                                     :n 10
                                                                                     :selectable? true})))
                          (Thread/sleep 300))
-                       (when-not initial-load?
-                         (d*/patch-signals! sse (j/write-value-as-string
-                                                 {:datatable {:sort (:sort signals)
-                                                              :page (:page signals)
-                                                              :filters filters-patch
-                                                              :openFilter ""}})))
+                       (d*/patch-signals! sse (j/write-value-as-string
+                                               {:datatable {:sort (:sort signals)
+                                                            :page (:page signals)
+                                                            :filters filters-patch
+                                                            :openFilter ""
+                                                            :columnOrder column-order
+                                                            :dragging nil
+                                                            :dragOver nil}}))
                        (d*/patch-elements! sse (->html (dt-table/render {:id "datatable"
-                                                                         :cols columns
+                                                                         :cols ordered-cols
                                                                          :rows rows
                                                                          :sort-state (:sort signals)
                                                                          :filters (:filters signals)
