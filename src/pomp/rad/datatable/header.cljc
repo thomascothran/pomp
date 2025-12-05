@@ -1,5 +1,6 @@
 (ns pomp.rad.datatable.header
-  (:require [pomp.rad.datatable.filter-menu :as filter-menu]))
+  (:require [pomp.rad.datatable.filter-menu :as filter-menu]
+            [pomp.rad.datatable.column-menu :as column-menu]))
 
 (def sort-icon-both
   [:svg {:xmlns "http://www.w3.org/2000/svg"
@@ -47,8 +48,11 @@
       [:th label])]])
 
 (defn render-sortable
-  [{:keys [cols sort-state filters data-url selectable? table-id]}]
-  (let [total-cols (count cols)]
+  [{:keys [cols sort-state filters data-url selectable? table-id group-by]}]
+  (let [total-cols (count cols)
+        grouped? (seq group-by)
+        group-col-key (first group-by)
+        group-col (when grouped? (some #(when (= (:key %) group-col-key) %) cols))]
     [:thead
      [:tr
       (when selectable?
@@ -56,6 +60,11 @@
          [:input.checkbox.checkbox-sm
           {:type "checkbox"
            :data-on:click (str "evt.target.checked ? @setAll(true, { include: '" table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: '" table-id "\\\\.selections\\\\..*' })")}]])
+      (when grouped?
+        [:th
+         [:div.flex.items-center.justify-between.gap-2
+          [:span.font-semibold "Group"]
+          (column-menu/render-group-column {:data-url data-url})]])
       (for [[idx {:keys [key label]}] (map-indexed vector cols)]
         (let [col-name (name key)
               current-filter (get filters key)
@@ -81,11 +90,17 @@
                 (and is-sorted? (= sort-dir "desc")) sort-icon-desc
                 :else sort-icon-both)]
              [:span.font-semibold label]]
-            (filter-menu/render
-             {:col-key key
-              :col-label label
-              :current-filter-op current-filter-op
-              :current-filter-value current-filter-val
-              :col-idx idx
-              :total-cols total-cols
-              :data-url data-url})]]))]]))
+            [:div.flex.items-center
+             (filter-menu/render
+              {:col-key key
+               :col-label label
+               :current-filter-op current-filter-op
+               :current-filter-value current-filter-val
+               :col-idx idx
+               :total-cols total-cols
+               :data-url data-url})
+             (column-menu/render
+              {:col-key key
+               :col-label label
+               :data-url data-url})]]]))]]))
+

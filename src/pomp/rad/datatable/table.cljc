@@ -3,14 +3,22 @@
             [pomp.rad.datatable.body :as body]
             [pomp.rad.datatable.pagination :as pagination]
             [pomp.rad.datatable.filter-menu :as filter-menu]
-            [pomp.rad.datatable.sort :as sort]))
+            [pomp.rad.datatable.sort :as sort]
+            [pomp.rad.datatable.group :as group]))
 
 (defn next-state
   [signals query-params]
-  (let [new-filters (or (filter-menu/next-state (:filters signals) query-params) {})
+  (let [new-group-by (group/next-state (:group-by signals) query-params)
+        grouping-changed? (not= new-group-by (:group-by signals))
+        new-filters (if grouping-changed?
+                      {}
+                      (or (filter-menu/next-state (:filters signals) query-params) {}))
         new-sort (or (sort/next-state (:sort signals) query-params) [])
         new-page (pagination/next-state (:page signals) query-params)]
-    {:filters new-filters :sort new-sort :page new-page}))
+    {:filters new-filters
+     :sort new-sort
+     :page new-page
+     :group-by new-group-by}))
 
 (defn query
   [signals query-params query-fn]
@@ -21,7 +29,7 @@
      :total-rows total-rows}))
 
 (defn render
-  [{:keys [id cols rows sort-state filters total-rows page-size page-current page-sizes data-url selectable? row-id-fn]}]
+  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn]}]
   [:div {:id id}
    [:div.overflow-x-auto
     [:table.table.table-sm
@@ -30,9 +38,11 @@
                               :filters filters
                               :data-url data-url
                               :selectable? selectable?
-                              :table-id id})
+                              :table-id id
+                              :group-by group-by})
      (body/render {:cols cols
                    :rows rows
+                   :groups groups
                    :selectable? selectable?
                    :row-id-fn row-id-fn
                    :table-id id})]]

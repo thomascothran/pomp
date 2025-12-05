@@ -7,6 +7,7 @@
             [pomp.rad.datatable.filter-menu :as dt-filter]
             [pomp.rad.datatable.table :as dt-table]
             [pomp.rad.datatable.column :as dt-column]
+            [pomp.rad.datatable.group :as dt-group]
             [pomp.rad.datatable.in-memory-query :as dt-imq]))
 
 (def columns
@@ -42,7 +43,7 @@
    :body (->html
           (page
            [:div.p-8
-            {:data-signals "{datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], dragging: null, dragOver: null}}"}
+            {:data-signals "{datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, groupBy: [], openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], dragging: null, dragOver: null, expanded: {}}}"}
             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
             [:div#datatable-container
              {:data-init (str "@get('" data-url "')")}
@@ -56,6 +57,8 @@
         ordered-cols (dt-column/reorder columns column-order)
         query-fn (dt-imq/query-fn philosophers)
         {:keys [signals rows total-rows]} (dt-table/query current-signals query-params query-fn)
+        group-by (:group-by signals)
+        groups (when (seq group-by) (dt-group/group-rows rows group-by))
         filters-patch (dt-filter/compute-patch (:filters current-signals) (:filters signals))]
     (->sse-response req
                     {on-open
@@ -70,6 +73,7 @@
                                                {:datatable {:sort (:sort signals)
                                                             :page (:page signals)
                                                             :filters filters-patch
+                                                            :groupBy (mapv name group-by)
                                                             :openFilter ""
                                                             :columnOrder column-order
                                                             :dragging nil
@@ -77,8 +81,10 @@
                        (d*/patch-elements! sse (->html (dt-table/render {:id "datatable"
                                                                          :cols ordered-cols
                                                                          :rows rows
+                                                                         :groups groups
                                                                          :sort-state (:sort signals)
                                                                          :filters (:filters signals)
+                                                                         :group-by group-by
                                                                          :total-rows total-rows
                                                                          :page-size (get-in signals [:page :size])
                                                                          :page-current (get-in signals [:page :current])
