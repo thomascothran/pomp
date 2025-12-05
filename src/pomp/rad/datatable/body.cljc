@@ -4,7 +4,7 @@
   (let [signal-path (str table-id ".selections." row-id)]
     [:tr
      (when selectable?
-       [:td
+       [:td.w-3
         [:input.checkbox.checkbox-sm
          {:type "checkbox"
           :data-signals (str "{\"" signal-path "\": false}")

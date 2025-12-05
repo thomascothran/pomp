@@ -39,7 +39,7 @@
   [:thead
    [:tr
     (when selectable?
-      [:th
+      [:th.w-3
        [:input.checkbox.checkbox-sm
         {:type "checkbox"
          :data-on:click (str "evt.target.checked ? @setAll(true, { include: '" table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: '" table-id "\\\\.selections\\\\..*' })")}]])
@@ -52,7 +52,7 @@
     [:thead
      [:tr
       (when selectable?
-        [:th
+        [:th.w-3
          [:input.checkbox.checkbox-sm
           {:type "checkbox"
            :data-on:click (str "evt.target.checked ? @setAll(true, { include: '" table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: '" table-id "\\\\.selections\\\\..*' })")}]])
