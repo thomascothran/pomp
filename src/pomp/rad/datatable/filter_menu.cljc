@@ -68,7 +68,8 @@
                :overflow "visible"}}
       [:form.flex.flex-col.gap-3
        {:data-on:submit__prevent
-        (str "@get('" data-url "?filterCol=" col-name
+        (str "document.getElementById('" popover-id "').hidePopover(); "
+             "@get('" data-url "?filterCol=" col-name
              "&filterOp=' + evt.target.elements['filterOp'].value + "
              "'&filterVal=' + evt.target.elements['filterVal'].value)")}
        [:div.text-sm.font-semibold (str "Filter " col-label)]
@@ -93,9 +94,17 @@
         [:button.btn.btn-sm.btn-ghost.flex-1
          {:type "button"
           :disabled (not has-filter?)
-          :data-on:click (str "@get('" data-url "?filterCol=" col-name "&filterVal=')")}
+          :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
+                              "@get('" data-url "?filterCol=" col-name "&filterVal=')")}
          "Clear"]
-        [:button.btn.btn-sm.btn-primary.flex-1 {:type "submit"} "Apply"]]]])))
+        [:button.btn.btn-sm.btn-primary.flex-1
+         {:type "button"
+          :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
+                              "@get('" data-url "?filterCol=" col-name
+                              "&filterOp=' + evt.target.closest('form').elements['filterOp'].value + "
+                              "'&filterVal=' + encodeURIComponent(evt.target.closest('form').elements['filterVal'].value))")}
+         "Apply"]]]])))
+
 
 
 

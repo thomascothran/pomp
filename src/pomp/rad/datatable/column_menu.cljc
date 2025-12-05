@@ -48,7 +48,8 @@
   [{:keys [col-key col-label data-url]}]
   (let [col-name (name col-key)
         popover-id (str "col-menu-" col-name)
-        anchor-name (str "--col-menu-" col-name)]
+        anchor-name (str "--col-menu-" col-name)
+        hide-popover (str "document.getElementById('" popover-id "').hidePopover(); ")]
     (list
      [:button.btn.btn-ghost.btn-xs.px-1.opacity-50.hover:opacity-100
       {:popovertarget popover-id
@@ -65,13 +66,13 @@
                :font-weight "normal"}}
       [:ul.menu.menu-sm.w-44
        [:li
-        [:a.flex.items-center.gap-2 {:data-on:click (str "@get('" data-url "?sortCol=" col-name "&sortDir=asc')")}
+        [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@get('" data-url "?sortCol=" col-name "&sortDir=asc')")}
          arrow-up-icon "Sort ascending"]]
        [:li
-        [:a.flex.items-center.gap-2 {:data-on:click (str "@get('" data-url "?sortCol=" col-name "&sortDir=desc')")}
+        [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@get('" data-url "?sortCol=" col-name "&sortDir=desc')")}
          arrow-down-icon "Sort descending"]]
        [:li
-        [:a.flex.items-center.gap-2 {:data-on:click (str "@get('" data-url "?groupBy=" col-name "')")}
+        [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@get('" data-url "?groupBy=" col-name "')")}
          list-icon "Group by " col-label]]]])))
 
 (defn render-group-column
@@ -94,5 +95,5 @@
                :font-weight "normal"}}
       [:ul.menu.menu-sm.w-44
        [:li
-        [:a {:data-on:click (str "@get('" data-url "?ungroup=true')")}
+        [:a {:data-on:click (str "document.getElementById('" popover-id "').hidePopover(); @get('" data-url "?ungroup=true')")}
          "Remove grouping"]]]])))
