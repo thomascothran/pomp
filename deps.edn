@@ -1,5 +1,4 @@
-{:deps {dev.onionpancakes/chassis  {:mvn/version "1.0.365"}
-        dev.data-star.clojure/ring {:mvn/version "1.0.0-RC4"}
+{:deps {dev.data-star.clojure/ring {:mvn/version "1.0.0-RC4"}
         metosin/jsonista           {:mvn/version "0.3.13"}}
 
  :aliases
@@ -10,7 +9,8 @@
                 org.clojure/tools.namespace {:mvn/version "1.5.0"}
                 djblue/portal {:mvn/version "0.61.0"}
                 info.sunng/ring-jetty9-adapter {:mvn/version "0.37.6"}
-                metosin/reitit {:mvn/version "0.9.1"}}
+                metosin/reitit {:mvn/version "0.9.1"}
+                dev.onionpancakes/chassis  {:mvn/version "1.0.365"}}
 
    :exec-fn dev/start-development!
    :exec-args {}
