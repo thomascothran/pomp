@@ -20,5 +20,6 @@
                   {:group-key group-key
                    :group-value group-value
                    :rows group-rows
-                   :row-ids (set (map :id group-rows))}))
+                   :row-ids (set (map :id group-rows))
+                   :count (count group-rows)}))
            (sort-by :group-value)))))

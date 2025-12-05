@@ -39,7 +39,7 @@
               (get row key))])]))
 
 (defn render-group-row
-  [{:keys [group-value row-ids cols selectable? table-id group-idx]}]
+  [{:keys [group-value row-ids cols selectable? table-id group-idx count]}]
   (let [expanded-signal (str table-id ".expanded." group-idx)
         row-id-strs (map #(str table-id "\\\\.selections\\\\." %) row-ids)
         select-pattern (str/join "|" row-id-strs)]
@@ -55,13 +55,14 @@
         :data-signals (str "{\"" expanded-signal "\": false}")}
        [:span {:data-show (str "$" expanded-signal)} chevron-down]
        [:span {:data-show (str "!$" expanded-signal)} chevron-right]
-       [:span.font-medium (str group-value)]]]
+       [:span.font-medium (str group-value)]
+       [:span.text-base-content.opacity-50 (str "(" count ")")]]]
      (for [_ cols]
        [:td])]))
 
 (defn render-group
   [{:keys [group cols selectable? row-id-fn table-id group-idx]}]
-  (let [{:keys [group-value rows row-ids]} group
+  (let [{:keys [group-value rows row-ids count]} group
         expanded-signal (str table-id ".expanded." group-idx)]
     (list
      (render-group-row {:group-value group-value
@@ -69,7 +70,8 @@
                         :cols cols
                         :selectable? selectable?
                         :table-id table-id
-                        :group-idx group-idx})
+                        :group-idx group-idx
+                        :count count})
      (for [row rows]
        [:tr {:data-show (str "$" expanded-signal)}
         (when selectable?
