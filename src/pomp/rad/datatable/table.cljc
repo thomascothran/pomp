@@ -29,7 +29,8 @@
                               :sort-state sort-state
                               :filters filters
                               :data-url data-url
-                              :selectable? selectable?})
+                              :selectable? selectable?
+                              :table-id id})
      (body/render {:cols cols
                    :rows rows
                    :selectable? selectable?
@@ -47,5 +48,5 @@
   [:div {:id id}
    [:div.overflow-x-auto
     [:table.table.table-sm
-     (header/render-simple {:cols cols :selectable? selectable?})
+     (header/render-simple {:cols cols :selectable? selectable? :table-id id})
      (body/render-skeleton {:cols cols :n n :selectable? selectable?})]]])
