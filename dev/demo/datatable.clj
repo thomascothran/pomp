@@ -51,7 +51,9 @@
 
 (defn data-handler [req]
   (let [query-params (:query-params req)
-        current-signals (get-in (get-signals req) [:datatable] {})
+        raw-signals (get-in (get-signals req) [:datatable] {})
+        current-signals (-> raw-signals
+                            (assoc :group-by (mapv keyword (:groupBy raw-signals))))
         initial-load? (empty? query-params)
         column-order (dt-column/next-state (:columnOrder current-signals) columns query-params)
         ordered-cols (dt-column/reorder columns column-order)

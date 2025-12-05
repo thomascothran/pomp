@@ -29,10 +29,10 @@
         on-last? (or (zero? total-rows) (>= (+ page-current 1) total-pgs))]
     [:div.flex.items-center.justify-between.mt-4.text-sm.opacity-70
      [:div.flex.items-center.gap-4
-      (when (util/has-active-filters? filters)
-        [:button.btn.btn-sm.btn-ghost.text-error.opacity-100
-         {:data-on:click (str "@get('" data-url "?clearFilters=1')")}
-         "✕ Clear filters"])
+      #_(when (util/has-active-filters? filters)
+          [:button.btn.btn-sm.btn-ghost.text-error.opacity-100
+           {:data-on:click (str "@get('" data-url "?clearFilters=1')")}
+           "✕ Clear filters"])
       [:div.flex.items-center.gap-1
        [:select.select.select-ghost.select-sm.font-medium
         {:data-on:change (str "@get('" data-url "?pageSize=' + evt.target.value)")}
