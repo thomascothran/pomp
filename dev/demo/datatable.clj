@@ -8,6 +8,7 @@
             [pomp.rad.datatable.table :as dt-table]
             [pomp.rad.datatable.column :as dt-column]
             [pomp.rad.datatable.group :as dt-group]
+            [pomp.rad.datatable.columns-menu :as dt-columns-menu]
             [pomp.rad.datatable.in-memory-query :as dt-imq]))
 
 (def columns
@@ -43,7 +44,7 @@
    :body (->html
           (page
            [:div.p-8
-            {:data-signals "{datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, groupBy: [], openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], dragging: null, dragOver: null, expanded: {}}}"}
+            {:data-signals "{datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, groupBy: [], openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], columns: {name: {visible: true}, century: {visible: true}, school: {visible: true}, region: {visible: true}}, dragging: null, dragOver: null, expanded: {}}}"}
             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
             [:div#datatable-container
              {:data-init (str "@get('" data-url "')")}
@@ -54,9 +55,11 @@
         raw-signals (get-in (get-signals req) [:datatable] {})
         current-signals (-> raw-signals
                             (assoc :group-by (mapv keyword (:groupBy raw-signals))))
+        columns-state (:columns current-signals)
         initial-load? (empty? query-params)
         column-order (dt-column/next-state (:columnOrder current-signals) columns query-params)
         ordered-cols (dt-column/reorder columns column-order)
+        visible-cols (dt-column/filter-visible ordered-cols columns-state)
         query-fn (dt-imq/query-fn philosophers)
         {:keys [signals rows total-rows]} (dt-table/query current-signals query-params query-fn)
         group-by (:group-by signals)
@@ -67,7 +70,7 @@
                      (fn [sse]
                        (when initial-load?
                          (d*/patch-elements! sse (->html (dt-table/render-skeleton {:id "datatable"
-                                                                                    :cols ordered-cols
+                                                                                    :cols visible-cols
                                                                                     :n 10
                                                                                     :selectable? true})))
                          (Thread/sleep 300))
@@ -81,7 +84,7 @@
                                                             :dragging nil
                                                             :dragOver nil}}))
                        (d*/patch-elements! sse (->html (dt-table/render {:id "datatable"
-                                                                         :cols ordered-cols
+                                                                         :cols visible-cols
                                                                          :rows rows
                                                                          :groups groups
                                                                          :sort-state (:sort signals)
@@ -92,7 +95,11 @@
                                                                          :page-current (get-in signals [:page :current])
                                                                          :page-sizes page-sizes
                                                                          :data-url data-url
-                                                                         :selectable? true})))
+                                                                         :selectable? true
+                                                                         :toolbar (dt-columns-menu/render {:cols ordered-cols
+                                                                                                           :columns-state columns-state
+                                                                                                           :table-id "datatable"
+                                                                                                           :data-url data-url})})))
                        (d*/close-sse! sse))})))
 
 (defn make-routes [_]

@@ -29,8 +29,12 @@
      :total-rows total-rows}))
 
 (defn render
-  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn]}]
+  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar]}]
   [:div {:id id}
+   (when toolbar
+     [:div.flex.items-center.px-2.py-1.border-b.border-base-300.bg-base-200
+      {:style {:justify-content "flex-end"}}
+      toolbar])
    [:div.overflow-x-auto
     [:table.table.table-sm
      (header/render-sortable {:cols cols

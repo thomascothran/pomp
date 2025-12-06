@@ -102,5 +102,6 @@
              (column-menu/render
               {:col-key key
                :col-label label
-               :data-url data-url})]]]))]]))
+               :data-url data-url
+               :table-id table-id})]]]))]]))
 

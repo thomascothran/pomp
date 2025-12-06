@@ -41,3 +41,12 @@
     (let [col-map (into {} (map (fn [c] [(name (:key c)) c]) cols))]
       (mapv #(get col-map %) column-order))
     cols))
+
+(defn filter-visible
+  "Filters columns to only include visible ones based on columns state.
+   columns-state is a map like {:name {:visible true}, :century {:visible false}}
+   Columns default to visible if not specified in state."
+  [cols columns-state]
+  (filter (fn [col]
+            (get-in columns-state [(keyword (name (:key col))) :visible] true))
+          cols))
