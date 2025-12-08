@@ -1,16 +1,65 @@
 # Datatable
 
-## `query-fn`
+A server-rendered datatable component for Clojure web applications using Datastar and DaisyUI. Provides filtering, sorting, pagination, column reordering, column visibility, and row grouping—all driven by server-side rendering with SSE updates.
+
+## Features
+
+- **Filtering**: Text filters with operators (contains, equals, starts-with, etc.)
+- **Sorting**: Click column headers to sort ascending/descending
+- **Pagination**: Configurable page sizes with navigation
+- **Column reordering**: Drag-and-drop column headers
+- **Column visibility**: Show/hide columns via menu
+- **Row grouping**: Group rows by any column
+- **Row selection**: Optional checkbox selection
+- **Skeleton loading**: Smooth loading states
+
+## Quick Start
+
+```clojure
+(ns myapp.table
+  (:require [pomp.rad.datatable.table :as dt]
+            [pomp.rad.datatable.in-memory-query :as imq]))
+
+(def columns
+  [{:key :name :label "Name" :type :text}
+   {:key :email :label "Email" :type :text}
+   {:key :role :label "Role" :type :enum}])
+
+(def users
+  [{:id 1 :name "Alice" :email "alice@example.com" :role "Admin"}
+   {:id 2 :name "Bob" :email "bob@example.com" :role "User"}
+   {:id 3 :name "Carol" :email "carol@example.com" :role "User"}])
+
+(def query-fn (imq/query-fn users))
+
+;; In your data handler, call the query function:
+(let [{:keys [signals rows total-rows]} (dt/query current-signals query-params query-fn)]
+  ;; Render the table with the results
+  (dt/render {:id "users-table"
+              :cols columns
+              :rows rows
+              :total-rows total-rows
+              :page-size (get-in signals [:page :size])
+              :page-current (get-in signals [:page :current])
+              :page-sizes [10 25 50]
+              :data-url "/api/users"
+              :sort-state (:sort signals)
+              :filters (:filters signals)}))
+```
+
+## API Reference
+
+### `query-fn`
 
 The `query-fn` is called by the datatable to fetch rows based on the current filter, sort, and pagination state.
 
-### Signature
+#### Signature
 
 ```clojure
 (query-fn signals) => {:rows [...] :total-rows n :page {...}}
 ```
 
-### Input: `signals` map
+#### Input: `signals` map
 
 | Key        | Type                        | Description                              |
 |------------|-----------------------------|------------------------------------------|
@@ -19,7 +68,7 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 | `:page`    | `{:size int :current int}`  | Pagination state |
 | `:group-by`| `keyword` (optional)        | Column to group by |
 
-#### Filter spec shape (`filter-spec`)
+#### Filter spec shape
 
 ```clojure
 {:type "text"
@@ -41,7 +90,7 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
  :current 0}   ;; 0-indexed page number
 ```
 
-### Output: result map
+#### Output: result map
 
 | Key          | Type   | Description                                      |
 |--------------|--------|--------------------------------------------------|
@@ -49,19 +98,17 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 | `:total-rows`| `int`  | Total count of rows **after filtering** (for pagination) |
 | `:page`      | `map`  | `{:size int :current int}` - possibly clamped page state |
 
-## `make-handler`
+### `make-handler`
 
 Creates a Ring handler for datatable data updates. Handles filtering, sorting, pagination, column visibility, and grouping.
 
-### Signature
+#### Signature
 
 ```clojure
 (make-handler opts) => (fn [request] ring-response)
 ```
 
-### Options
-
-#### Required
+#### Required options
 
 | Key | Type | Description |
 |-----|------|-------------|
@@ -70,7 +117,7 @@ Creates a Ring handler for datatable data updates. Handles filtering, sorting, p
 | `:id` | `string` | Table element ID |
 | `:data-url` | `string` | URL for data fetches |
 
-#### Optional
+#### Optional options
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -88,11 +135,11 @@ Creates a Ring handler for datatable data updates. Handles filtering, sorting, p
  :type :text}  ;; :text or :enum
 ```
 
-### Example
+#### Example
 
 ```clojure
 (def handler
-  (make-handler {:query-fn (in-memory-query/query-fn my-data)
+  (make-handler {:query-fn (imq/query-fn my-data)
                  :columns [{:key :name :label "Name" :type :text}
                            {:key :status :label "Status" :type :enum}]
                  :id "my-table"
