@@ -1,6 +1,6 @@
 (ns demo.util
   (:require [dev.onionpancakes.chassis.core :as c]
-            [jsonista.core :as j]
+            [clojure.data.json :as json]
             [starfederation.datastar.clojure.api :as d*]))
 
 (defn ->html
@@ -26,5 +26,5 @@
   [req]
   (if (get-in req [:headers "datastar-request"])
     (some-> (d*/get-signals req)
-            (j/read-value j/keyword-keys-object-mapper))
+            (json/read-str {:key-fn keyword}))
     req))

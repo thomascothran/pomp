@@ -1,5 +1,5 @@
 {:deps {dev.data-star.clojure/ring {:mvn/version "1.0.0-RC4"}
-        metosin/jsonista           {:mvn/version "0.3.13"}}
+        org.clojure/data.json      {:mvn/version "2.5.1"}}
 
  :aliases
  {:dev

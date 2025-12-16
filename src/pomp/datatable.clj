@@ -4,7 +4,7 @@
    Use `make-handler` to create a Ring handler for your datatable."
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.ring :refer [->sse-response on-open]]
-            [jsonista.core :as j]
+            [clojure.data.json :as json]
             [pomp.rad.datatable.core :as dt]
             [pomp.rad.datatable.state.column :as column-state]
             [pomp.rad.datatable.state.group :as group-state]
@@ -18,7 +18,7 @@
   [req id]
   (if (get-in req [:headers "datastar-request"])
     (some-> (d*/get-signals req)
-            (j/read-value j/keyword-keys-object-mapper)
+            (json/read-str {:key-fn keyword})
             :datatable
             (get (keyword id)))
     {}))
@@ -72,7 +72,7 @@
                                                                                         :n skeleton-rows
                                                                                         :selectable? selectable?})))
                            (Thread/sleep 300))
-                         (d*/patch-signals! sse (j/write-value-as-string
+                         (d*/patch-signals! sse (json/write-str
                                                  {:datatable {(keyword id) {:sort (:sort signals)
                                                                             :page (:page signals)
                                                                             :filters filters-patch
