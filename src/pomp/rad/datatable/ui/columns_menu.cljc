@@ -21,7 +21,7 @@
       [:ul.menu.menu-sm.w-48
        (for [{:keys [key label]} cols]
          (let [col-name (name key)
-               signal-path (str table-id ".columns." col-name ".visible")
+               signal-path (str "datatable." table-id ".columns." col-name ".visible")
                visible? (get-in columns-state [(keyword col-name) :visible] true)]
            [:li
             [:label.flex.items-center.gap-2

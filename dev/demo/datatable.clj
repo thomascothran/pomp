@@ -1,14 +1,7 @@
 (ns demo.datatable
-  (:require [starfederation.datastar.clojure.api :as d*]
-            [starfederation.datastar.clojure.adapter.ring
-             :refer [->sse-response on-open]]
-            [demo.util :refer [->html page get-signals]]
-            [jsonista.core :as j]
-            [pomp.rad.datatable.core :as dt]
-            [pomp.rad.datatable.state.column :as column-state]
-            [pomp.rad.datatable.state.group :as group-state]
-            [pomp.rad.datatable.state.filter :as filter-state]
-            [pomp.rad.datatable.ui.columns-menu :as columns-menu]))
+  (:require [demo.util :refer [->html page]]
+            [pomp.datatable :as datatable]
+            [pomp.rad.datatable.core :as dt]))
 
 (def columns
   [{:key :name :label "Name" :type :text}
@@ -33,8 +26,6 @@
    {:id 14 :name "Immanuel Kant" :century "18th" :school "German Idealism" :region "Germany"}
    {:id 15 :name "Friedrich Nietzsche" :century "19th" :school "Existentialism" :region "Germany"}])
 
-(def page-sizes [10 25 100 250])
-
 (def data-url "/demo/datatable/data")
 
 (defn page-handler [_req]
@@ -43,63 +34,21 @@
    :body (->html
           (page
            [:div.p-8
-            {:data-signals "{datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, groupBy: [], openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], columns: {name: {visible: true}, century: {visible: true}, school: {visible: true}, region: {visible: true}}, dragging: null, dragOver: null, expanded: {}}}"}
+            {:data-signals "{datatable: {datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, groupBy: [], openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], columns: {name: {visible: true}, century: {visible: true}, school: {visible: true}, region: {visible: true}}, dragging: null, dragOver: null, expanded: {}}}}"}
             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
             [:div#datatable-container
              {:data-init (str "@get('" data-url "')")}
              [:div#datatable]]]))})
 
-(defn data-handler [req]
-  (let [query-params (:query-params req)
-        raw-signals (get-in (get-signals req) [:datatable] {})
-        current-signals (-> raw-signals
-                            (assoc :group-by (mapv keyword (:groupBy raw-signals))))
-        columns-state (:columns current-signals)
-        initial-load? (empty? query-params)
-        column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
-        ordered-cols (column-state/reorder columns column-order)
-        visible-cols (column-state/filter-visible ordered-cols columns-state)
-        query-fn (dt/query-fn philosophers)
-        {:keys [signals rows total-rows]} (dt/query current-signals query-params query-fn)
-        group-by (:group-by signals)
-        groups (when (seq group-by) (group-state/group-rows rows group-by))
-        filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))]
-    (->sse-response req
-                    {on-open
-                     (fn [sse]
-                       (when initial-load?
-                         (d*/patch-elements! sse (->html (dt/render-skeleton {:id "datatable"
-                                                                              :cols visible-cols
-                                                                              :n 10
-                                                                              :selectable? true})))
-                         (Thread/sleep 300))
-                       (d*/patch-signals! sse (j/write-value-as-string
-                                               {:datatable {:sort (:sort signals)
-                                                            :page (:page signals)
-                                                            :filters filters-patch
-                                                            :groupBy (mapv name group-by)
-                                                            :openFilter ""
-                                                            :columnOrder column-order
-                                                            :dragging nil
-                                                            :dragOver nil}}))
-                       (d*/patch-elements! sse (->html (dt/render {:id "datatable"
-                                                                   :cols visible-cols
-                                                                   :rows rows
-                                                                   :groups groups
-                                                                   :sort-state (:sort signals)
-                                                                   :filters (:filters signals)
-                                                                   :group-by group-by
-                                                                   :total-rows total-rows
-                                                                   :page-size (get-in signals [:page :size])
-                                                                   :page-current (get-in signals [:page :current])
-                                                                   :page-sizes page-sizes
-                                                                   :data-url data-url
-                                                                   :selectable? true
-                                                                   :toolbar (columns-menu/render {:cols ordered-cols
-                                                                                                  :columns-state columns-state
-                                                                                                  :table-id "datatable"
-                                                                                                  :data-url data-url})})))
-                       (d*/close-sse! sse))})))
+(def data-handler
+  (datatable/make-handler
+   {:id "datatable"
+    :columns columns
+    :query-fn (dt/query-fn philosophers)
+    :data-url data-url
+    :render-html-fn ->html
+    :page-sizes [10 25 100 250]
+    :selectable? true}))
 
 (defn make-routes [_]
   [["/datatable" page-handler]

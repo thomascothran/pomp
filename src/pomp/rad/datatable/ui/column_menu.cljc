@@ -32,7 +32,7 @@
         [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@get('" data-url "?groupBy=" col-name "')")}
          primitives/list-icon "Group by " col-label]]
        [:li
-        [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "$" table-id ".columns." col-name ".visible = false; @get('" data-url "')")}
+        [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "$datatable." table-id ".columns." col-name ".visible = false; @get('" data-url "')")}
          primitives/eye-slash-icon "Hide column"]]]])))
 
 (defn render-group-column

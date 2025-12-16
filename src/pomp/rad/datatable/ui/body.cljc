@@ -3,7 +3,7 @@
             [pomp.rad.datatable.ui.primitives :as primitives]))
 
 (defn render-row [{:keys [cols row selectable? row-id table-id grouped?]}]
-  (let [signal-path (str table-id ".selections." row-id)]
+  (let [signal-path (str "datatable." table-id ".selections." row-id)]
     [:tr
      (when selectable?
        [:td.w-3
@@ -19,8 +19,8 @@
 
 (defn render-group-row
   [{:keys [group-value row-ids cols selectable? table-id group-idx count]}]
-  (let [expanded-signal (str table-id ".expanded." group-idx)
-        row-id-strs (map #(str table-id "\\\\.selections\\\\." %) row-ids)
+  (let [expanded-signal (str "datatable." table-id ".expanded." group-idx)
+        row-id-strs (map #(str "datatable\\\\." table-id "\\\\.selections\\\\." %) row-ids)
         select-pattern (str/join "|" row-id-strs)]
     [:tr.bg-base-200
      (when selectable?
@@ -42,7 +42,7 @@
 (defn render-group
   [{:keys [group cols selectable? row-id-fn table-id group-idx]}]
   (let [{:keys [group-value rows row-ids count]} group
-        expanded-signal (str table-id ".expanded." group-idx)]
+        expanded-signal (str "datatable." table-id ".expanded." group-idx)]
     (list
      (render-group-row {:group-value group-value
                         :row-ids row-ids
@@ -57,8 +57,8 @@
           [:td.w-3
            [:input.checkbox.checkbox-sm
             {:type "checkbox"
-             :data-signals (str "{\"" table-id ".selections." (row-id-fn row) "\": false}")
-             :data-bind (str table-id ".selections." (row-id-fn row))}]])
+             :data-signals (str "{\"datatable." table-id ".selections." (row-id-fn row) "\": false}")
+             :data-bind (str "datatable." table-id ".selections." (row-id-fn row))}]])
         [:td]
         (for [{:keys [key render]} cols]
           [:td (if render

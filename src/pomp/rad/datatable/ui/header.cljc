@@ -10,7 +10,7 @@
       [:th.w-3
        [:input.checkbox.checkbox-sm
         {:type "checkbox"
-         :data-on:click (str "evt.target.checked ? @setAll(true, { include: '" table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: '" table-id "\\\\.selections\\\\..*' })")}]])
+         :data-on:click (str "evt.target.checked ? @setAll(true, { include: 'datatable\\\\." table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: 'datatable\\\\." table-id "\\\\.selections\\\\..*' })")}]])
     (for [{:keys [label]} cols]
       [:th label])]])
 
@@ -26,7 +26,7 @@
         [:th.w-3
          [:input.checkbox.checkbox-sm
           {:type "checkbox"
-           :data-on:click (str "evt.target.checked ? @setAll(true, { include: '" table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: '" table-id "\\\\.selections\\\\..*' })")}]])
+           :data-on:click (str "evt.target.checked ? @setAll(true, { include: 'datatable\\\\." table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: 'datatable\\\\." table-id "\\\\.selections\\\\..*' })")}]])
       (when grouped?
         [:th
          [:div.flex.items-center.justify-between.gap-2
@@ -42,12 +42,12 @@
               sort-dir (:direction current-sort)]
           [:th
            {:draggable "true"
-            :data-on:dragstart (str "$" table-id ".dragging = '" col-name "'")
-            :data-on:dragend (str "$" table-id ".dragging = null; $" table-id ".dragOver = null")
-            :data-on:dragover__prevent (str "$" table-id ".dragOver = '" col-name "'")
-            :data-on:dragleave (str "if ($" table-id ".dragOver === '" col-name "') $" table-id ".dragOver = null")
-            :data-on:drop (str "@get('" data-url "?moveCol=' + $" table-id ".dragging + '&beforeCol=" col-name "')")
-            :data-class (str "{'border-l-4 border-primary': $" table-id ".dragOver === '" col-name "' && $" table-id ".dragging !== '" col-name "'}")}
+            :data-on:dragstart (str "$datatable." table-id ".dragging = '" col-name "'")
+            :data-on:dragend (str "$datatable." table-id ".dragging = null; $datatable." table-id ".dragOver = null")
+            :data-on:dragover__prevent (str "$datatable." table-id ".dragOver = '" col-name "'")
+            :data-on:dragleave (str "if ($datatable." table-id ".dragOver === '" col-name "') $datatable." table-id ".dragOver = null")
+            :data-on:drop (str "@get('" data-url "?moveCol=' + $datatable." table-id ".dragging + '&beforeCol=" col-name "')")
+            :data-class (str "{'border-l-4 border-primary': $datatable." table-id ".dragOver === '" col-name "' && $datatable." table-id ".dragging !== '" col-name "'}")}
            [:div.flex.items-center.justify-between.gap-2
             [:button.flex.items-center.gap-1.hover:text-primary.transition-colors
              {:data-on:click (str "@get('" data-url "?clicked=" col-name "')")}
