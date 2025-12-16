@@ -1,21 +1,14 @@
 (ns pomp.rad.datatable.ui.body
   (:require [clojure.string :as str]
-            [pomp.rad.datatable.ui.primitives :as primitives]))
+            [pomp.rad.datatable.ui.primitives :as primitives]
+            [pomp.rad.datatable.ui.row :as row]))
 
-(defn render-row [{:keys [cols row selectable? row-id table-id grouped?]}]
-  (let [signal-path (str "datatable." table-id ".selections." row-id)]
-    [:tr
-     (when selectable?
-       [:td.w-3
-        [:input.checkbox.checkbox-sm
-         {:type "checkbox"
-          :data-signals (str "{\"" signal-path "\": false}")
-          :data-bind signal-path}]])
-     (when grouped? [:td])
-     (for [{:keys [key render]} cols]
-       [:td (if render
-              (render (get row key) row)
-              (get row key))])]))
+(defn render-row
+  "Renders a data row. Delegates to row/render-row.
+   
+   Deprecated: Use pomp.rad.datatable.ui.row/render-row directly."
+  [ctx]
+  (row/render-row ctx))
 
 (defn render-group-row
   [{:keys [group-value row-ids cols selectable? table-id group-idx count]}]
@@ -51,22 +44,20 @@
                         :table-id table-id
                         :group-idx group-idx
                         :count count})
-     (for [row rows]
-       [:tr {:data-show (str "$" expanded-signal)}
-        (when selectable?
-          [:td.w-3
-           [:input.checkbox.checkbox-sm
-            {:type "checkbox"
-             :data-signals (str "{\"datatable." table-id ".selections." (row-id-fn row) "\": false}")
-             :data-bind (str "datatable." table-id ".selections." (row-id-fn row))}]])
-        [:td]
-        (for [{:keys [key render]} cols]
-          [:td (if render
-                 (render (get row key) row)
-                 (get row key))])]))))
+     (for [r rows]
+       (let [signal-path (str "datatable." table-id ".selections." (row-id-fn r))]
+         [:tr {:data-show (str "$" expanded-signal)}
+          (when selectable?
+            (row/render-selection-cell {:signal-path signal-path}))
+          [:td]
+          (for [col cols]
+            (row/render-cell {:value (get r (:key col))
+                              :row r
+                              :col col}))])))))
 
-(defn render [{:keys [cols rows groups selectable? row-id-fn table-id]}]
+(defn render [{:keys [cols rows groups selectable? row-id-fn table-id render-row render-cell]}]
   (let [row-id-fn (or row-id-fn :id)
+        render-row-fn (or render-row row/render-row)
         grouped? (seq groups)]
     [:tbody
      (if grouped?
@@ -77,13 +68,14 @@
                         :row-id-fn row-id-fn
                         :table-id table-id
                         :group-idx idx}))
-       (for [row rows]
-         (render-row {:cols cols
-                      :row row
-                      :selectable? selectable?
-                      :row-id (row-id-fn row)
-                      :table-id table-id
-                      :grouped? false})))]))
+       (for [r rows]
+         (render-row-fn {:cols cols
+                         :row r
+                         :selectable? selectable?
+                         :row-id (row-id-fn r)
+                         :table-id table-id
+                         :grouped? false
+                         :render-cell render-cell})))]))
 
 (defn render-skeleton-row [{:keys [cols selectable?]}]
   [:tr

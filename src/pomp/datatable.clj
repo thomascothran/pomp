@@ -37,10 +37,15 @@
    - :page-sizes    - Available page sizes (default [10 25 100])
    - :selectable?   - Enable row selection (default false)
    - :skeleton-rows - Number of skeleton rows on initial load (default 10)
+   - :render-row    - Custom row render function (see pomp.rad.datatable.ui.row/render-row)
+   - :render-header - Custom header render function (see pomp.rad.datatable.ui.header/render-sortable)
+   - :render-cell   - Custom cell render function (see pomp.rad.datatable.ui.row/render-cell)
+                      Used by the default render-row; ignored if :render-row is provided
+                      unless the custom render-row chooses to use it.
 
    Returns a Ring handler function that handles datatable requests via SSE."
   [{:keys [id columns query-fn data-url render-html-fn
-           page-sizes selectable? skeleton-rows]
+           page-sizes selectable? skeleton-rows render-row render-header render-cell]
     :or {page-sizes [10 25 100]
          selectable? false
          skeleton-rows 10}}]
@@ -89,6 +94,9 @@
                                                                              :page-sizes page-sizes
                                                                              :data-url data-url
                                                                              :selectable? selectable?
+                                                                             :render-row render-row
+                                                                             :render-header render-header
+                                                                             :render-cell render-cell
                                                                              :toolbar (columns-menu/render {:cols ordered-cols
                                                                                                             :columns-state columns-state
                                                                                                             :table-id id

@@ -6,9 +6,14 @@
    - `next-state` and `query` for state management
    - `query-fn` for creating in-memory query functions
    
+   Customization:
+   The `render` function accepts `:render-row` and `:render-header` options
+   to override the default rendering. See the `render` docstring for details.
+   
    For more control, you can require the sub-namespaces directly:
    - `pomp.rad.datatable.state.*` for state transition functions
-   - `pomp.rad.datatable.ui.*` for rendering functions
+   - `pomp.rad.datatable.ui.*` for rendering functions  
+   - `pomp.rad.datatable.ui.row` for default row/cell render functions
    - `pomp.rad.datatable.query.*` for query implementations"
   (:require [pomp.rad.datatable.state.table :as state]
             [pomp.rad.datatable.state.filter :as filter-state]
@@ -75,7 +80,25 @@
    - :page-sizes   - Available page sizes [10 25 100]
    - :selectable?  - Enable row selection
    - :row-id-fn    - Function to get row ID (default: :id)
-   - :toolbar      - Toolbar hiccup to render above table"
+   - :toolbar      - Toolbar hiccup to render above table
+   
+   Render overrides:
+   - :render-cell   - Custom cell render function. Receives:
+                      {:value any :row map :col map}
+                      Used by the default render-row. If :render-row is also provided,
+                      :render-cell is passed in the context but the custom render-row
+                      must explicitly use it.
+                      See pomp.rad.datatable.ui.row/render-cell for default.
+   
+   - :render-row    - Custom row render function. Receives:
+                      {:cols [...] :row {...} :selectable? bool :row-id id
+                       :table-id str :grouped? bool :render-cell fn-or-nil}
+                      See pomp.rad.datatable.ui.row/render-row for default.
+   
+   - :render-header - Custom header render function. Receives:
+                      {:cols [...] :sort-state [...] :filters {...} :data-url str
+                       :selectable? bool :table-id str :group-by [...]}
+                      See pomp.rad.datatable.ui.header/render-sortable for default."
   ui/render)
 
 (def render-skeleton
