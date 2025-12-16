@@ -1,5 +1,6 @@
 (ns pomp.rad.datatable.filter-menu
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clojure.set :as set]))
 
 (def funnel-icon
   [:svg {:xmlns "http://www.w3.org/2000/svg"
@@ -36,11 +37,11 @@
 
 (defn compute-patch
   [old-signals new-signals]
-  (let [removed-keys (clojure.set/difference (set (keys old-signals)) (set (keys new-signals)))]
+  (let [removed-keys (set/difference (set (keys old-signals)) (set (keys new-signals)))]
     (merge new-signals (into {} (map (fn [k] [k nil]) removed-keys)))))
 
 (defn render
-  [{:keys [col-key col-label current-filter-op current-filter-value col-idx total-cols data-url]}]
+  [{:keys [col-key col-label current-filter-op current-filter-value data-url]}]
   (let [col-name (name col-key)
         popover-id (str "filter-" col-name)
         anchor-name (str "--filter-" col-name)
@@ -75,7 +76,7 @@
        [:div.text-sm.font-semibold (str "Filter " col-label)]
        [:input {:type "hidden" :name "filterOp" :value current-op}]
        [:details.dropdown.w-full
-        [:summary.select.select-sm.select-bordered.w-full.flex.items-center
+        [:summary.select.select-sm.w-full.flex.items-center
          {:style {:padding-right "2rem"}}
          [:span current-label]]
         [:ul.dropdown-content.menu.bg-base-100.rounded-field.w-full.shadow-lg.mt-1.text-xs.py-1
@@ -85,7 +86,7 @@
                                      "evt.target.closest('details').querySelector('summary span').textContent = '" label "'; "
                                      "evt.target.closest('details').removeAttribute('open')")}
             [:a.py-1 {:class (when (= current-op value) "active")} label]])]]
-       [:input.input.input-sm.input-bordered.w-full
+       [:input.input.input-sm.w-full
         {:type "text"
          :name "filterVal"
          :placeholder "Value..."
@@ -104,8 +105,3 @@
                               "&filterOp=' + evt.target.closest('form').elements['filterOp'].value + "
                               "'&filterVal=' + encodeURIComponent(evt.target.closest('form').elements['filterVal'].value))")}
          "Apply"]]]])))
-
-
-
-
-
