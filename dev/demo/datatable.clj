@@ -4,12 +4,11 @@
              :refer [->sse-response on-open]]
             [demo.util :refer [->html page get-signals]]
             [jsonista.core :as j]
-            [pomp.rad.datatable.filter-menu :as dt-filter]
-            [pomp.rad.datatable.table :as dt-table]
-            [pomp.rad.datatable.column :as dt-column]
-            [pomp.rad.datatable.group :as dt-group]
-            [pomp.rad.datatable.columns-menu :as dt-columns-menu]
-            [pomp.rad.datatable.in-memory-query :as dt-imq]))
+            [pomp.rad.datatable.core :as dt]
+            [pomp.rad.datatable.state.column :as column-state]
+            [pomp.rad.datatable.state.group :as group-state]
+            [pomp.rad.datatable.state.filter :as filter-state]
+            [pomp.rad.datatable.ui.columns-menu :as columns-menu]))
 
 (def columns
   [{:key :name :label "Name" :type :text}
@@ -57,22 +56,22 @@
                             (assoc :group-by (mapv keyword (:groupBy raw-signals))))
         columns-state (:columns current-signals)
         initial-load? (empty? query-params)
-        column-order (dt-column/next-state (:columnOrder current-signals) columns query-params)
-        ordered-cols (dt-column/reorder columns column-order)
-        visible-cols (dt-column/filter-visible ordered-cols columns-state)
-        query-fn (dt-imq/query-fn philosophers)
-        {:keys [signals rows total-rows]} (dt-table/query current-signals query-params query-fn)
+        column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
+        ordered-cols (column-state/reorder columns column-order)
+        visible-cols (column-state/filter-visible ordered-cols columns-state)
+        query-fn (dt/query-fn philosophers)
+        {:keys [signals rows total-rows]} (dt/query current-signals query-params query-fn)
         group-by (:group-by signals)
-        groups (when (seq group-by) (dt-group/group-rows rows group-by))
-        filters-patch (dt-filter/compute-patch (:filters current-signals) (:filters signals))]
+        groups (when (seq group-by) (group-state/group-rows rows group-by))
+        filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))]
     (->sse-response req
                     {on-open
                      (fn [sse]
                        (when initial-load?
-                         (d*/patch-elements! sse (->html (dt-table/render-skeleton {:id "datatable"
-                                                                                    :cols visible-cols
-                                                                                    :n 10
-                                                                                    :selectable? true})))
+                         (d*/patch-elements! sse (->html (dt/render-skeleton {:id "datatable"
+                                                                              :cols visible-cols
+                                                                              :n 10
+                                                                              :selectable? true})))
                          (Thread/sleep 300))
                        (d*/patch-signals! sse (j/write-value-as-string
                                                {:datatable {:sort (:sort signals)
@@ -83,23 +82,23 @@
                                                             :columnOrder column-order
                                                             :dragging nil
                                                             :dragOver nil}}))
-                       (d*/patch-elements! sse (->html (dt-table/render {:id "datatable"
-                                                                         :cols visible-cols
-                                                                         :rows rows
-                                                                         :groups groups
-                                                                         :sort-state (:sort signals)
-                                                                         :filters (:filters signals)
-                                                                         :group-by group-by
-                                                                         :total-rows total-rows
-                                                                         :page-size (get-in signals [:page :size])
-                                                                         :page-current (get-in signals [:page :current])
-                                                                         :page-sizes page-sizes
-                                                                         :data-url data-url
-                                                                         :selectable? true
-                                                                         :toolbar (dt-columns-menu/render {:cols ordered-cols
-                                                                                                           :columns-state columns-state
-                                                                                                           :table-id "datatable"
-                                                                                                           :data-url data-url})})))
+                       (d*/patch-elements! sse (->html (dt/render {:id "datatable"
+                                                                   :cols visible-cols
+                                                                   :rows rows
+                                                                   :groups groups
+                                                                   :sort-state (:sort signals)
+                                                                   :filters (:filters signals)
+                                                                   :group-by group-by
+                                                                   :total-rows total-rows
+                                                                   :page-size (get-in signals [:page :size])
+                                                                   :page-current (get-in signals [:page :current])
+                                                                   :page-sizes page-sizes
+                                                                   :data-url data-url
+                                                                   :selectable? true
+                                                                   :toolbar (columns-menu/render {:cols ordered-cols
+                                                                                                  :columns-state columns-state
+                                                                                                  :table-id "datatable"
+                                                                                                  :data-url data-url})})))
                        (d*/close-sse! sse))})))
 
 (defn make-routes [_]
@@ -109,7 +108,5 @@
 (comment
   (require '[demo.datatable :as dt] :reload)
   (require '[demo.util :refer [->html]])
-
-  (dt-util/apply-filters philosophers {:name {:type "text" :op "contains" :value "a"}})
 
   (:body (page-handler {})))

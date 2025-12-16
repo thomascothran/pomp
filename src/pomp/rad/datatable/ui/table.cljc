@@ -1,36 +1,10 @@
-(ns pomp.rad.datatable.table
-  (:require [pomp.rad.datatable.header :as header]
-            [pomp.rad.datatable.body :as body]
-            [pomp.rad.datatable.pagination :as pagination]
-            [pomp.rad.datatable.filter-menu :as filter-menu]
-            [pomp.rad.datatable.sort :as sort]
-            [pomp.rad.datatable.group :as group]))
-
-(defn next-state
-  [signals query-params]
-  (let [new-group-by (group/next-state (:group-by signals) query-params)
-        grouping-changed? (not= new-group-by (:group-by signals))
-        new-filters (if grouping-changed?
-                      {}
-                      (or (filter-menu/next-state (:filters signals) query-params) {}))
-        new-sort (or (sort/next-state (:sort signals) query-params) [])
-        new-page (pagination/next-state (:page signals) query-params)]
-    {:filters new-filters
-     :sort new-sort
-     :page new-page
-     :group-by new-group-by}))
-
-(defn query
-  [signals query-params query-fn]
-  (let [new-signals (next-state signals query-params)
-        {:keys [rows total-rows page]} (query-fn new-signals)]
-    {:signals (assoc new-signals :page page)
-     :rows rows
-     :total-rows total-rows}))
+(ns pomp.rad.datatable.ui.table
+  (:require [pomp.rad.datatable.ui.header :as header]
+            [pomp.rad.datatable.ui.body :as body]
+            [pomp.rad.datatable.ui.pagination :as pagination]))
 
 (defn render
-  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar]
-    :as opts}]
+  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar]}]
   [:div {:id id}
    (when toolbar
      [:div.flex.items-center.px-2.py-1.border-b.border-base-300.bg-base-200

@@ -1,7 +1,7 @@
 (ns pomp.rad.datatable.table-test
   (:require [clojure.edn :as edn]
             [clojure.test :refer [deftest is]]
-            [pomp.rad.datatable.table :as t]))
+            [pomp.rad.datatable.core :as dt]))
 
 (def test-table-data
   {:group-by [],
@@ -39,4 +39,4 @@
 
 (deftest table-render-characterization-test
   (is (= expected-result
-         (t/render test-table-data))))
+         (dt/render test-table-data))))

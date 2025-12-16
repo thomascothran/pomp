@@ -1,4 +1,4 @@
-(ns pomp.rad.datatable.group)
+(ns pomp.rad.datatable.state.group)
 
 (defn next-state
   [group-by query-params]

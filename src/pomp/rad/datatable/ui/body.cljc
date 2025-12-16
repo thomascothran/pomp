@@ -1,27 +1,6 @@
-(ns pomp.rad.datatable.body
-  (:require [clojure.string :as str]))
-
-(def chevron-right
-  [:svg.w-4.h-4
-   {:xmlns "http://www.w3.org/2000/svg"
-    :fill "none"
-    :viewBox "0 0 24 24"
-    :stroke-width "2"
-    :stroke "currentColor"}
-   [:path {:stroke-linecap "round"
-           :stroke-linejoin "round"
-           :d "m8.25 4.5 7.5 7.5-7.5 7.5"}]])
-
-(def chevron-down
-  [:svg.w-4.h-4
-   {:xmlns "http://www.w3.org/2000/svg"
-    :fill "none"
-    :viewBox "0 0 24 24"
-    :stroke-width "2"
-    :stroke "currentColor"}
-   [:path {:stroke-linecap "round"
-           :stroke-linejoin "round"
-           :d "m19.5 8.25-7.5 7.5-7.5-7.5"}]])
+(ns pomp.rad.datatable.ui.body
+  (:require [clojure.string :as str]
+            [pomp.rad.datatable.ui.primitives :as primitives]))
 
 (defn render-row [{:keys [cols row selectable? row-id table-id grouped?]}]
   (let [signal-path (str table-id ".selections." row-id)]
@@ -53,8 +32,8 @@
       [:button.btn.btn-ghost.btn-xs.flex.items-center.gap-1
        {:data-on:click (str "$" expanded-signal " = !$" expanded-signal)
         :data-signals (str "{\"" expanded-signal "\": false}")}
-       [:span {:data-show (str "$" expanded-signal)} chevron-down]
-       [:span {:data-show (str "!$" expanded-signal)} chevron-right]
+       [:span {:data-show (str "$" expanded-signal)} primitives/chevron-down]
+       [:span {:data-show (str "!$" expanded-signal)} primitives/chevron-right]
        [:span.font-medium (str group-value)]
        [:span.text-base-content.opacity-50 (str "(" count ")")]]]
      (for [_ cols]

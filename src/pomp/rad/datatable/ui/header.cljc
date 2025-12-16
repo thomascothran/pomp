@@ -1,42 +1,9 @@
-(ns pomp.rad.datatable.header
-  (:require [pomp.rad.datatable.filter-menu :as filter-menu]
-            [pomp.rad.datatable.column-menu :as column-menu]))
+(ns pomp.rad.datatable.ui.header
+  (:require [pomp.rad.datatable.ui.primitives :as primitives]
+            [pomp.rad.datatable.ui.filter-menu :as filter-menu]
+            [pomp.rad.datatable.ui.column-menu :as column-menu]))
 
-(def sort-icon-both
-  [:svg {:xmlns "http://www.w3.org/2000/svg"
-         :fill "none"
-         :viewBox "0 0 24 24"
-         :stroke-width "1.5"
-         :stroke "currentColor"
-         :class "w-3 h-3"}
-   [:path {:stroke-linecap "round"
-           :stroke-linejoin "round"
-           :d "M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5"}]])
-
-(def sort-icon-asc
-  [:svg {:xmlns "http://www.w3.org/2000/svg"
-         :fill "none"
-         :viewBox "0 0 24 24"
-         :stroke-width "2"
-         :stroke "currentColor"
-         :class "w-3 h-3"}
-   [:path {:stroke-linecap "round"
-           :stroke-linejoin "round"
-           :d "M4.5 15.75l7.5-7.5 7.5 7.5"}]])
-
-(def sort-icon-desc
-  [:svg {:xmlns "http://www.w3.org/2000/svg"
-         :fill "none"
-         :viewBox "0 0 24 24"
-         :stroke-width "2"
-         :stroke "currentColor"
-         :class "w-3 h-3"}
-   [:path {:stroke-linecap "round"
-           :stroke-linejoin "round"
-           :d "M19.5 8.25l-7.5 7.5-7.5-7.5"}]])
-
-(defn render-simple
-  [{:keys [cols selectable? table-id]}]
+(defn render-simple [{:keys [cols selectable? table-id]}]
   [:thead
    [:tr
     (when selectable?
@@ -86,9 +53,9 @@
              {:data-on:click (str "@get('" data-url "?clicked=" col-name "')")}
              [:span {:class (if is-sorted? "opacity-100" "opacity-30")}
               (cond
-                (and is-sorted? (= sort-dir "asc")) sort-icon-asc
-                (and is-sorted? (= sort-dir "desc")) sort-icon-desc
-                :else sort-icon-both)]
+                (and is-sorted? (= sort-dir "asc")) primitives/sort-icon-asc
+                (and is-sorted? (= sort-dir "desc")) primitives/sort-icon-desc
+                :else primitives/sort-icon-both)]
              [:span.font-semibold label]]
             [:div.flex.items-center
              (filter-menu/render
@@ -104,4 +71,3 @@
                :col-label label
                :data-url data-url
                :table-id table-id})]]]))]]))
-

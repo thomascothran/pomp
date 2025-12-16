@@ -1,4 +1,4 @@
-(ns pomp.rad.datatable.sort)
+(ns pomp.rad.datatable.state.sort)
 
 (defn next-state
   [signals query-params]

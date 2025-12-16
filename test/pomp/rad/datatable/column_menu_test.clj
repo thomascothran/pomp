@@ -1,7 +1,7 @@
 (ns pomp.rad.datatable.column-menu-test
   (:require [clojure.edn :as edn]
             [clojure.test :refer [deftest is]]
-            [pomp.rad.datatable.columns-menu :as cm]))
+            [pomp.rad.datatable.ui.columns-menu :as columns-menu]))
 
 (def test-inputs
   {:cols
@@ -24,4 +24,4 @@
 
 (deftest render-characterization-tests
   (is (= expected-result
-         (cm/render test-inputs))))
+         (columns-menu/render test-inputs))))

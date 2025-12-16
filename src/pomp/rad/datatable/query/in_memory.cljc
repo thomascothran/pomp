@@ -1,4 +1,4 @@
-(ns pomp.rad.datatable.in-memory-query
+(ns pomp.rad.datatable.query.in-memory
   (:require [clojure.string :as str]))
 
 (defn- apply-text-filter [rows col-key filter-op filter-value]
