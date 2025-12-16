@@ -2,6 +2,12 @@
   (:require [clojure.test :refer [deftest is testing]]
             [pomp.rad.datatable.query.in-memory :as query]))
 
+;; =============================================================================
+;; New filter structure: {:filters {:col-key [{:type "text" :op "contains" :value "x"} ...]}}
+;; Each column maps to a VECTOR of filter specs, enabling multiple filters per column.
+;; Multiple filters on the same column use AND logic.
+;; =============================================================================
+
 (def test-rows
   [{:id 1 :name "Alice" :age 30 :city "New York"}
    {:id 2 :name "Bob" :age 25 :city "Boston"}
@@ -16,11 +22,11 @@
 (deftest apply-filters-contains-test
   (testing "contains filter"
     (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}]
-           (query/apply-filters test-rows {:name {:type "text" :op "contains" :value "lic"}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value "lic"}]}))
         "filters rows where name contains 'lic'")
 
     (is (= test-rows
-           (query/apply-filters test-rows {:name {:type "text" :op "contains" :value ""}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value ""}]}))
         "blank value returns all rows")))
 
 (deftest apply-filters-not-contains-test
@@ -29,21 +35,21 @@
             {:id 3 :name "Charlie" :age 35 :city "Chicago"}
             {:id 4 :name "Diana" :age 28 :city "Denver"}
             {:id 5 :name "Eve" :age 32 :city ""}]
-           (query/apply-filters test-rows {:name {:type "text" :op "not-contains" :value "lic"}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "not-contains" :value "lic"}]}))
         "filters rows where name does not contain 'lic'")
 
     (is (= test-rows
-           (query/apply-filters test-rows {:name {:type "text" :op "not-contains" :value ""}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "not-contains" :value ""}]}))
         "blank value returns all rows")))
 
 (deftest apply-filters-equals-test
   (testing "equals filter"
     (is (= [{:id 2 :name "Bob" :age 25 :city "Boston"}]
-           (query/apply-filters test-rows {:name {:type "text" :op "equals" :value "bob"}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "equals" :value "bob"}]}))
         "filters rows where name equals 'bob' (case-insensitive)")
 
     (is (= []
-           (query/apply-filters test-rows {:name {:type "text" :op "equals" :value "bobby"}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "equals" :value "bobby"}]}))
         "returns empty when no match")))
 
 (deftest apply-filters-not-equals-test
@@ -52,13 +58,13 @@
             {:id 3 :name "Charlie" :age 35 :city "Chicago"}
             {:id 4 :name "Diana" :age 28 :city "Denver"}
             {:id 5 :name "Eve" :age 32 :city ""}]
-           (query/apply-filters test-rows {:name {:type "text" :op "not-equals" :value "bob"}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "not-equals" :value "bob"}]}))
         "filters rows where name does not equal 'bob'")))
 
 (deftest apply-filters-starts-with-test
   (testing "starts-with filter"
     (is (= [{:id 3 :name "Charlie" :age 35 :city "Chicago"}]
-           (query/apply-filters test-rows {:name {:type "text" :op "starts-with" :value "ch"}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "starts-with" :value "ch"}]}))
         "filters rows where name starts with 'ch'")))
 
 (deftest apply-filters-ends-with-test
@@ -66,27 +72,38 @@
     (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}
             {:id 3 :name "Charlie" :age 35 :city "Chicago"}
             {:id 5 :name "Eve" :age 32 :city ""}]
-           (query/apply-filters test-rows {:name {:type "text" :op "ends-with" :value "e"}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "ends-with" :value "e"}]}))
         "filters rows where name ends with 'e'")))
 
 (deftest apply-filters-is-empty-test
   (testing "is-empty filter"
     (is (= [{:id 5 :name "Eve" :age 32 :city ""}]
-           (query/apply-filters test-rows {:city {:type "text" :op "is-empty" :value ""}}))
+           (query/apply-filters test-rows {:city [{:type "text" :op "is-empty" :value ""}]}))
         "filters rows where city is empty")))
 
 (deftest apply-filters-multiple-columns-test
   (testing "multiple column filters (AND logic)"
     (is (= [{:id 3 :name "Charlie" :age 35 :city "Chicago"}]
-           (query/apply-filters test-rows {:name {:type "text" :op "contains" :value "ar"}
-                                           :city {:type "text" :op "starts-with" :value "ch"}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value "ar"}]
+                                           :city [{:type "text" :op "starts-with" :value "ch"}]}))
         "filters with multiple columns use AND logic")))
 
 (deftest apply-filters-case-insensitive-test
   (testing "case insensitivity"
     (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}]
-           (query/apply-filters test-rows {:name {:type "text" :op "contains" :value "ALICE"}}))
+           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value "ALICE"}]}))
         "filtering is case-insensitive")))
+
+(deftest apply-filters-multiple-same-column-test
+  (testing "multiple filters on same column (AND logic)"
+    ;; name contains "a" matches: Alice, Charlie, Diana
+    ;; name ends-with "e" matches: Alice, Charlie, Eve
+    ;; AND logic: Alice, Charlie
+    (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}
+            {:id 3 :name "Charlie" :age 35 :city "Chicago"}]
+           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value "a"}
+                                                  {:type "text" :op "ends-with" :value "e"}]}))
+        "multiple filters on same column use AND logic")))
 
 ;; =============================================================================
 ;; Sort Tests
@@ -179,7 +196,7 @@
       (is (= {:rows [{:id 4 :name "Diana" :age 28 :city "Denver"}]
               :total-rows 1
               :page {:size 1 :current 0}}
-             (qfn {:filters {:city {:type "text" :op "starts-with" :value "d"}}
+             (qfn {:filters {:city [{:type "text" :op "starts-with" :value "d"}]}
                    :sort [{:column "name" :direction "asc"}]
                    :page {:size 1 :current 1}}))
           "combines filter, sort, and pagination (clamps page when beyond range)"))
@@ -196,7 +213,7 @@
     (testing "total-rows reflects filtered count"
       ;; name contains "e" matches: Alice, Charlie, Eve = 3
       (is (= 3
-             (:total-rows (qfn {:filters {:name {:type "text" :op "contains" :value "e"}}
+             (:total-rows (qfn {:filters {:name [{:type "text" :op "contains" :value "e"}]}
                                 :sort []
                                 :page {:size 10 :current 0}})))
           "total-rows is count after filtering, before pagination"))))

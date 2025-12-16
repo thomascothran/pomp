@@ -34,9 +34,12 @@
           (column-menu/render-group-column {:data-url data-url})]])
       (for [[idx {:keys [key label]}] (map-indexed vector cols)]
         (let [col-name (name key)
-              current-filter (get filters key)
-              current-filter-op (:op current-filter)
-              current-filter-val (:value current-filter)
+              ;; filters is now {:col-key [{:type "text" :op "..." :value "..."}]}
+              ;; Get the first filter for display in the menu
+              col-filters (get filters key)
+              first-filter (first col-filters)
+              current-filter-op (:op first-filter)
+              current-filter-val (:value first-filter)
               current-sort (first sort-state)
               is-sorted? (= (:column current-sort) col-name)
               sort-dir (:direction current-sort)]

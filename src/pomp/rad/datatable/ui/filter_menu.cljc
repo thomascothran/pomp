@@ -67,7 +67,7 @@
          {:type "button"
           :disabled (not has-filter?)
           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
-                              "@get('" data-url "?filterCol=" col-name "&filterVal=')")}
+                              "@get('" data-url "?filterCol=" col-name "&clearColFilters=1')")}
          "Clear"]
         [:button.btn.btn-sm.btn-primary.flex-1
          {:type "button"
