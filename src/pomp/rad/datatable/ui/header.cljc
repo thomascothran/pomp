@@ -44,16 +44,19 @@
               is-sorted? (= (:column current-sort) col-name)
               sort-dir (:direction current-sort)]
           [:th
-           {:draggable "true"
-            :data-on:dragstart (str "$datatable." table-id ".dragging = '" col-name "'")
-            :data-on:dragend (str "$datatable." table-id ".dragging = null; $datatable." table-id ".dragOver = null")
+           {:style {:resize "horizontal" :overflow "hidden" :min-width "80px"}
+            ;; Drop target handlers stay on th
             :data-on:dragover__prevent (str "$datatable." table-id ".dragOver = '" col-name "'")
             :data-on:dragleave (str "if ($datatable." table-id ".dragOver === '" col-name "') $datatable." table-id ".dragOver = null")
             :data-on:drop (str "@get('" data-url "?moveCol=' + $datatable." table-id ".dragging + '&beforeCol=" col-name "')")
             :data-class (str "{'border-l-4 border-primary': $datatable." table-id ".dragOver === '" col-name "' && $datatable." table-id ".dragging !== '" col-name "'}")}
            [:div.flex.items-center.justify-between.gap-2
-            [:button.flex.items-center.gap-1.hover:text-primary.transition-colors
-             {:data-on:click (str "@get('" data-url "?clicked=" col-name "')")}
+            ;; Label is the drag handle
+            [:button.flex.items-center.gap-1.hover:text-primary.transition-colors.cursor-grab
+             {:draggable "true"
+              :data-on:dragstart (str "$datatable." table-id ".dragging = '" col-name "'")
+              :data-on:dragend (str "$datatable." table-id ".dragging = null; $datatable." table-id ".dragOver = null")
+              :data-on:click (str "@get('" data-url "?clicked=" col-name "')")}
              [:span {:class (if is-sorted? "opacity-100" "opacity-30")}
               (cond
                 (and is-sorted? (= sort-dir "asc")) primitives/sort-icon-asc
