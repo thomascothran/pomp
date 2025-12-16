@@ -6,13 +6,20 @@
 (defn move [column-order move-col target-col]
   (if (or (nil? move-col) (nil? target-col) (= move-col target-col))
     column-order
-    (let [without-moved (vec (remove #(= % move-col) column-order))
-          target-idx (.indexOf without-moved target-col)]
-      (if (neg? target-idx)
+    (let [move-idx (.indexOf column-order move-col)
+          target-idx (.indexOf column-order target-col)]
+      (if (or (neg? move-idx) (neg? target-idx))
         column-order
-        (vec (concat (subvec without-moved 0 target-idx)
-                     [move-col]
-                     (subvec without-moved target-idx)))))))
+        (let [without-moved (vec (remove #(= % move-col) column-order))
+              new-target-idx (.indexOf without-moved target-col)
+              ;; If moving right (was before target), insert after target
+              ;; If moving left (was after target), insert before target
+              insert-idx (if (< move-idx target-idx)
+                           (inc new-target-idx)
+                           new-target-idx)]
+          (vec (concat (subvec without-moved 0 insert-idx)
+                       [move-col]
+                       (subvec without-moved insert-idx))))))))
 
 (defn next-state [current-order cols query-params]
   (let [move-col (get query-params "moveCol")
