@@ -1,16 +1,18 @@
 [:div
  {:id "datatable"}
+ [:script :present]
  nil
  [:div.overflow-x-auto
   [:table.table.table-sm
-   {:data-on:mousemove
+   {:data-class "{'select-none': $datatable.datatable.cellSelectDragging}"
+    :data-on:mousemove
     "pompCellSelectMove(evt, 'datatable', $datatable.datatable.cellSelectDragging, $datatable.datatable.cellSelectStart)",
     :data-on:pompcellselection
     "$datatable.datatable.cellSelection = evt.detail.selection",
     :data-on:mouseup__window
     "$datatable.datatable.cellSelectDragging = false",
     :data-on:keydown__window
-    "pompCellSelectCopy(evt, 'datatable', $datatable.datatable.cellSelection)"}
+    "if (evt.key === 'Escape') { $datatable.datatable.cellSelection = {} } else { pompCellSelectCopy(evt, 'datatable', $datatable.datatable.cellSelection) }"}
    [:thead
     [:tr
      [:th.w-3

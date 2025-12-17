@@ -3,6 +3,25 @@
             [clojure.test :refer [deftest is]]
             [pomp.rad.datatable.core :as dt]))
 
+(defn- strip-script-content
+  "Strips the content from [:script ...] forms, keeping only [:script :present].
+   This allows tests to verify the script tag exists without including the full JS content."
+  [hiccup]
+  (cond
+    (and (vector? hiccup)
+         (= :script (first hiccup))
+         (= 2 (count hiccup))
+         (string? (second hiccup)))
+    [:script :present]
+
+    (vector? hiccup)
+    (mapv strip-script-content hiccup)
+
+    (seq? hiccup)
+    (map strip-script-content hiccup)
+
+    :else hiccup))
+
 (def test-table-data
   {:group-by [],
    :filters {},
@@ -39,4 +58,4 @@
 
 (deftest table-render-characterization-test
   (is (= expected-result
-         (dt/render test-table-data))))
+         (strip-script-content (dt/render test-table-data)))))
