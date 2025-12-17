@@ -1,7 +1,9 @@
 (ns pomp.rad.datatable.ui.table
   (:require [pomp.rad.datatable.ui.header :as header]
             [pomp.rad.datatable.ui.body :as body]
-            [pomp.rad.datatable.ui.pagination :as pagination]))
+            [pomp.rad.datatable.ui.pagination :as pagination]
+            #?(:clj [clojure.java.io :as io])
+            #?(:clj [dev.onionpancakes.chassis.core :as c])))
 
 (defn render
   [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar render-row render-header render-cell]}]
@@ -14,6 +16,8 @@
                     :group-by group-by}
         render-header-fn (or render-header header/render-sortable)]
     [:div {:id id}
+     #?(:clj (when-let [script (some-> (io/resource "public/js/datatable.js") slurp)]
+               [:script (c/raw script)]))
      (when toolbar
        [:div.flex.items-center.px-2.py-1.border-b.border-base-300.bg-base-200
         {:style {:justify-content "flex-end"}}

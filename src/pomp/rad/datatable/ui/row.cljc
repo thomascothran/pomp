@@ -1,28 +1,28 @@
 (ns pomp.rad.datatable.ui.row
   "Row rendering functions for the datatable.
-   
+
    These are the default implementations that can be overridden
    by passing `:render-row` to `pomp.rad.datatable.core/render` or
    `pomp.datatable/make-handler`.
-   
+
    Functions:
    - `render-row`           - Renders a complete table row (default for :render-row)
    - `render-cell`          - Renders a single data cell
    - `render-selection-cell` - Renders the selection checkbox cell
-   
+
    Example custom render-row:
-   
+
      (defn my-render-row [{:keys [cols row selectable? row-id table-id]}]
        [:tr.my-custom-class {:data-id row-id}
         (when selectable?
-          (row/render-selection-cell 
+          (row/render-selection-cell
             {:signal-path (str \"datatable.\" table-id \".selections.\" row-id)}))
         (for [col cols]
           (row/render-cell {:value (get row (:key col)) :row row :col col}))])")
 
 (defn render-cell
   "Renders a single data cell.
-   
+
    ctx contains:
    - :value    - The cell value
    - :row      - The full row data
@@ -37,7 +37,7 @@
     [:td {:data-row row-idx
           :data-col col-idx
           :data-value (str value)
-          :data-class (str "{'bg-primary/20': $datatable." table-id ".cellSelection['" cell-key "']}")
+          :data-class (str "{'bg-info/20': $datatable." table-id ".cellSelection['" cell-key "']}")
           :data-on:mousedown (str "$datatable." table-id ".cellSelectDragging = true; "
                                   "$datatable." table-id ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
                                   "$datatable." table-id ".cellSelection = {'" cell-key "': true}")}
@@ -45,7 +45,7 @@
 
 (defn render-selection-cell
   "Renders a selection checkbox cell.
-   
+
    ctx contains:
    - :signal-path - The datastar signal path for this row's selection"
   [{:keys [signal-path]}]
@@ -57,7 +57,7 @@
 
 (defn render-row
   "Renders a data row with optional selection checkbox.
-   
+
    ctx contains:
    - :cols        - Column definitions
    - :row         - The row data

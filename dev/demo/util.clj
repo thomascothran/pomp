@@ -1,7 +1,6 @@
 (ns demo.util
   (:require [dev.onionpancakes.chassis.core :as c]
             [clojure.data.json :as json]
-            [clojure.java.io :as io]
             [starfederation.datastar.clojure.api :as d*]))
 
 (defn ->html
@@ -15,9 +14,7 @@
     [:link {:href "/assets/output.css"
             :rel "stylesheet"}]
     [:script {:type "module"
-              :src "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"}]
-    (when-let [script (some-> (io/resource "public/js/datatable.js") slurp)]
-      [:script (c/raw script)])]
+              :src "https://cdn.jsdelivr.net/gh/starfederation/datastar@1.0.0-RC.6/bundles/datastar.js"}]]
    [:body.min-h-screen.m-0
     children]])
 
