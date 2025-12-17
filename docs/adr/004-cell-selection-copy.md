@@ -1,7 +1,7 @@
 # ADR: Excel-like Cell Selection and Copy for Datatable
 
-**Status:** Proposed  
-**Date:** 2025-12-15  
+**Status:** Proposed
+**Date:** 2025-12-15
 **Context:** Pomp datatable component needs Excel-like cell range selection and clipboard copy functionality to improve data export workflows.
 
 ---
@@ -123,16 +123,16 @@ Independent of implementation, the feature should support these behaviors:
   (field start-cell nil)
   (field end-cell nil)
   (field is-dragging false)
-  
+
   (constructor [this]
     (.addEventListener this "mousedown" #(handle-mouse-down this %))
     (.addEventListener js/document "keydown" #(handle-keydown this %)))
-  
+
   (method handle-mouse-down [this e]
     (when-let [cell (get-cell-from-event e)]
       (set! (.-start-cell this) cell)
       (set! (.-is-dragging this) true)))
-  
+
   (method copy-to-clipboard [this]
     (let [data (get-selected-data this)
           tsv (format-as-tsv data)]
@@ -206,15 +206,158 @@ Independent of implementation, the feature should support these behaviors:
 
 ## Recommendation
 
-**Start with Option B (Squint Web Component)** for the following reasons:
+**Decision: Option A (Datastar Signals + Server Rendering)**
 
-1. **Clean architecture** — Selection is inherently a client-side UI concern; keeping it client-side is natural
-2. **Performance** — No network latency; immediate visual feedback
-3. **Reusability** — Component can be used across different tables
-4. **Simplicity** — Single responsibility; doesn't complicate server or signal architecture
-5. **Progressive enhancement** — Can later add Option C's server fetch for cross-page copy if needed
+Option A aligns with our existing Datastar-first architecture. The implementation uses Datastar signals for state, `data-class` for highlighting, and small helper functions (called from Datastar expressions) for complex logic.
 
-Option A's complex `data-class` expressions would be hard to maintain. Option C adds unnecessary complexity for the common case (copying visible cells).
+---
+
+## Implementation Plan (Option A)
+
+### Signal Structure
+
+```javascript
+datatable.myTable.cellSelectDragging = false    // true while mouse is down
+datatable.myTable.cellSelectStart = null        // {row: 2, col: 1} or null
+datatable.myTable.cellSelection = {}            // {"2-1": true, "3-1": true, ...}
+```
+
+Selection uses flat keys like `"2-1"` (row-col) for simple lookup in `data-class` expressions.
+
+### Event Flow
+
+| Event | Element | Handler |
+|-------|---------|---------|
+| `mousedown` | Each `<td>` | Inline expression: set dragging=true, start cell, initial selection |
+| `mousemove` | `<table>` | Call `pompCellSelectMove()`, receive selection via custom event |
+| `mouseup` | Window | Inline expression: set dragging=false |
+| `keydown` | Window | Call `pompCellSelectCopy()` for Ctrl+C |
+
+### Cell Rendering
+
+Each data cell gets these attributes:
+
+```clojure
+[:td {:data-row row-idx
+      :data-col col-idx
+      :data-value (str value)  ;; for copy script to read
+      :data-class (str "{'bg-primary/20': $datatable." table-id ".cellSelection['" row-idx "-" col-idx "']}")
+      :data-on:mousedown (str 
+        "$datatable." table-id ".cellSelectDragging = true; "
+        "$datatable." table-id ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
+        "$datatable." table-id ".cellSelection = {'" row-idx "-" col-idx "': true}")}
+ value]
+```
+
+### Table-Level Handlers
+
+```clojure
+[:table.table.table-sm
+ {:data-on:mousemove 
+  (str "pompCellSelectMove(evt, '" table-id "', "
+       "$datatable." table-id ".cellSelectDragging, "
+       "$datatable." table-id ".cellSelectStart)")
+  
+  :data-on:pompcellselection 
+  (str "$datatable." table-id ".cellSelection = evt.detail.selection")
+  
+  :data-on:mouseup__window 
+  (str "$datatable." table-id ".cellSelectDragging = false")
+  
+  :data-on:keydown__window 
+  (str "pompCellSelectCopy(evt, '" table-id "', $datatable." table-id ".cellSelection)")}
+ ...]
+```
+
+### JavaScript Helper Functions
+
+Rendered inline with the table (or in a shared script):
+
+```javascript
+function pompCellSelectMove(evt, tableId, isDragging, start) {
+  if (!isDragging || !start) return;
+  
+  const cell = evt.target.closest('td[data-row]');
+  if (!cell) return;
+  
+  const row = parseInt(cell.dataset.row);
+  const col = parseInt(cell.dataset.col);
+  
+  // Build rectangular selection
+  const selection = {};
+  const minRow = Math.min(start.row, row);
+  const maxRow = Math.max(start.row, row);
+  const minCol = Math.min(start.col, col);
+  const maxCol = Math.max(start.col, col);
+  
+  for (let r = minRow; r <= maxRow; r++) {
+    for (let c = minCol; c <= maxCol; c++) {
+      selection[`${r}-${c}`] = true;
+    }
+  }
+  
+  evt.target.dispatchEvent(new CustomEvent('pompcellselection', {
+    bubbles: true,
+    detail: { selection }
+  }));
+}
+
+function pompCellSelectCopy(evt, tableId, cellSelection) {
+  if (!(evt.ctrlKey || evt.metaKey) || evt.key !== 'c') return;
+  if (!cellSelection || Object.keys(cellSelection).length === 0) return;
+  
+  evt.preventDefault();
+  
+  // Find selection bounds
+  const keys = Object.keys(cellSelection);
+  const coords = keys.map(k => k.split('-').map(Number));
+  const minRow = Math.min(...coords.map(c => c[0]));
+  const maxRow = Math.max(...coords.map(c => c[0]));
+  const minCol = Math.min(...coords.map(c => c[1]));
+  const maxCol = Math.max(...coords.map(c => c[1]));
+  
+  // Build TSV from DOM
+  const table = document.getElementById(tableId);
+  const lines = [];
+  
+  for (let r = minRow; r <= maxRow; r++) {
+    const cells = [];
+    for (let c = minCol; c <= maxCol; c++) {
+      const cell = table.querySelector(`td[data-row="${r}"][data-col="${c}"]`);
+      cells.push(cell ? (cell.dataset.value || cell.textContent) : '');
+    }
+    lines.push(cells.join('\t'));
+  }
+  
+  navigator.clipboard.writeText(lines.join('\n'));
+}
+```
+
+### Implementation Tasks
+
+1. **Update signal initialization** — Add `cellSelectDragging`, `cellSelectStart`, `cellSelection` to datatable signals in `demo/datatable.clj` and wherever signals are initialized.
+
+2. **Modify `row/render-cell`** — Add `data-row`, `data-col`, `data-value`, `data-class`, and `data-on:mousedown` attributes. Need to thread row-idx and col-idx through the rendering context.
+
+3. **Modify `body/render`** — Pass row index to row rendering functions.
+
+4. **Modify `table/render`** — Add table-level event handlers (`mousemove`, `mouseup__window`, `keydown__window`, `pompcellselection`).
+
+5. **Add JavaScript helpers** — Create `pompCellSelectMove` and `pompCellSelectCopy` functions, either inline in a `<script>` tag or in a separate JS file.
+
+6. **Handle grouped rows** — Skip group header rows (don't add `data-row` to them).
+
+7. **Exclude checkbox column** — Don't add cell selection attributes to the selection checkbox column.
+
+8. **Add CSS** — Ensure `bg-primary/20` or similar class exists for selection highlighting.
+
+### Design Decisions Made
+
+- **Flat selection keys** (`"2-1"`) vs nested map — Flat is simpler for `data-class` lookups
+- **Window-level Ctrl+C** — With guard check for active selection; matches Excel/AG Grid behavior
+- **No headers in copy** — For now; can add later with Shift modifier
+- **Always enabled** — No feature flag; cell selection is always available
+- **`pomp` prefix** — All JS functions prefixed to avoid collisions
 
 ---
 
