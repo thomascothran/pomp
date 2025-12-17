@@ -1,4 +1,4 @@
-(ns pomp.rad.datatable.in-memory-query
+(ns pomp.rad.datatable.query.in-memory
   (:require [clojure.string :as str]))
 
 (defn- apply-text-filter [rows col-key filter-op filter-value]
@@ -18,11 +18,20 @@
       "is-empty" (filter #(str/blank? (str (get % col-key))) rows)
       rows)))
 
-(defn apply-filters [rows filters]
-  (reduce (fn [filtered-rows [col-key filter-spec]]
-            (case (:type filter-spec)
-              "text" (apply-text-filter filtered-rows col-key (:op filter-spec) (:value filter-spec))
-              filtered-rows))
+(defn apply-filters
+  "Applies filters to rows. Filter structure: {:col-key [{:type \"text\" :op \"contains\" :value \"x\"} ...]}
+   Multiple filters on the same column use AND logic.
+   Multiple filters across columns also use AND logic."
+  [rows filters]
+  (reduce (fn [filtered-rows [col-key filter-specs]]
+            ;; filter-specs is now a vector of filters for this column
+            ;; Apply all filters for this column with AND logic
+            (reduce (fn [rows filter-spec]
+                      (case (:type filter-spec)
+                        "text" (apply-text-filter rows col-key (:op filter-spec) (:value filter-spec))
+                        rows))
+                    filtered-rows
+                    filter-specs))
           rows
           filters))
 

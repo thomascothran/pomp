@@ -1,0 +1,57 @@
+(ns pomp.rad.datatable.ui.table
+  (:require [pomp.rad.datatable.ui.header :as header]
+            [pomp.rad.datatable.ui.body :as body]
+            [pomp.rad.datatable.ui.pagination :as pagination]
+            #?(:clj [clojure.java.io :as io])
+            #?(:clj [dev.onionpancakes.chassis.core :as c])))
+
+(defn render
+  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar render-row render-header render-cell]}]
+  (let [header-ctx {:cols cols
+                    :sort-state sort-state
+                    :filters filters
+                    :data-url data-url
+                    :selectable? selectable?
+                    :table-id id
+                    :group-by group-by}
+        render-header-fn (or render-header header/render-sortable)]
+    [:div {:id id}
+     #?(:clj (when-let [script (some-> (io/resource "public/js/datatable.js") slurp)]
+               [:script (c/raw script)]))
+     (when toolbar
+       [:div.flex.items-center.px-2.py-1.border-b.border-base-300.bg-base-200
+        {:style {:justify-content "flex-end"}}
+        toolbar])
+     [:div.overflow-x-auto
+      [:table.table.table-sm
+       {:data-class (str "{'select-none': $datatable." id ".cellSelectDragging}")
+        :data-on:mousemove (str "pompCellSelectMove(evt, '" id "', "
+                                "$datatable." id ".cellSelectDragging, "
+                                "$datatable." id ".cellSelectStart)")
+        :data-on:pompcellselection (str "$datatable." id ".cellSelection = evt.detail.selection")
+        :data-on:mouseup__window (str "$datatable." id ".cellSelectDragging = false")
+        :data-on:keydown__window (str "if (evt.key === 'Escape') { $datatable." id ".cellSelection = {} } "
+                                      "else { pompCellSelectCopy(evt, '" id "', $datatable." id ".cellSelection) }")}
+       (render-header-fn header-ctx)
+       (body/render {:cols cols
+                     :rows rows
+                     :groups groups
+                     :selectable? selectable?
+                     :row-id-fn row-id-fn
+                     :table-id id
+                     :render-row render-row
+                     :render-cell render-cell})]]
+     (pagination/render {:total-rows total-rows
+                         :page-size page-size
+                         :page-current page-current
+                         :filters filters
+                         :page-sizes page-sizes
+                         :data-url data-url})]))
+
+(defn render-skeleton
+  [{:keys [id cols n selectable?]}]
+  [:div {:id id}
+   [:div.overflow-x-auto
+    [:table.table.table-sm
+     (header/render-simple {:cols cols :selectable? selectable? :table-id id})
+     (body/render-skeleton {:cols cols :n n :selectable? selectable?})]]])
