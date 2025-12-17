@@ -20,6 +20,14 @@
         toolbar])
      [:div.overflow-x-auto
       [:table.table.table-sm
+       {:data-class (str "{'select-none': $datatable." id ".cellSelectDragging}")
+        :data-on:mousemove (str "pompCellSelectMove(evt, '" id "', "
+                                "$datatable." id ".cellSelectDragging, "
+                                "$datatable." id ".cellSelectStart)")
+        :data-on:pompcellselection (str "$datatable." id ".cellSelection = evt.detail.selection")
+        :data-on:mouseup__window (str "$datatable." id ".cellSelectDragging = false")
+        :data-on:keydown__window (str "if (evt.key === 'Escape') { $datatable." id ".cellSelection = {} } "
+                                      "else { pompCellSelectCopy(evt, '" id "', $datatable." id ".cellSelection) }")}
        (render-header-fn header-ctx)
        (body/render {:cols cols
                      :rows rows

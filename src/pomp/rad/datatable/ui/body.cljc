@@ -33,9 +33,10 @@
        [:td])]))
 
 (defn render-group
-  [{:keys [group cols selectable? row-id-fn table-id group-idx]}]
+  [{:keys [group cols selectable? row-id-fn table-id group-idx row-idx-offset]}]
   (let [{:keys [group-value rows row-ids count]} group
-        expanded-signal (str "datatable." table-id ".expanded." group-idx)]
+        expanded-signal (str "datatable." table-id ".expanded." group-idx)
+        row-idx-offset (or row-idx-offset 0)]
     (list
      (render-group-row {:group-value group-value
                         :row-ids row-ids
@@ -44,16 +45,20 @@
                         :table-id table-id
                         :group-idx group-idx
                         :count count})
-     (for [r rows]
-       (let [signal-path (str "datatable." table-id ".selections." (row-id-fn r))]
+     (for [[idx r] (map-indexed vector rows)]
+       (let [signal-path (str "datatable." table-id ".selections." (row-id-fn r))
+             row-idx (+ row-idx-offset idx)]
          [:tr {:data-show (str "$" expanded-signal)}
           (when selectable?
             (row/render-selection-cell {:signal-path signal-path}))
           [:td]
-          (for [col cols]
+          (for [[col-idx col] (map-indexed vector cols)]
             (row/render-cell {:value (get r (:key col))
                               :row r
-                              :col col}))])))))
+                              :col col
+                              :row-idx row-idx
+                              :col-idx col-idx
+                              :table-id table-id}))])))))
 
 (defn render [{:keys [cols rows groups selectable? row-id-fn table-id render-row render-cell]}]
   (let [row-id-fn (or row-id-fn :id)
@@ -61,18 +66,29 @@
         grouped? (seq groups)]
     [:tbody
      (if grouped?
-       (for [[idx group] (map-indexed vector groups)]
-         (render-group {:group group
-                        :cols cols
-                        :selectable? selectable?
-                        :row-id-fn row-id-fn
-                        :table-id table-id
-                        :group-idx idx}))
-       (for [r rows]
+       ;; For grouped rows, calculate cumulative row-idx-offset
+       (let [groups-with-offsets (reduce (fn [acc group]
+                                           (let [offset (if (empty? acc)
+                                                          0
+                                                          (+ (:row-idx-offset (last acc))
+                                                             (count (:rows (:group (last acc))))))]
+                                             (conj acc {:group group :row-idx-offset offset})))
+                                         []
+                                         groups)]
+         (for [[idx {:keys [group row-idx-offset]}] (map-indexed vector groups-with-offsets)]
+           (render-group {:group group
+                          :cols cols
+                          :selectable? selectable?
+                          :row-id-fn row-id-fn
+                          :table-id table-id
+                          :group-idx idx
+                          :row-idx-offset row-idx-offset})))
+       (for [[row-idx r] (map-indexed vector rows)]
          (render-row-fn {:cols cols
                          :row r
                          :selectable? selectable?
                          :row-id (row-id-fn r)
+                         :row-idx row-idx
                          :table-id table-id
                          :grouped? false
                          :render-cell render-cell})))]))

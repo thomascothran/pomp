@@ -34,7 +34,7 @@
    :body (->html
           (page
            [:div.p-8
-            {:data-signals "{datatable: {datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, groupBy: [], openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], columns: {name: {visible: true}, century: {visible: true}, school: {visible: true}, region: {visible: true}}, dragging: null, dragOver: null, expanded: {}}}}"}
+            {:data-signals "{datatable: {datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, groupBy: [], openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], columns: {name: {visible: true}, century: {visible: true}, school: {visible: true}, region: {visible: true}}, dragging: null, dragOver: null, expanded: {}, cellSelectDragging: false, cellSelectStart: null, cellSelection: {}}}}"}
             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
             [:div#datatable-container
              {:data-init (str "@get('" data-url "')")}
