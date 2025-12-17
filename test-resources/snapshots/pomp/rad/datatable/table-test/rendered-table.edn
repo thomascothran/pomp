@@ -1,6 +1,5 @@
 [:div
  {:id "datatable"}
- [:script :present]
  nil
  [:div.overflow-x-auto
   [:table.table.table-sm
