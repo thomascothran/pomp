@@ -6,8 +6,8 @@
 (def columns
   [{:key :name :label "Name" :type :text}
    {:key :century :label "Century" :type :text}
-   {:key :school :label "School" :type :enum}
-   {:key :region :label "Region" :type :enum}])
+   {:key :school :label "School" :type :enum :groupable true}
+   {:key :region :label "Region" :type :enum :groupable true}])
 
 (def philosophers
   [{:id 1 :name "Socrates" :century "5th BC" :school "Classical Greek" :region "Greece"}

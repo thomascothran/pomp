@@ -32,7 +32,7 @@
          [:div.flex.items-center.justify-between.gap-2
           [:span.font-semibold "Group"]
           (column-menu/render-group-column {:data-url data-url})]])
-      (for [[idx {:keys [key label]}] (map-indexed vector cols)]
+      (for [[idx {:keys [key label groupable]}] (map-indexed vector cols)]
         (let [col-name (name key)
               ;; filters is now {:col-key [{:type "text" :op "..." :value "..."}]}
               ;; Get the first filter for display in the menu
@@ -76,4 +76,5 @@
               {:col-key key
                :col-label label
                :data-url data-url
-               :table-id table-id})]]]))]]))
+               :table-id table-id
+               :groupable? groupable})]]]))]]))
