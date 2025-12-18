@@ -23,8 +23,7 @@
           :data-on:click (str "evt.target.checked ? @setAll(true, { include: '" select-pattern "' }) : @setAll(false, { include: '" select-pattern "' })")}]])
      [:td
       [:button.btn.btn-ghost.btn-xs.flex.items-center.gap-1
-       {:data-on:click (str "$" expanded-signal " = !$" expanded-signal)
-        :data-signals (str "{\"" expanded-signal "\": false}")}
+       {:data-on:click (str "$" expanded-signal " = !$" expanded-signal)}
        [:span {:data-show (str "$" expanded-signal)} primitives/chevron-down]
        [:span {:data-show (str "!$" expanded-signal)} primitives/chevron-right]
        [:span.font-medium (str group-value)]

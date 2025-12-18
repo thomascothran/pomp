@@ -67,26 +67,29 @@
           {:keys [signals rows total-rows]} (dt/query current-signals query-params req query-fn)
           group-by (:group-by signals)
           groups (when (seq group-by) (group-state/group-rows rows group-by))
-          filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))]
+          filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))
+          ;; Initialize expanded state for each group (all collapsed by default)
+          expanded-signals (when (seq groups)
+                             (into {} (map (fn [idx] [(keyword (str idx)) false]) groups)))]
       (->sse-response req
                       {on-open
                        (fn [sse]
                          (when initial-load?
-                           ;; Load the datatable JS before rendering any elements with event handlers
                            (d*/patch-elements! sse (render-html-fn (dt/render-skeleton {:id id
                                                                                         :cols visible-cols
                                                                                         :n skeleton-rows
                                                                                         :selectable? selectable?})))
                            (d*/execute-script! sse cell-select-script))
                          (d*/patch-signals! sse (json/write-str
-                                                 {:datatable {(keyword id) {:sort (:sort signals)
-                                                                            :page (:page signals)
-                                                                            :filters filters-patch
-                                                                            :groupBy (mapv name group-by)
-                                                                            :openFilter ""
-                                                                            :columnOrder column-order
-                                                                            :dragging nil
-                                                                            :dragOver nil}}}))
+                                                 {:datatable {(keyword id) (cond-> {:sort (:sort signals)
+                                                                                    :page (:page signals)
+                                                                                    :filters filters-patch
+                                                                                    :groupBy (mapv name group-by)
+                                                                                    :openFilter ""
+                                                                                    :columnOrder column-order
+                                                                                    :dragging nil
+                                                                                    :dragOver nil}
+                                                                             expanded-signals (assoc :expanded expanded-signals))}}))
                          (d*/patch-elements! sse (render-html-fn (dt/render {:id id
                                                                              :cols visible-cols
                                                                              :rows rows
