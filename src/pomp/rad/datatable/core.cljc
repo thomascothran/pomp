@@ -41,8 +41,8 @@
    (query signals query-params query-fn) => {:signals ... :rows ... :total-rows ...}
 
    This is the main entry point for handling datatable requests."
-  [signals query-params query-fn]
-  (state/query signals query-params query-fn))
+  [signals query-params req query-fn]
+  (state/query signals query-params req query-fn))
 
 (defn compute-filter-patch
   "Computes a patch for updating filter signals (handles removals).
@@ -119,15 +119,3 @@
    - :selectable? - Show selection column"
   [opts]
   (ui/render-skeleton opts))
-
-;; =============================================================================
-;; Query
-;; =============================================================================
-
-(def query-fn
-  "Creates an in-memory query function for the given rows.
-
-   (query-fn rows) => (fn [signals] {:rows ... :total-rows ... :page ...})
-
-   The returned function handles filtering, sorting, and pagination."
-  in-memory/query-fn)

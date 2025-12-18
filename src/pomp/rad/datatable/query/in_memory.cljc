@@ -60,7 +60,7 @@
 
 (defn query-fn
   [rows]
-  (fn [{:keys [filters sort page]}]
+  (fn [{:keys [filters sort page]} _request]
     (let [filtered (apply-filters rows filters)
           sorted (sort-data filtered sort)
           {:keys [rows current]} (paginate-data sorted page)]

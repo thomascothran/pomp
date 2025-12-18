@@ -19,9 +19,9 @@
      :group-by new-group-by}))
 
 (defn query
-  [signals query-params query-fn]
+  [signals query-params request query-fn]
   (let [new-signals (next-state signals query-params)
-        {:keys [rows total-rows page]} (query-fn new-signals)]
+        {:keys [rows total-rows page]} (query-fn new-signals request)]
     {:signals (assoc new-signals :page page)
      :rows rows
      :total-rows total-rows}))

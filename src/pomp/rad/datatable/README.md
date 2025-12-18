@@ -83,7 +83,7 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 #### Signature
 
 ```clojure
-(query-fn signals) => {:rows [...] :total-rows n :page {...}}
+(query-fn signals ring-request) => {:rows [...] :total-rows n :page {...}}
 ```
 
 #### Input: `signals` map

@@ -64,7 +64,7 @@
           column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
           ordered-cols (column-state/reorder columns column-order)
           visible-cols (column-state/filter-visible ordered-cols columns-state)
-          {:keys [signals rows total-rows]} (dt/query current-signals query-params query-fn)
+          {:keys [signals rows total-rows]} (dt/query current-signals query-params req query-fn)
           group-by (:group-by signals)
           groups (when (seq group-by) (group-state/group-rows rows group-by))
           filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))]

@@ -1,8 +1,7 @@
 (ns demo.datatable
   (:require [demo.util :refer [->html page]]
             [pomp.datatable :as datatable]
-            [pomp.rad.datatable.query.in-memory :as imq]
-            [pomp.rad.datatable.core :as dt]))
+            [pomp.rad.datatable.query.in-memory :as imq]))
 
 (def columns
   [{:key :name :label "Name" :type :text}
@@ -57,6 +56,4 @@
 
 (comment
   (require '[demo.datatable :as dt] :reload)
-  (require '[demo.util :refer [->html]])
-
   (:body (page-handler {})))
