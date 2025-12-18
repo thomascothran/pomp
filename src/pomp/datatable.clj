@@ -5,11 +5,16 @@
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.ring :refer [->sse-response on-open]]
             [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [pomp.rad.datatable.core :as dt]
             [pomp.rad.datatable.state.column :as column-state]
             [pomp.rad.datatable.state.group :as group-state]
             [pomp.rad.datatable.state.filter :as filter-state]
             [pomp.rad.datatable.ui.columns-menu :as columns-menu]))
+
+(def ^:private cell-select-script
+  "JavaScript for cell selection functionality, loaded from classpath."
+  (slurp (io/resource "public/pomp/js/datatable.js")))
 
 (defn get-signals
   "Extracts datatable signals from a Ring request for a specific table.
@@ -55,7 +60,7 @@
           current-signals (-> raw-signals
                               (assoc :group-by (mapv keyword (:groupBy raw-signals))))
           columns-state (:columns current-signals)
-          initial-load? (empty? query-params)
+          initial-load? (empty? raw-signals)
           column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
           ordered-cols (column-state/reorder columns column-order)
           visible-cols (column-state/filter-visible ordered-cols columns-state)
@@ -67,11 +72,12 @@
                       {on-open
                        (fn [sse]
                          (when initial-load?
+                           ;; Load the datatable JS before rendering any elements with event handlers
                            (d*/patch-elements! sse (render-html-fn (dt/render-skeleton {:id id
                                                                                         :cols visible-cols
                                                                                         :n skeleton-rows
                                                                                         :selectable? selectable?})))
-                           (Thread/sleep 300))
+                           (d*/execute-script! sse cell-select-script))
                          (d*/patch-signals! sse (json/write-str
                                                  {:datatable {(keyword id) {:sort (:sort signals)
                                                                             :page (:page signals)

@@ -44,9 +44,9 @@
             :muuntaja m/instance}
      :exception pretty/exception
      :reitit.middleware/transform dev/print-request-diffs})
-
-   (fn [_req]
-     {:status 404})))
+   (ring/routes
+    (ring/create-resource-handler {:path "/"})
+    (ring/create-default-handler))))
 
 (defonce !server
   (atom nil))

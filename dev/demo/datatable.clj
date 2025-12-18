@@ -1,6 +1,7 @@
 (ns demo.datatable
   (:require [demo.util :refer [->html page]]
             [pomp.datatable :as datatable]
+            [pomp.rad.datatable.query.in-memory :as imq]
             [pomp.rad.datatable.core :as dt]))
 
 (def columns
@@ -34,17 +35,17 @@
    :body (->html
           (page
            [:div.p-8
-            {:data-signals "{datatable: {datatable: {sort: [], page: {size: 10, current: 0}, filters: {}, groupBy: [], openFilter: '', columnOrder: ['name', 'century', 'school', 'region'], columns: {name: {visible: true}, century: {visible: true}, school: {visible: true}, region: {visible: true}}, dragging: null, dragOver: null, expanded: {}, cellSelectDragging: false, cellSelectStart: null, cellSelection: {}}}}"}
             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
             [:div#datatable-container
              {:data-init (str "@get('" data-url "')")}
              [:div#datatable]]]))})
 
-(def data-handler
+(defn make-data-handler
+  []
   (datatable/make-handler
    {:id "datatable"
     :columns columns
-    :query-fn (dt/query-fn philosophers)
+    :query-fn (imq/query-fn philosophers)
     :data-url data-url
     :render-html-fn ->html
     :page-sizes [10 25 100 250]
@@ -52,7 +53,7 @@
 
 (defn make-routes [_]
   [["/datatable" page-handler]
-   ["/datatable/data" data-handler]])
+   ["/datatable/data" (make-data-handler)]])
 
 (comment
   (require '[demo.datatable :as dt] :reload)
