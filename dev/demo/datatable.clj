@@ -1,7 +1,9 @@
 (ns demo.datatable
   (:require [demo.util :refer [->html page]]
+            [next.jdbc :as jdbc]
+            [next.jdbc.result-set :as rs]
             [pomp.datatable :as datatable]
-            [pomp.rad.datatable.query.in-memory :as imq]))
+            [pomp.rad.datatable.query.sql :as sqlq]))
 
 (defn format-century
   "Formats a numeric century as a human-readable string.
@@ -25,6 +27,7 @@
    {:key :region :label "Region" :type :enum :groupable true}])
 
 (def philosophers
+  "Seed data for the philosophers table."
   [{:id 1 :name "Socrates" :century -5 :school "Classical Greek" :region "Greece"}
    {:id 2 :name "Plato" :century -4 :school "Platonism" :region "Greece"}
    {:id 3 :name "Aristotle" :century -4 :school "Peripatetic" :region "Greece"}
@@ -41,6 +44,49 @@
    {:id 14 :name "Immanuel Kant" :century 18 :school "German Idealism" :region "Germany"}
    {:id 15 :name "Friedrich Nietzsche" :century 19 :school "Existentialism" :region "Germany"}])
 
+;; =============================================================================
+;; H2 Database Setup
+;; =============================================================================
+
+(def db-spec
+  "H2 in-memory database spec."
+  {:dbtype "h2:mem" :dbname "demo"})
+
+(defonce ^:private datasource
+  (delay (jdbc/get-datasource db-spec)))
+
+(defn get-datasource
+  "Returns the H2 datasource, creating it if needed."
+  []
+  @datasource)
+
+(defn create-schema!
+  "Creates the philosophers table if it doesn't exist."
+  []
+  (jdbc/execute! (get-datasource)
+                 ["CREATE TABLE IF NOT EXISTS philosophers (
+                     id INT PRIMARY KEY,
+                     name VARCHAR(100),
+                     century INT,
+                     school VARCHAR(100),
+                     region VARCHAR(100))"]))
+
+(defn seed-data!
+  "Inserts the philosophers data into the table.
+   Clears existing data first."
+  []
+  (let [ds (get-datasource)]
+    (jdbc/execute! ds ["DELETE FROM philosophers"])
+    (doseq [p philosophers]
+      (jdbc/execute! ds ["INSERT INTO philosophers (id, name, century, school, region) VALUES (?, ?, ?, ?, ?)"
+                         (:id p) (:name p) (:century p) (:school p) (:region p)]))))
+
+(defn init-db!
+  "Initializes the H2 database with schema and seed data."
+  []
+  (create-schema!)
+  (seed-data!))
+
 (def data-url "/demo/datatable/data")
 
 (defn page-handler [_req]
@@ -56,19 +102,31 @@
 
 (defn make-data-handler
   []
-  (datatable/make-handler
-   {:id "datatable"
-    :columns columns
-    :query-fn (imq/query-fn philosophers)
-    :data-url data-url
-    :render-html-fn ->html
-    :page-sizes [10 25 100 250]
-    :selectable? true}))
+  (let [execute! (fn [sqlvec]
+                   (jdbc/execute! (get-datasource) sqlvec
+                                  {:builder-fn rs/as-unqualified-lower-maps}))]
+    (datatable/make-handler
+     {:id "datatable"
+      :columns columns
+      :query-fn (sqlq/query-fn {:table-name "philosophers"} execute!)
+      :data-url data-url
+      :render-html-fn ->html
+      :page-sizes [10 25 100 250]
+      :selectable? true})))
 
 (defn make-routes [_]
+  (init-db!)
   [["/datatable" page-handler]
    ["/datatable/data" (make-data-handler)]])
 
 (comment
   (require '[demo.datatable :as dt] :reload)
+
+  ;; Initialize the database
+  (dt/init-db!)
+
+  ;; Check data in the database
+  (jdbc/execute! (dt/get-datasource) ["SELECT * FROM philosophers"])
+
+  ;; Test the page handler
   (:body (page-handler {})))
