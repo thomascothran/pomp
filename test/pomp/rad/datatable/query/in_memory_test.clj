@@ -421,3 +421,89 @@
             {:id 4 :name "Diana" :status "inactive"}]
            (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is-not-empty" :value ""}]}))
         "filters rows where status is not nil")))
+
+;; =============================================================================
+;; Number Filter Tests
+;; =============================================================================
+
+(def number-test-rows
+  [{:id 1 :name "Alice" :age 30}
+   {:id 2 :name "Bob" :age 25}
+   {:id 3 :name "Charlie" :age 35}
+   {:id 4 :name "Diana" :age 30}
+   {:id 5 :name "Eve" :age nil}])
+
+(deftest apply-filters-number-equals-test
+  (testing "number equals"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "equals" :value "30"}]}))
+        "filters rows where age equals 30")))
+
+(deftest apply-filters-number-not-equals-test
+  (testing "number not-equals"
+    (is (= [{:id 2 :name "Bob" :age 25}
+            {:id 3 :name "Charlie" :age 35}
+            {:id 5 :name "Eve" :age nil}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "not-equals" :value "30"}]}))
+        "filters rows where age does not equal 30")))
+
+(deftest apply-filters-number-greater-than-test
+  (testing "number greater-than"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 3 :name "Charlie" :age 35}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "greater-than" :value "25"}]}))
+        "filters rows where age > 25")))
+
+(deftest apply-filters-number-greater-than-or-equal-test
+  (testing "number greater-than-or-equal"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 3 :name "Charlie" :age 35}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "greater-than-or-equal" :value "30"}]}))
+        "filters rows where age >= 30")))
+
+(deftest apply-filters-number-less-than-test
+  (testing "number less-than"
+    (is (= [{:id 2 :name "Bob" :age 25}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "less-than" :value "30"}]}))
+        "filters rows where age < 30")))
+
+(deftest apply-filters-number-less-than-or-equal-test
+  (testing "number less-than-or-equal"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 2 :name "Bob" :age 25}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "less-than-or-equal" :value "30"}]}))
+        "filters rows where age <= 30")))
+
+(deftest apply-filters-number-is-empty-test
+  (testing "number is-empty"
+    (is (= [{:id 5 :name "Eve" :age nil}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "is-empty" :value ""}]}))
+        "filters rows where age is nil")))
+
+(deftest apply-filters-number-is-not-empty-test
+  (testing "number is-not-empty"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 2 :name "Bob" :age 25}
+            {:id 3 :name "Charlie" :age 35}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "is-not-empty" :value ""}]}))
+        "filters rows where age is not nil")))
+
+(deftest apply-filters-number-with-negative-values-test
+  (testing "number comparisons with negative values"
+    (let [rows [{:id 1 :name "Socrates" :century -5}
+                {:id 2 :name "Plato" :century -4}
+                {:id 3 :name "Seneca" :century 1}
+                {:id 4 :name "Kant" :century 18}]]
+      (is (= [{:id 1 :name "Socrates" :century -5}
+              {:id 2 :name "Plato" :century -4}]
+             (query/apply-filters rows {:century [{:type "number" :op "less-than" :value "0"}]}))
+          "filters BC centuries (negative values)")
+      (is (= [{:id 3 :name "Seneca" :century 1}
+              {:id 4 :name "Kant" :century 18}]
+             (query/apply-filters rows {:century [{:type "number" :op "greater-than" :value "0"}]}))
+          "filters AD centuries (positive values)"))))

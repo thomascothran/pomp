@@ -24,19 +24,22 @@
   "Renders a single data cell.
 
    ctx contains:
-   - :value    - The cell value
+   - :value    - The cell value (possibly transformed by :display-fn)
+   - :raw-value - The raw cell value from the row (for data-value attribute)
    - :row      - The full row data
    - :col      - The column definition {:key :label :render ...}
    - :row-idx  - Row index (0-based, for cell selection)
    - :col-idx  - Column index (0-based, for cell selection)
    - :table-id - Table element ID (for cell selection signals)"
-  [{:keys [value row col row-idx col-idx table-id]}]
+  [{:keys [value raw-value row col row-idx col-idx table-id]}]
   (let [{:keys [render]} col
         cell-key (str row-idx "-" col-idx)
+        ;; Use raw-value for data-value if provided, otherwise fall back to value
+        data-val (if (some? raw-value) raw-value value)
         display-value (if render (render value row) value)]
     [:td {:data-row row-idx
           :data-col col-idx
-          :data-value (str value)
+          :data-value (str data-val)
           :data-class (str "{'bg-info/20': $datatable." table-id ".cellSelection['" cell-key "']}")
           :data-on:mousedown (str "$datatable." table-id ".cellSelectDragging = true; "
                                   "$datatable." table-id ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
@@ -66,7 +69,11 @@
    - :row-idx     - Row index (0-based, for cell selection)
    - :table-id    - The table's element ID
    - :grouped?    - Whether this row is inside a group (adds empty cell for indent)
-   - :render-cell - Optional custom cell render function"
+   - :render-cell - Optional custom cell render function
+   
+   Column definitions can include:
+   - :display-fn  - Function (fn [row] ...) to compute display value
+                    Raw value from :key is still used for data-value attribute"
   [{:keys [cols row selectable? row-id row-idx table-id grouped?] :as ctx}]
   (let [signal-path (str "datatable." table-id ".selections." row-id)
         render-cell-fn (or (:render-cell ctx) render-cell)]
@@ -75,9 +82,14 @@
        (render-selection-cell {:signal-path signal-path}))
      (when grouped? [:td])
      (for [[col-idx col] (map-indexed vector cols)]
-       (render-cell-fn {:value (get row (:key col))
-                        :row row
-                        :col col
-                        :row-idx row-idx
-                        :col-idx col-idx
-                        :table-id table-id}))]))
+       (let [raw-value (get row (:key col))
+             display-value (if-let [display-fn (:display-fn col)]
+                             (display-fn row)
+                             raw-value)]
+         (render-cell-fn {:value display-value
+                          :raw-value raw-value
+                          :row row
+                          :col col
+                          :row-idx row-idx
+                          :col-idx col-idx
+                          :table-id table-id})))]))

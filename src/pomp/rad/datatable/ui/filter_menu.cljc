@@ -21,6 +21,14 @@
             {:value "is-empty" :label "is empty"}
             {:value "is-not-empty" :label "is not empty"}
             {:value "is-any-of" :label "is any of"}]
+   :number [{:value "equals" :label "equals"}
+            {:value "not-equals" :label "not equals"}
+            {:value "greater-than" :label "greater than"}
+            {:value "greater-than-or-equal" :label "greater than or equal"}
+            {:value "less-than" :label "less than"}
+            {:value "less-than-or-equal" :label "less than or equal"}
+            {:value "is-empty" :label "is empty"}
+            {:value "is-not-empty" :label "is not empty"}]
    :boolean [{:value "is" :label "is"}
              {:value "is-not" :label "is not"}
              {:value "is-empty" :label "is empty"}

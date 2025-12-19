@@ -65,6 +65,38 @@
     "is-not-empty" (remove #(nil? (get % col-key)) rows)
     rows))
 
+(defn- parse-number
+  "Parses a string to a number. Returns nil if parsing fails."
+  [s]
+  (when (and s (not (str/blank? s)))
+    (try
+      #?(:clj (Double/parseDouble s)
+         :cljs (let [n (js/parseFloat s)]
+                 (when-not (js/isNaN n) n)))
+      (catch #?(:clj Exception :cljs :default) _ nil))))
+
+(defn- apply-number-filter
+  "Filters rows based on numeric column values.
+   filter-value is a string that gets parsed to a number."
+  [rows col-key filter-op filter-value]
+  (let [target-num (parse-number filter-value)]
+    (case filter-op
+      "equals" (filter #(when-let [v (get % col-key)]
+                          (== v target-num)) rows)
+      "not-equals" (remove #(when-let [v (get % col-key)]
+                              (== v target-num)) rows)
+      "greater-than" (filter #(when-let [v (get % col-key)]
+                                (> v target-num)) rows)
+      "greater-than-or-equal" (filter #(when-let [v (get % col-key)]
+                                         (>= v target-num)) rows)
+      "less-than" (filter #(when-let [v (get % col-key)]
+                             (< v target-num)) rows)
+      "less-than-or-equal" (filter #(when-let [v (get % col-key)]
+                                      (<= v target-num)) rows)
+      "is-empty" (filter #(nil? (get % col-key)) rows)
+      "is-not-empty" (remove #(nil? (get % col-key)) rows)
+      rows)))
+
 (defn apply-filters
   "Applies filters to rows. Filter structure: {:col-key [{:type \"string\" :op \"contains\" :value \"x\"} ...]}
    Multiple filters on the same column use AND logic.
@@ -77,6 +109,7 @@
                       (let [{:keys [type op value]} filter-spec]
                         (case type
                           ("string" "text") (apply-text-filter rows col-key op value)
+                          "number" (apply-number-filter rows col-key op value)
                           "boolean" (apply-boolean-filter rows col-key op value)
                           "date" (apply-date-filter rows col-key op value)
                           "enum" (apply-enum-filter rows col-key op value)

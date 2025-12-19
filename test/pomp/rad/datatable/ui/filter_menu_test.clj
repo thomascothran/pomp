@@ -46,6 +46,7 @@
 (deftest default-filter-operations-test
   (testing "contains expected type keys"
     (is (contains? filter-menu/default-filter-operations :string))
+    (is (contains? filter-menu/default-filter-operations :number))
     (is (contains? filter-menu/default-filter-operations :boolean))
     (is (contains? filter-menu/default-filter-operations :date))
     (is (contains? filter-menu/default-filter-operations :enum)))
@@ -60,6 +61,18 @@
       (is (contains? values "is-empty"))
       (is (contains? values "is-not-empty"))
       (is (contains? values "is-any-of"))))
+
+  (testing "number operations include expected values"
+    (let [ops (filter-menu/default-filter-operations :number)
+          values (set (map :value ops))]
+      (is (contains? values "equals"))
+      (is (contains? values "not-equals"))
+      (is (contains? values "greater-than"))
+      (is (contains? values "greater-than-or-equal"))
+      (is (contains? values "less-than"))
+      (is (contains? values "less-than-or-equal"))
+      (is (contains? values "is-empty"))
+      (is (contains? values "is-not-empty"))))
 
   (testing "boolean operations include expected values"
     (let [ops (filter-menu/default-filter-operations :boolean)
@@ -119,6 +132,10 @@
   (testing "returns default ops when both nil"
     (let [result (filter-menu/operations-for-column :string nil nil)]
       (is (= (filter-menu/default-filter-operations :string) result))))
+
+  (testing "returns default number ops for :number type"
+    (let [result (filter-menu/operations-for-column :number nil nil)]
+      (is (= (filter-menu/default-filter-operations :number) result))))
 
   (testing "returns default ops when table-ops doesn't have the type"
     (let [table-ops {:boolean [{:value "table-op" :label "Table Op"}]}
@@ -191,6 +208,19 @@
           labels (set (find-operation-labels result))]
       (is (contains? labels "contains"))
       (is (contains? labels "starts with"))))
+
+  (testing "renders number operations for :number type"
+    (let [result (filter-menu/render {:col-key :age
+                                      :col-label "Age"
+                                      :col-type :number
+                                      :data-url "/data"})
+          labels (set (find-operation-labels result))]
+      (is (contains? labels "equals"))
+      (is (contains? labels "greater than"))
+      (is (contains? labels "less than"))
+      ;; Should NOT contain string-specific operations
+      (is (not (contains? labels "contains")))
+      (is (not (contains? labels "starts with")))))
 
   (testing "renders boolean operations for :boolean type"
     (let [result (filter-menu/render {:col-key :active
