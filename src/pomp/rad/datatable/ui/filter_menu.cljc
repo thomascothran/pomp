@@ -162,6 +162,7 @@
          {:type "button"
           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
                               "@get('" data-url "?filterCol=" col-name
+                              "&clearColFilters=1"
                               "&filterType=" filter-type-str
                               "&filterOp=' + evt.target.closest('form').elements['filterOp'].value + "
                               "'&filterVal=' + encodeURIComponent(evt.target.closest('form').elements['filterVal'].value))")}

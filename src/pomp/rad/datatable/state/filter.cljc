@@ -4,10 +4,10 @@
 
 (defn next-state
   "Computes the next filter state from current signals and query params.
-   
+
    Filter structure: {:col-key [{:type \"string\" :op \"contains\" :value \"x\"} ...]}
    Each column maps to a VECTOR of filter specs, enabling multiple filters per column.
-   
+
    Query params:
    - filterCol: column key to filter on
    - filterType: filter type (\"string\", \"boolean\", \"date\", \"enum\") - defaults to \"string\"
@@ -16,7 +16,8 @@
    - filterIdx: index of filter to modify/remove (for removeFilter)
    - removeFilter: when \"1\", removes filter at filterIdx
    - clearFilters: when present, clears all filters
-   - clearColFilters: when \"1\" with filterCol, clears all filters for that column"
+   - clearColFilters: when \"1\" with filterCol, clears all filters for that column
+                      (if filterOp/filterVal also present, clears first then adds new filter)"
   [signals query-params]
   (let [{:keys [filter-col filter-type filter-op filter-val filter-idx remove-filter?
                 clear-filters? clear-col-filters?]}
@@ -28,7 +29,11 @@
          :remove-filter? (= "1" (get query-params "removeFilter"))
          :clear-filters? (some? (get query-params "clearFilters"))
          :clear-col-filters? (= "1" (get query-params "clearColFilters"))}
-        col-key (some-> filter-col keyword)]
+        col-key (some-> filter-col keyword)
+        ;; Check if we have a new filter to add
+        has-new-filter? (or (not (str/blank? filter-val))
+                            (= filter-op "is-empty")
+                            (= filter-op "is-not-empty"))]
     (cond
       ;; Clear all filters
       clear-filters? {}
@@ -36,8 +41,12 @@
       ;; No column specified - return unchanged
       (nil? col-key) signals
 
-      ;; Clear all filters for a specific column
-      clear-col-filters? (dissoc signals col-key)
+      ;; Clear column and optionally add new filter
+      clear-col-filters?
+      (if has-new-filter?
+        (let [new-filter {:type (or filter-type "string") :op (or filter-op "contains") :value filter-val}]
+          (assoc (dissoc signals col-key) col-key [new-filter]))
+        (dissoc signals col-key))
 
       ;; Remove filter at specific index
       remove-filter?
@@ -49,9 +58,7 @@
           (assoc signals col-key updated-filters)))
 
       ;; Blank value (except for is-empty/is-not-empty) - no new filter added
-      (and (str/blank? filter-val)
-           (not= filter-op "is-empty")
-           (not= filter-op "is-not-empty"))
+      (not has-new-filter?)
       signals
 
       ;; Add new filter to the column's filter array
