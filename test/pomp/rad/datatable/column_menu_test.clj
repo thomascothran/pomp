@@ -5,8 +5,8 @@
 
 (def test-inputs
   {:cols
-   [{:key :name, :label "Name", :type :text}
-    {:key :century, :label "Century", :type :text}
+   [{:key :name, :label "Name", :type :string}
+    {:key :century, :label "Century", :type :string}
     {:key :school, :label "School", :type :enum}
     {:key :region, :label "Region", :type :enum}],
    :columns-state

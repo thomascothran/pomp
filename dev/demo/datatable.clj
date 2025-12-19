@@ -4,8 +4,8 @@
             [pomp.rad.datatable.query.in-memory :as imq]))
 
 (def columns
-  [{:key :name :label "Name" :type :text}
-   {:key :century :label "Century" :type :text}
+  [{:key :name :label "Name" :type :string}
+   {:key :century :label "Century" :type :string}
    {:key :school :label "School" :type :enum :groupable true}
    {:key :region :label "Region" :type :enum :groupable true}])
 

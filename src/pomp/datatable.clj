@@ -33,7 +33,7 @@
 
    Required options:
    - :id            - Table element ID (string)
-   - :columns       - Column definitions [{:key :name :label \"Name\" :type :text} ...]
+   - :columns       - Column definitions [{:key :name :label \"Name\" :type :string} ...]
    - :query-fn      - Query function (see `pomp.rad.datatable.core/query-fn`)
    - :data-url      - URL for data fetches (string)
    - :render-html-fn - Function to convert hiccup to HTML string

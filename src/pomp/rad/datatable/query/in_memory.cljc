@@ -66,7 +66,7 @@
     rows))
 
 (defn apply-filters
-  "Applies filters to rows. Filter structure: {:col-key [{:type \"text\" :op \"contains\" :value \"x\"} ...]}
+  "Applies filters to rows. Filter structure: {:col-key [{:type \"string\" :op \"contains\" :value \"x\"} ...]}
    Multiple filters on the same column use AND logic.
    Multiple filters across columns also use AND logic."
   [rows filters]
@@ -76,7 +76,7 @@
             (reduce (fn [rows filter-spec]
                       (let [{:keys [type op value]} filter-spec]
                         (case type
-                          "text" (apply-text-filter rows col-key op value)
+                          ("string" "text") (apply-text-filter rows col-key op value)
                           "boolean" (apply-boolean-filter rows col-key op value)
                           "date" (apply-date-filter rows col-key op value)
                           "enum" (apply-enum-filter rows col-key op value)

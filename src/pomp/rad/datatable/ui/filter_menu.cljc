@@ -90,14 +90,8 @@
   (let [col-name (name col-key)
         popover-id (str "filter-" col-name)
         anchor-name (str "--filter-" col-name)
-        ;; Normalize type for URL: :text -> "string", nil -> "string", otherwise name of keyword
-        filter-type-str (case col-type
-                          :text "string"
-                          :string "string"
-                          :boolean "boolean"
-                          :date "date"
-                          :enum "enum"
-                          "string")
+        ;; Convert col-type keyword to string for URL
+        filter-type-str (name (or col-type :string))
         ;; Get operations for this column based on type and any overrides
         ops (operations-for-column (or col-type :string) col-filter-ops table-filter-ops)
         current-op (or current-filter-op (:value (first ops)))
@@ -164,4 +158,5 @@
                               "&filterOp=' + evt.target.closest('form').elements['filterOp'].value + "
                               "'&filterVal=' + encodeURIComponent(evt.target.closest('form').elements['filterVal'].value))")}
          "Apply"]]]])))
+
 

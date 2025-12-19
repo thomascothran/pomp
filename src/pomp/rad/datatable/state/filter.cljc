@@ -5,12 +5,12 @@
 (defn next-state
   "Computes the next filter state from current signals and query params.
    
-   Filter structure: {:col-key [{:type \"text\" :op \"contains\" :value \"x\"} ...]}
+   Filter structure: {:col-key [{:type \"string\" :op \"contains\" :value \"x\"} ...]}
    Each column maps to a VECTOR of filter specs, enabling multiple filters per column.
    
    Query params:
    - filterCol: column key to filter on
-   - filterType: filter type (\"text\", \"boolean\", \"date\", \"enum\") - defaults to \"text\"
+   - filterType: filter type (\"string\", \"boolean\", \"date\", \"enum\") - defaults to \"string\"
    - filterOp: filter operation (default: \"contains\")
    - filterVal: filter value
    - filterIdx: index of filter to modify/remove (for removeFilter)
@@ -28,14 +28,7 @@
          :remove-filter? (= "1" (get query-params "removeFilter"))
          :clear-filters? (some? (get query-params "clearFilters"))
          :clear-col-filters? (= "1" (get query-params "clearColFilters"))}
-        col-key (some-> filter-col keyword)
-        ;; Normalize filter type: "string" -> "text", nil -> "text"
-        normalized-type (case filter-type
-                          "string" "text"
-                          "boolean" "boolean"
-                          "date" "date"
-                          "enum" "enum"
-                          "text")]
+        col-key (some-> filter-col keyword)]
     (cond
       ;; Clear all filters
       clear-filters? {}
@@ -63,7 +56,7 @@
 
       ;; Add new filter to the column's filter array
       :else
-      (let [new-filter {:type normalized-type :op (or filter-op "contains") :value filter-val}
+      (let [new-filter {:type (or filter-type "string") :op (or filter-op "contains") :value filter-val}
             current-filters (get signals col-key [])]
         (assoc signals col-key (conj current-filters new-filter))))))
 

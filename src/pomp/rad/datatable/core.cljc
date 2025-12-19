@@ -70,14 +70,14 @@
 
    Required opts:
    - :id          - Table element ID
-   - :cols        - Column definitions [{:key :name :label \"Name\" :type :text} ...]
+   - :cols        - Column definitions [{:key :name :label \"Name\" :type :string} ...]
    - :rows        - Data rows to display
    - :data-url    - URL for data fetches
 
    Optional opts:
    - :groups       - Grouped row data (from group-rows)
    - :sort-state   - Current sort state [{:column \"name\" :direction \"asc\"}]
-   - :filters      - Current filter state {:col-key {:type \"text\" :op \"contains\" :value \"...\"}}
+   - :filters      - Current filter state {:col-key [{:type \"string\" :op \"contains\" :value \"...\"}]}
    - :group-by     - Columns to group by [:col-key]
    - :total-rows   - Total row count for pagination
    - :page-size    - Current page size
