@@ -3,6 +3,92 @@
             [pomp.rad.datatable.ui.filter-menu :as filter-menu]))
 
 ;; =============================================================================
+;; Signal-based filter tests
+;; The Apply button should update signals directly, not send filter params in URL.
+;; This requires a table-id to construct the signal path.
+;; =============================================================================
+
+(defn- find-apply-button-onclick
+  "Extracts the data-on:click handler from the Apply button in rendered hiccup."
+  [hiccup]
+  (cond
+    (and (vector? hiccup)
+         (= :button.btn.btn-sm.btn-primary.flex-1 (first hiccup))
+         (map? (second hiccup))
+         (= "Apply" (last hiccup)))
+    (:data-on:click (second hiccup))
+
+    (vector? hiccup)
+    (some find-apply-button-onclick hiccup)
+
+    (seq? hiccup)
+    (some find-apply-button-onclick hiccup)
+
+    :else
+    nil))
+
+(defn- find-clear-button-onclick
+  "Extracts the data-on:click handler from the Clear button in rendered hiccup."
+  [hiccup]
+  (cond
+    (and (vector? hiccup)
+         (= :button.btn.btn-sm.btn-ghost.flex-1 (first hiccup))
+         (map? (second hiccup))
+         (= "Clear" (last hiccup)))
+    (:data-on:click (second hiccup))
+
+    (vector? hiccup)
+    (some find-clear-button-onclick hiccup)
+
+    (seq? hiccup)
+    (some find-clear-button-onclick hiccup)
+
+    :else
+    nil))
+
+(deftest apply-button-updates-signals-test
+  (testing "Apply button updates signal at index 0 and fetches data"
+    (let [result (filter-menu/render {:col-key :century
+                                      :col-label "Century"
+                                      :col-type :number
+                                      :table-id "philosophers"
+                                      :data-url "/data"})
+          onclick (find-apply-button-onclick result)]
+      ;; Should update the signal for this column's filter at index 0
+      (is (clojure.string/includes? onclick "$datatable.philosophers.filters.century")
+          "Should reference the column's filter signal")
+      ;; Should NOT include filterCol, filterOp, filterVal in URL params
+      (is (not (clojure.string/includes? onclick "filterCol="))
+          "Should NOT send filterCol as URL param")
+      (is (not (clojure.string/includes? onclick "filterOp="))
+          "Should NOT send filterOp as URL param")
+      (is (not (clojure.string/includes? onclick "filterVal="))
+          "Should NOT send filterVal as URL param")
+      ;; Should call @get to fetch data after updating signal
+      (is (clojure.string/includes? onclick "@get")
+          "Should call @get to fetch data"))))
+
+(deftest clear-button-removes-signal-test
+  (testing "Clear button removes the filter signal and fetches data"
+    (let [result (filter-menu/render {:col-key :century
+                                      :col-label "Century"
+                                      :col-type :number
+                                      :table-id "philosophers"
+                                      :current-filter-op "equals"
+                                      :current-filter-value "5"
+                                      :data-url "/data"})
+          onclick (find-clear-button-onclick result)]
+      ;; Should clear/remove the filter signal
+      (is (clojure.string/includes? onclick "$datatable.philosophers.filters.century")
+          "Should reference the column's filter signal")
+      ;; Should NOT include clearColFilters hack
+      (is (not (clojure.string/includes? onclick "clearColFilters"))
+          "Should NOT use clearColFilters hack")
+      ;; Should call @get to fetch data
+      (is (clojure.string/includes? onclick "@get")
+          "Should call @get to fetch data"))))
+
+;; =============================================================================
 ;; normalize-operations tests
 ;; Converts operation specs to canonical {:value :label} format.
 ;; Accepts: string, {:value :label}, or vector of either.
@@ -301,47 +387,52 @@
     :else
     nil))
 
-(deftest render-includes-filter-type-in-url-test
-  (testing "includes filterType=string for :string column"
+(deftest render-includes-filter-type-in-signal-test
+  (testing "includes type: 'string' in signal for :string column"
     (let [result (filter-menu/render {:col-key :name
                                       :col-label "Name"
                                       :col-type :string
+                                      :table-id "test"
                                       :data-url "/data"})
-          apply-url (find-apply-button-url result)]
-      (is (clojure.string/includes? apply-url "filterType=string")
-          "Apply URL should include filterType=string")))
+          onclick (find-apply-button-onclick result)]
+      (is (clojure.string/includes? onclick "type: 'string'")
+          "Apply signal should include type: 'string'")))
 
-  (testing "includes filterType=boolean for :boolean column"
+  (testing "includes type: 'boolean' in signal for :boolean column"
     (let [result (filter-menu/render {:col-key :active
                                       :col-label "Active"
                                       :col-type :boolean
+                                      :table-id "test"
                                       :data-url "/data"})
-          apply-url (find-apply-button-url result)]
-      (is (clojure.string/includes? apply-url "filterType=boolean")
-          "Apply URL should include filterType=boolean")))
+          onclick (find-apply-button-onclick result)]
+      (is (clojure.string/includes? onclick "type: 'boolean'")
+          "Apply signal should include type: 'boolean'")))
 
-  (testing "includes filterType=date for :date column"
+  (testing "includes type: 'date' in signal for :date column"
     (let [result (filter-menu/render {:col-key :created
                                       :col-label "Created"
                                       :col-type :date
+                                      :table-id "test"
                                       :data-url "/data"})
-          apply-url (find-apply-button-url result)]
-      (is (clojure.string/includes? apply-url "filterType=date")
-          "Apply URL should include filterType=date")))
+          onclick (find-apply-button-onclick result)]
+      (is (clojure.string/includes? onclick "type: 'date'")
+          "Apply signal should include type: 'date'")))
 
-  (testing "includes filterType=enum for :enum column"
+  (testing "includes type: 'enum' in signal for :enum column"
     (let [result (filter-menu/render {:col-key :status
                                       :col-label "Status"
                                       :col-type :enum
+                                      :table-id "test"
                                       :data-url "/data"})
-          apply-url (find-apply-button-url result)]
-      (is (clojure.string/includes? apply-url "filterType=enum")
-          "Apply URL should include filterType=enum")))
+          onclick (find-apply-button-onclick result)]
+      (is (clojure.string/includes? onclick "type: 'enum'")
+          "Apply signal should include type: 'enum'")))
 
-  (testing "defaults to filterType=string when no col-type"
+  (testing "defaults to type: 'string' when no col-type"
     (let [result (filter-menu/render {:col-key :name
                                       :col-label "Name"
+                                      :table-id "test"
                                       :data-url "/data"})
-          apply-url (find-apply-button-url result)]
-      (is (clojure.string/includes? apply-url "filterType=string")
-          "Apply URL should default to filterType=string"))))
+          onclick (find-apply-button-onclick result)]
+      (is (clojure.string/includes? onclick "type: 'string'")
+          "Apply signal should default to type: 'string'"))))

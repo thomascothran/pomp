@@ -73,6 +73,7 @@
                :table-filter-ops table-filter-ops
                :current-filter-op current-filter-op
                :current-filter-value current-filter-val
+               :table-id table-id
                :col-idx idx
                :total-cols total-cols
                :data-url data-url})

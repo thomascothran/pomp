@@ -94,11 +94,11 @@
 
 (defn render
   [{:keys [col-key col-label col-type col-filter-ops table-filter-ops
-           current-filter-op current-filter-value data-url]}]
+           current-filter-op current-filter-value table-id data-url]}]
   (let [col-name (name col-key)
         popover-id (str "filter-" col-name)
         anchor-name (str "--filter-" col-name)
-        ;; Convert col-type keyword to string for URL
+        ;; Convert col-type keyword to string for signal
         filter-type-str (name (or col-type :string))
         ;; Get operations for this column based on type and any overrides
         ops (operations-for-column (or col-type :string) col-filter-ops table-filter-ops)
@@ -110,7 +110,9 @@
                           (:label (first ops)))
         has-filter? (or (not (str/blank? current-filter-value))
                         (= current-op "is-empty")
-                        (= current-op "is-not-empty"))]
+                        (= current-op "is-not-empty"))
+        ;; Signal path for this column's filters
+        signal-path (str "$datatable." table-id ".filters." col-name)]
     (list
      [:button.btn.btn-ghost.btn-xs.px-1
       {:popovertarget popover-id
@@ -129,10 +131,8 @@
       [:form.flex.flex-col.gap-3
        {:data-on:submit__prevent
         (str "document.getElementById('" popover-id "').hidePopover(); "
-             "@get('" data-url "?filterCol=" col-name
-             "&filterType=" filter-type-str
-             "&filterOp=' + evt.target.elements['filterOp'].value + "
-             "'&filterVal=' + evt.target.elements['filterVal'].value)")}
+             signal-path " = [{type: '" filter-type-str "', op: evt.target.elements['filterOp'].value, value: evt.target.elements['filterVal'].value}]; "
+             "@get('" data-url "')")}
        [:div.text-sm.font-semibold (str "Filter " col-label)]
        [:input {:type "hidden" :name "filterOp" :value current-op}]
        [:details.dropdown.w-full
@@ -156,16 +156,15 @@
          {:type "button"
           :disabled (not has-filter?)
           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
-                              "@get('" data-url "?filterCol=" col-name "&clearColFilters=1')")}
+                              signal-path " = null; "
+                              "@get('" data-url "')")}
          "Clear"]
         [:button.btn.btn-sm.btn-primary.flex-1
          {:type "button"
           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
-                              "@get('" data-url "?filterCol=" col-name
-                              "&clearColFilters=1"
-                              "&filterType=" filter-type-str
-                              "&filterOp=' + evt.target.closest('form').elements['filterOp'].value + "
-                              "'&filterVal=' + encodeURIComponent(evt.target.closest('form').elements['filterVal'].value))")}
+                              signal-path " = [{type: '" filter-type-str "', op: evt.target.closest('form').elements['filterOp'].value, value: encodeURIComponent(evt.target.closest('form').elements['filterVal'].value)}]; "
+                              "@get('" data-url "')")}
          "Apply"]]]])))
+
 
 

@@ -148,3 +148,58 @@
           "Should render column-level custom operation")
       (is (not (contains? status-ops "is any of"))
           "Should NOT render default enum 'is any of' when overridden"))))
+
+(defn- find-filter-apply-button-onclick
+  "Finds the Apply button onclick handler for a specific column in rendered header.
+   Returns the onclick string."
+  [hiccup col-key]
+  (let [col-name (name col-key)
+        popover-id (str "filter-" col-name)]
+    (letfn [(find-button [h]
+              (cond
+                ;; Found the Apply button
+                (and (vector? h)
+                     (= :button.btn.btn-sm.btn-primary.flex-1 (first h))
+                     (map? (second h))
+                     (= "Apply" (last h)))
+                (:data-on:click (second h))
+
+                (vector? h)
+                (some find-button h)
+
+                (seq? h)
+                (some find-button h)
+
+                :else
+                nil))]
+      ;; First find the right filter menu by id, then find the button
+      (letfn [(find-menu [h]
+                (cond
+                  (and (vector? h)
+                       (= :div.bg-base-100.shadow-lg.rounded-box.p-4.w-64 (first h))
+                       (map? (second h))
+                       (= popover-id (:id (second h))))
+                  (find-button h)
+
+                  (vector? h)
+                  (some find-menu h)
+
+                  (seq? h)
+                  (some find-menu h)
+
+                  :else
+                  nil))]
+        (find-menu hiccup)))))
+
+(deftest render-sortable-passes-table-id-to-filter-menu-test
+  (testing "passes table-id to filter-menu for signal updates"
+    (let [cols [{:key :name :label "Name" :type :string}]
+          result (header/render-sortable {:cols cols
+                                          :sort-state []
+                                          :filters {}
+                                          :data-url "/data"
+                                          :table-id "philosophers"})
+          onclick (find-filter-apply-button-onclick result :name)]
+      ;; The Apply button should update the signal with the table-id in the path
+      (is (clojure.string/includes? onclick "$datatable.philosophers.filters.name")
+          "Apply button should reference the correct signal path with table-id"))))
