@@ -81,6 +81,32 @@
            (query/apply-filters test-rows {:city [{:type "text" :op "is-empty" :value ""}]}))
         "filters rows where city is empty")))
 
+(deftest apply-filters-is-not-empty-test
+  (testing "is-not-empty filter"
+    (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}
+            {:id 2 :name "Bob" :age 25 :city "Boston"}
+            {:id 3 :name "Charlie" :age 35 :city "Chicago"}
+            {:id 4 :name "Diana" :age 28 :city "Denver"}]
+           (query/apply-filters test-rows {:city [{:type "text" :op "is-not-empty" :value ""}]}))
+        "filters rows where city is not empty")))
+
+(deftest apply-filters-is-any-of-test
+  (testing "is-any-of filter with multiple values"
+    (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}
+            {:id 2 :name "Bob" :age 25 :city "Boston"}]
+           (query/apply-filters test-rows {:name [{:type "text" :op "is-any-of" :value ["alice" "bob"]}]}))
+        "filters rows where name is any of the specified values"))
+
+  (testing "is-any-of filter with single value"
+    (is (= [{:id 3 :name "Charlie" :age 35 :city "Chicago"}]
+           (query/apply-filters test-rows {:name [{:type "text" :op "is-any-of" :value ["charlie"]}]}))
+        "works with single value in array"))
+
+  (testing "is-any-of filter with no matches"
+    (is (= []
+           (query/apply-filters test-rows {:name [{:type "text" :op "is-any-of" :value ["xyz" "abc"]}]}))
+        "returns empty when no matches")))
+
 (deftest apply-filters-multiple-columns-test
   (testing "multiple column filters (AND logic)"
     (is (= [{:id 3 :name "Charlie" :age 35 :city "Chicago"}]
@@ -198,7 +224,8 @@
               :page {:size 1 :current 0}}
              (qfn {:filters {:city [{:type "text" :op "starts-with" :value "d"}]}
                    :sort [{:column "name" :direction "asc"}]
-                   :page {:size 1 :current 1}}))
+                   :page {:size 1 :current 1}}
+                  nil))
           "combines filter, sort, and pagination (clamps page when beyond range)"))
 
     (testing "no filters"
@@ -207,7 +234,8 @@
               :page {:size 10 :current 0}}
              (qfn {:filters {}
                    :sort []
-                   :page {:size 10 :current 0}}))
+                   :page {:size 10 :current 0}}
+                  nil))
           "returns all rows when no filters"))
 
     (testing "total-rows reflects filtered count"
@@ -215,5 +243,6 @@
       (is (= 3
              (:total-rows (qfn {:filters {:name [{:type "text" :op "contains" :value "e"}]}
                                 :sort []
-                                :page {:size 10 :current 0}})))
+                                :page {:size 10 :current 0}}
+                               nil)))
           "total-rows is count after filtering, before pagination"))))

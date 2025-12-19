@@ -99,16 +99,8 @@
                 [:a.py-1 {:class "active"} "contains"]]
                [:li
                 {:data-on:click
-                 "evt.target.closest('form').elements['filterOp'].value = 'not-contains'; evt.target.closest('details').querySelector('summary span').textContent = 'does not contain'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "does not contain"]]
-               [:li
-                {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'equals'; evt.target.closest('details').querySelector('summary span').textContent = 'equals'; evt.target.closest('details').removeAttribute('open')"}
                 [:a.py-1 {:class nil} "equals"]]
-               [:li
-                {:data-on:click
-                 "evt.target.closest('form').elements['filterOp'].value = 'not-equals'; evt.target.closest('details').querySelector('summary span').textContent = 'does not equal'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "does not equal"]]
                [:li
                 {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'starts-with'; evt.target.closest('details').querySelector('summary span').textContent = 'starts with'; evt.target.closest('details').removeAttribute('open')"}
@@ -120,7 +112,15 @@
                [:li
                 {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'is-empty'; evt.target.closest('details').querySelector('summary span').textContent = 'is empty'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "is empty"]])]]
+                [:a.py-1 {:class nil} "is empty"]]
+               [:li
+                {:data-on:click
+                 "evt.target.closest('form').elements['filterOp'].value = 'is-not-empty'; evt.target.closest('details').querySelector('summary span').textContent = 'is not empty'; evt.target.closest('details').removeAttribute('open')"}
+                [:a.py-1 {:class nil} "is not empty"]]
+               [:li
+                {:data-on:click
+                 "evt.target.closest('form').elements['filterOp'].value = 'is-any-of'; evt.target.closest('details').querySelector('summary span').textContent = 'is any of'; evt.target.closest('details').removeAttribute('open')"}
+                [:a.py-1 {:class nil} "is any of"]])]]
             [:input.input.input-sm.w-full
              {:type "text",
               :name "filterVal",
@@ -290,16 +290,8 @@
                 [:a.py-1 {:class "active"} "contains"]]
                [:li
                 {:data-on:click
-                 "evt.target.closest('form').elements['filterOp'].value = 'not-contains'; evt.target.closest('details').querySelector('summary span').textContent = 'does not contain'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "does not contain"]]
-               [:li
-                {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'equals'; evt.target.closest('details').querySelector('summary span').textContent = 'equals'; evt.target.closest('details').removeAttribute('open')"}
                 [:a.py-1 {:class nil} "equals"]]
-               [:li
-                {:data-on:click
-                 "evt.target.closest('form').elements['filterOp'].value = 'not-equals'; evt.target.closest('details').querySelector('summary span').textContent = 'does not equal'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "does not equal"]]
                [:li
                 {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'starts-with'; evt.target.closest('details').querySelector('summary span').textContent = 'starts with'; evt.target.closest('details').removeAttribute('open')"}
@@ -311,7 +303,15 @@
                [:li
                 {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'is-empty'; evt.target.closest('details').querySelector('summary span').textContent = 'is empty'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "is empty"]])]]
+                [:a.py-1 {:class nil} "is empty"]]
+               [:li
+                {:data-on:click
+                 "evt.target.closest('form').elements['filterOp'].value = 'is-not-empty'; evt.target.closest('details').querySelector('summary span').textContent = 'is not empty'; evt.target.closest('details').removeAttribute('open')"}
+                [:a.py-1 {:class nil} "is not empty"]]
+               [:li
+                {:data-on:click
+                 "evt.target.closest('form').elements['filterOp'].value = 'is-any-of'; evt.target.closest('details').querySelector('summary span').textContent = 'is any of'; evt.target.closest('details').removeAttribute('open')"}
+                [:a.py-1 {:class nil} "is any of"]])]]
             [:input.input.input-sm.w-full
              {:type "text",
               :name "filterVal",
@@ -480,16 +480,8 @@
                 [:a.py-1 {:class "active"} "contains"]]
                [:li
                 {:data-on:click
-                 "evt.target.closest('form').elements['filterOp'].value = 'not-contains'; evt.target.closest('details').querySelector('summary span').textContent = 'does not contain'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "does not contain"]]
-               [:li
-                {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'equals'; evt.target.closest('details').querySelector('summary span').textContent = 'equals'; evt.target.closest('details').removeAttribute('open')"}
                 [:a.py-1 {:class nil} "equals"]]
-               [:li
-                {:data-on:click
-                 "evt.target.closest('form').elements['filterOp'].value = 'not-equals'; evt.target.closest('details').querySelector('summary span').textContent = 'does not equal'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "does not equal"]]
                [:li
                 {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'starts-with'; evt.target.closest('details').querySelector('summary span').textContent = 'starts with'; evt.target.closest('details').removeAttribute('open')"}
@@ -501,7 +493,15 @@
                [:li
                 {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'is-empty'; evt.target.closest('details').querySelector('summary span').textContent = 'is empty'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "is empty"]])]]
+                [:a.py-1 {:class nil} "is empty"]]
+               [:li
+                {:data-on:click
+                 "evt.target.closest('form').elements['filterOp'].value = 'is-not-empty'; evt.target.closest('details').querySelector('summary span').textContent = 'is not empty'; evt.target.closest('details').removeAttribute('open')"}
+                [:a.py-1 {:class nil} "is not empty"]]
+               [:li
+                {:data-on:click
+                 "evt.target.closest('form').elements['filterOp'].value = 'is-any-of'; evt.target.closest('details').querySelector('summary span').textContent = 'is any of'; evt.target.closest('details').removeAttribute('open')"}
+                [:a.py-1 {:class nil} "is any of"]])]]
             [:input.input.input-sm.w-full
              {:type "text",
               :name "filterVal",
@@ -670,16 +670,8 @@
                 [:a.py-1 {:class "active"} "contains"]]
                [:li
                 {:data-on:click
-                 "evt.target.closest('form').elements['filterOp'].value = 'not-contains'; evt.target.closest('details').querySelector('summary span').textContent = 'does not contain'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "does not contain"]]
-               [:li
-                {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'equals'; evt.target.closest('details').querySelector('summary span').textContent = 'equals'; evt.target.closest('details').removeAttribute('open')"}
                 [:a.py-1 {:class nil} "equals"]]
-               [:li
-                {:data-on:click
-                 "evt.target.closest('form').elements['filterOp'].value = 'not-equals'; evt.target.closest('details').querySelector('summary span').textContent = 'does not equal'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "does not equal"]]
                [:li
                 {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'starts-with'; evt.target.closest('details').querySelector('summary span').textContent = 'starts with'; evt.target.closest('details').removeAttribute('open')"}
@@ -691,7 +683,15 @@
                [:li
                 {:data-on:click
                  "evt.target.closest('form').elements['filterOp'].value = 'is-empty'; evt.target.closest('details').querySelector('summary span').textContent = 'is empty'; evt.target.closest('details').removeAttribute('open')"}
-                [:a.py-1 {:class nil} "is empty"]])]]
+                [:a.py-1 {:class nil} "is empty"]]
+               [:li
+                {:data-on:click
+                 "evt.target.closest('form').elements['filterOp'].value = 'is-not-empty'; evt.target.closest('details').querySelector('summary span').textContent = 'is not empty'; evt.target.closest('details').removeAttribute('open')"}
+                [:a.py-1 {:class nil} "is not empty"]]
+               [:li
+                {:data-on:click
+                 "evt.target.closest('form').elements['filterOp'].value = 'is-any-of'; evt.target.closest('details').querySelector('summary span').textContent = 'is any of'; evt.target.closest('details').removeAttribute('open')"}
+                [:a.py-1 {:class nil} "is any of"]])]]
             [:input.input.input-sm.w-full
              {:type "text",
               :name "filterVal",

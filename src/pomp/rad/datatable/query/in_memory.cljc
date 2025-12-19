@@ -16,6 +16,9 @@
       "starts-with" (filter #(str/starts-with? (get-cell-val %) search-term) rows)
       "ends-with" (filter #(str/ends-with? (get-cell-val %) search-term) rows)
       "is-empty" (filter #(str/blank? (str (get % col-key))) rows)
+      "is-not-empty" (remove #(str/blank? (str (get % col-key))) rows)
+      "is-any-of" (let [values (set (map str/lower-case filter-value))]
+                    (filter #(contains? values (get-cell-val %)) rows))
       rows)))
 
 (defn apply-filters
