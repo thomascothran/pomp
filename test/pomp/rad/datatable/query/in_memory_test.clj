@@ -246,3 +246,178 @@
                                 :page {:size 10 :current 0}}
                                nil)))
           "total-rows is count after filtering, before pagination"))))
+
+;; =============================================================================
+;; Boolean Filter Tests
+;; =============================================================================
+
+(def bool-test-rows
+  [{:id 1 :name "Alice" :active true}
+   {:id 2 :name "Bob" :active false}
+   {:id 3 :name "Charlie" :active true}
+   {:id 4 :name "Diana" :active nil}
+   {:id 5 :name "Eve" :active false}])
+
+(deftest apply-filters-boolean-is-test
+  (testing "boolean is true"
+    (is (= [{:id 1 :name "Alice" :active true}
+            {:id 3 :name "Charlie" :active true}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is" :value "true"}]}))
+        "filters rows where active is true"))
+
+  (testing "boolean is false"
+    (is (= [{:id 2 :name "Bob" :active false}
+            {:id 5 :name "Eve" :active false}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is" :value "false"}]}))
+        "filters rows where active is false")))
+
+(deftest apply-filters-boolean-is-not-test
+  (testing "boolean is-not true"
+    (is (= [{:id 2 :name "Bob" :active false}
+            {:id 4 :name "Diana" :active nil}
+            {:id 5 :name "Eve" :active false}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is-not" :value "true"}]}))
+        "filters rows where active is not true (includes nil)"))
+
+  (testing "boolean is-not false"
+    (is (= [{:id 1 :name "Alice" :active true}
+            {:id 3 :name "Charlie" :active true}
+            {:id 4 :name "Diana" :active nil}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is-not" :value "false"}]}))
+        "filters rows where active is not false (includes nil)")))
+
+(deftest apply-filters-boolean-is-empty-test
+  (testing "boolean is-empty"
+    (is (= [{:id 4 :name "Diana" :active nil}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is-empty" :value ""}]}))
+        "filters rows where active is nil")))
+
+(deftest apply-filters-boolean-is-not-empty-test
+  (testing "boolean is-not-empty"
+    (is (= [{:id 1 :name "Alice" :active true}
+            {:id 2 :name "Bob" :active false}
+            {:id 3 :name "Charlie" :active true}
+            {:id 5 :name "Eve" :active false}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is-not-empty" :value ""}]}))
+        "filters rows where active is not nil")))
+
+;; =============================================================================
+;; Date Filter Tests
+;; =============================================================================
+
+(def date-test-rows
+  [{:id 1 :name "Alice" :created "2024-01-15"}
+   {:id 2 :name "Bob" :created "2024-02-20"}
+   {:id 3 :name "Charlie" :created "2024-01-15"}
+   {:id 4 :name "Diana" :created "2024-03-10"}
+   {:id 5 :name "Eve" :created nil}])
+
+(deftest apply-filters-date-is-test
+  (testing "date is exact match"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "is" :value "2024-01-15"}]}))
+        "filters rows where created equals exact date")))
+
+(deftest apply-filters-date-is-not-test
+  (testing "date is-not"
+    (is (= [{:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 4 :name "Diana" :created "2024-03-10"}
+            {:id 5 :name "Eve" :created nil}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "is-not" :value "2024-01-15"}]}))
+        "filters rows where created does not equal date")))
+
+(deftest apply-filters-date-after-test
+  (testing "date after"
+    (is (= [{:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 4 :name "Diana" :created "2024-03-10"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "after" :value "2024-01-15"}]}))
+        "filters rows where created is after date (exclusive)")))
+
+(deftest apply-filters-date-on-or-after-test
+  (testing "date on-or-after"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}
+            {:id 4 :name "Diana" :created "2024-03-10"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "on-or-after" :value "2024-01-15"}]}))
+        "filters rows where created is on or after date (inclusive)")))
+
+(deftest apply-filters-date-before-test
+  (testing "date before"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "before" :value "2024-02-20"}]}))
+        "filters rows where created is before date (exclusive)")))
+
+(deftest apply-filters-date-on-or-before-test
+  (testing "date on-or-before"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "on-or-before" :value "2024-02-20"}]}))
+        "filters rows where created is on or before date (inclusive)")))
+
+(deftest apply-filters-date-is-empty-test
+  (testing "date is-empty"
+    (is (= [{:id 5 :name "Eve" :created nil}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "is-empty" :value ""}]}))
+        "filters rows where created is nil")))
+
+(deftest apply-filters-date-is-not-empty-test
+  (testing "date is-not-empty"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}
+            {:id 4 :name "Diana" :created "2024-03-10"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "is-not-empty" :value ""}]}))
+        "filters rows where created is not nil")))
+
+;; =============================================================================
+;; Enum Filter Tests
+;; =============================================================================
+
+(def enum-test-rows
+  [{:id 1 :name "Alice" :status "active"}
+   {:id 2 :name "Bob" :status "pending"}
+   {:id 3 :name "Charlie" :status "active"}
+   {:id 4 :name "Diana" :status "inactive"}
+   {:id 5 :name "Eve" :status nil}])
+
+(deftest apply-filters-enum-is-test
+  (testing "enum is exact match"
+    (is (= [{:id 1 :name "Alice" :status "active"}
+            {:id 3 :name "Charlie" :status "active"}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is" :value "active"}]}))
+        "filters rows where status equals value")))
+
+(deftest apply-filters-enum-is-not-test
+  (testing "enum is-not"
+    (is (= [{:id 2 :name "Bob" :status "pending"}
+            {:id 4 :name "Diana" :status "inactive"}
+            {:id 5 :name "Eve" :status nil}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is-not" :value "active"}]}))
+        "filters rows where status does not equal value")))
+
+(deftest apply-filters-enum-is-any-of-test
+  (testing "enum is-any-of"
+    (is (= [{:id 1 :name "Alice" :status "active"}
+            {:id 2 :name "Bob" :status "pending"}
+            {:id 3 :name "Charlie" :status "active"}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is-any-of" :value ["active" "pending"]}]}))
+        "filters rows where status is any of the values")))
+
+(deftest apply-filters-enum-is-empty-test
+  (testing "enum is-empty"
+    (is (= [{:id 5 :name "Eve" :status nil}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is-empty" :value ""}]}))
+        "filters rows where status is nil")))
+
+(deftest apply-filters-enum-is-not-empty-test
+  (testing "enum is-not-empty"
+    (is (= [{:id 1 :name "Alice" :status "active"}
+            {:id 2 :name "Bob" :status "pending"}
+            {:id 3 :name "Charlie" :status "active"}
+            {:id 4 :name "Diana" :status "inactive"}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is-not-empty" :value ""}]}))
+        "filters rows where status is not nil")))

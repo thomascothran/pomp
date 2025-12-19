@@ -4,14 +4,15 @@
             [pomp.rad.datatable.ui.pagination :as pagination]))
 
 (defn render
-  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar render-row render-header render-cell]}]
+  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar render-row render-header render-cell filter-operations]}]
   (let [header-ctx {:cols cols
                     :sort-state sort-state
                     :filters filters
                     :data-url data-url
                     :selectable? selectable?
                     :table-id id
-                    :group-by group-by}
+                    :group-by group-by
+                    :filter-operations filter-operations}
         render-header-fn (or render-header header/render-sortable)]
     [:div {:id id}
      (when toolbar

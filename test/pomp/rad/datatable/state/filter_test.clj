@@ -109,3 +109,47 @@
                                  {:name [{:type "text" :op "equals" :value "jane"}]
                                   :city [{:type "text" :op "contains" :value "NYC"}]}))
         "handles add, remove, and update together")))
+
+;; =============================================================================
+;; Filter type support - filters should store the column type
+;; =============================================================================
+
+(deftest next-state-filter-type-test
+  (testing "stores filter type from filterType param"
+    (is (= {:active [{:type "boolean" :op "is" :value "true"}]}
+           (filter/next-state {} {"filterCol" "active"
+                                  "filterType" "boolean"
+                                  "filterOp" "is"
+                                  "filterVal" "true"}))
+        "boolean filter type is stored"))
+
+  (testing "stores date filter type"
+    (is (= {:created [{:type "date" :op "after" :value "2024-01-01"}]}
+           (filter/next-state {} {"filterCol" "created"
+                                  "filterType" "date"
+                                  "filterOp" "after"
+                                  "filterVal" "2024-01-01"}))
+        "date filter type is stored"))
+
+  (testing "stores enum filter type"
+    (is (= {:status [{:type "enum" :op "is" :value "active"}]}
+           (filter/next-state {} {"filterCol" "status"
+                                  "filterType" "enum"
+                                  "filterOp" "is"
+                                  "filterVal" "active"}))
+        "enum filter type is stored"))
+
+  (testing "defaults to text when filterType not provided"
+    (is (= {:name [{:type "text" :op "contains" :value "john"}]}
+           (filter/next-state {} {"filterCol" "name"
+                                  "filterOp" "contains"
+                                  "filterVal" "john"}))
+        "defaults to text type for backwards compatibility"))
+
+  (testing "string filterType is stored as text"
+    (is (= {:name [{:type "text" :op "contains" :value "john"}]}
+           (filter/next-state {} {"filterCol" "name"
+                                  "filterType" "string"
+                                  "filterOp" "contains"
+                                  "filterVal" "john"}))
+        "string type is normalized to text")))

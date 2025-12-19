@@ -15,8 +15,9 @@
       [:th label])]])
 
 (defn render-sortable
-  [{:keys [cols sort-state filters data-url selectable? table-id group-by]}]
+  [{:keys [cols sort-state filters data-url selectable? table-id group-by filter-operations]}]
   (let [total-cols (count cols)
+        table-filter-ops filter-operations
         grouped? (seq group-by)
         group-col-key (first group-by)
         group-col (when grouped? (some #(when (= (:key %) group-col-key) %) cols))]
@@ -32,7 +33,7 @@
          [:div.flex.items-center.justify-between.gap-2
           [:span.font-semibold "Group"]
           (column-menu/render-group-column {:data-url data-url})]])
-      (for [[idx {:keys [key label groupable]}] (map-indexed vector cols)]
+      (for [[idx {:keys [key label type groupable filter-operations] :as col}] (map-indexed vector cols)]
         (let [col-name (name key)
               ;; filters is now {:col-key [{:type "text" :op "..." :value "..."}]}
               ;; Get the first filter for display in the menu
@@ -67,6 +68,9 @@
              (filter-menu/render
               {:col-key key
                :col-label label
+               :col-type type
+               :col-filter-ops filter-operations
+               :table-filter-ops table-filter-ops
                :current-filter-op current-filter-op
                :current-filter-value current-filter-val
                :col-idx idx
@@ -78,3 +82,5 @@
                :data-url data-url
                :table-id table-id
                :groupable? groupable})]]]))]]))
+
+

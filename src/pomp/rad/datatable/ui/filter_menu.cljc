@@ -90,6 +90,14 @@
   (let [col-name (name col-key)
         popover-id (str "filter-" col-name)
         anchor-name (str "--filter-" col-name)
+        ;; Normalize type for URL: :text -> "string", nil -> "string", otherwise name of keyword
+        filter-type-str (case col-type
+                          :text "string"
+                          :string "string"
+                          :boolean "boolean"
+                          :date "date"
+                          :enum "enum"
+                          "string")
         ;; Get operations for this column based on type and any overrides
         ops (operations-for-column (or col-type :string) col-filter-ops table-filter-ops)
         current-op (or current-filter-op (:value (first ops)))
@@ -120,6 +128,7 @@
        {:data-on:submit__prevent
         (str "document.getElementById('" popover-id "').hidePopover(); "
              "@get('" data-url "?filterCol=" col-name
+             "&filterType=" filter-type-str
              "&filterOp=' + evt.target.elements['filterOp'].value + "
              "'&filterVal=' + evt.target.elements['filterVal'].value)")}
        [:div.text-sm.font-semibold (str "Filter " col-label)]
@@ -151,6 +160,8 @@
          {:type "button"
           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
                               "@get('" data-url "?filterCol=" col-name
+                              "&filterType=" filter-type-str
                               "&filterOp=' + evt.target.closest('form').elements['filterOp'].value + "
                               "'&filterVal=' + encodeURIComponent(evt.target.closest('form').elements['filterVal'].value))")}
          "Apply"]]]])))
+

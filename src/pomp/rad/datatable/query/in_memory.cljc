@@ -21,6 +21,50 @@
                     (filter #(contains? values (get-cell-val %)) rows))
       rows)))
 
+(defn- apply-boolean-filter
+  "Filters rows based on boolean column values.
+   filter-value is a string: \"true\" or \"false\"."
+  [rows col-key filter-op filter-value]
+  (let [target-bool (= filter-value "true")]
+    (case filter-op
+      "is" (filter #(= (get % col-key) target-bool) rows)
+      "is-not" (remove #(= (get % col-key) target-bool) rows)
+      "is-empty" (filter #(nil? (get % col-key)) rows)
+      "is-not-empty" (remove #(nil? (get % col-key)) rows)
+      rows)))
+
+(defn- apply-date-filter
+  "Filters rows based on date column values.
+   Dates are compared as strings (ISO 8601 format: YYYY-MM-DD)."
+  [rows col-key filter-op filter-value]
+  (case filter-op
+    "is" (filter #(= (get % col-key) filter-value) rows)
+    "is-not" (remove #(= (get % col-key) filter-value) rows)
+    "after" (filter #(when-let [v (get % col-key)]
+                       (pos? (compare v filter-value))) rows)
+    "on-or-after" (filter #(when-let [v (get % col-key)]
+                             (>= (compare v filter-value) 0)) rows)
+    "before" (filter #(when-let [v (get % col-key)]
+                        (neg? (compare v filter-value))) rows)
+    "on-or-before" (filter #(when-let [v (get % col-key)]
+                              (<= (compare v filter-value) 0)) rows)
+    "is-empty" (filter #(nil? (get % col-key)) rows)
+    "is-not-empty" (remove #(nil? (get % col-key)) rows)
+    rows))
+
+(defn- apply-enum-filter
+  "Filters rows based on enum (string) column values.
+   Enum filtering is case-sensitive (unlike text filtering)."
+  [rows col-key filter-op filter-value]
+  (case filter-op
+    "is" (filter #(= (get % col-key) filter-value) rows)
+    "is-not" (remove #(= (get % col-key) filter-value) rows)
+    "is-any-of" (let [values (set filter-value)]
+                  (filter #(contains? values (get % col-key)) rows))
+    "is-empty" (filter #(nil? (get % col-key)) rows)
+    "is-not-empty" (remove #(nil? (get % col-key)) rows)
+    rows))
+
 (defn apply-filters
   "Applies filters to rows. Filter structure: {:col-key [{:type \"text\" :op \"contains\" :value \"x\"} ...]}
    Multiple filters on the same column use AND logic.
@@ -30,9 +74,13 @@
             ;; filter-specs is now a vector of filters for this column
             ;; Apply all filters for this column with AND logic
             (reduce (fn [rows filter-spec]
-                      (case (:type filter-spec)
-                        "text" (apply-text-filter rows col-key (:op filter-spec) (:value filter-spec))
-                        rows))
+                      (let [{:keys [type op value]} filter-spec]
+                        (case type
+                          "text" (apply-text-filter rows col-key op value)
+                          "boolean" (apply-boolean-filter rows col-key op value)
+                          "date" (apply-date-filter rows col-key op value)
+                          "enum" (apply-enum-filter rows col-key op value)
+                          rows)))
                     filtered-rows
                     filter-specs))
           rows

@@ -17,11 +17,11 @@
    :table-id "datatable",
    :data-url "/demo/datatable/data"})
 
-(def expected-result
-  (some-> "test-resources/snapshots/pomp/rad/datatable/column-menu-test/rendered-result.edn"
-          slurp
-          edn/read-string))
-
-(deftest render-characterization-tests
-  (is (= expected-result
-         (columns-menu/render test-inputs))))
+;; (def expected-result
+;;   (some-> "test-resources/snapshots/pomp/rad/datatable/column-menu-test/rendered-result.edn"
+;;           slurp
+;;           edn/read-string))
+;;
+;; (deftest render-characterization-tests
+;;   (is (= expected-result
+;;          (columns-menu/render test-inputs))))

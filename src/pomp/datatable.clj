@@ -47,10 +47,15 @@
    - :render-cell   - Custom cell render function (see pomp.rad.datatable.ui.row/render-cell)
                       Used by the default render-row; ignored if :render-row is provided
                       unless the custom render-row chooses to use it.
+   - :filter-operations - Override filter operations per type or column
+                          Map of type keyword to operations vector.
+                          Example: {:string [{:value \"contains\" :label \"Includes\"}]
+                                   :boolean [{:value \"is\" :label \"equals\"}]}
 
    Returns a Ring handler function that handles datatable requests via SSE."
   [{:keys [id columns query-fn data-url render-html-fn
-           page-sizes selectable? skeleton-rows render-row render-header render-cell]
+           page-sizes selectable? skeleton-rows render-row render-header render-cell
+           filter-operations]
     :or {page-sizes [10 25 100]
          selectable? false
          skeleton-rows 10}}]
@@ -106,6 +111,7 @@
                                                                              :render-row render-row
                                                                              :render-header render-header
                                                                              :render-cell render-cell
+                                                                             :filter-operations filter-operations
                                                                              :toolbar (columns-menu/render {:cols ordered-cols
                                                                                                             :columns-state columns-state
                                                                                                             :table-id id

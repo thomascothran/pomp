@@ -246,3 +246,72 @@
       (is (contains? labels "Table Op"))
       ;; Should NOT contain default operations
       (is (not (contains? labels "contains"))))))
+
+;; =============================================================================
+;; render tests - filterType in URL
+;; Verifies that render includes filterType in the Apply button URL
+;; =============================================================================
+
+(defn- find-apply-button-url
+  "Extracts the data-on:click URL from the Apply button in rendered hiccup."
+  [hiccup]
+  (cond
+    (and (vector? hiccup)
+         (= :button.btn.btn-sm.btn-primary.flex-1 (first hiccup))
+         (map? (second hiccup))
+         (= "Apply" (last hiccup)))
+    (:data-on:click (second hiccup))
+
+    (vector? hiccup)
+    (some find-apply-button-url hiccup)
+
+    (seq? hiccup)
+    (some find-apply-button-url hiccup)
+
+    :else
+    nil))
+
+(deftest render-includes-filter-type-in-url-test
+  (testing "includes filterType=string for :string column"
+    (let [result (filter-menu/render {:col-key :name
+                                      :col-label "Name"
+                                      :col-type :string
+                                      :data-url "/data"})
+          apply-url (find-apply-button-url result)]
+      (is (clojure.string/includes? apply-url "filterType=string")
+          "Apply URL should include filterType=string")))
+
+  (testing "includes filterType=boolean for :boolean column"
+    (let [result (filter-menu/render {:col-key :active
+                                      :col-label "Active"
+                                      :col-type :boolean
+                                      :data-url "/data"})
+          apply-url (find-apply-button-url result)]
+      (is (clojure.string/includes? apply-url "filterType=boolean")
+          "Apply URL should include filterType=boolean")))
+
+  (testing "includes filterType=date for :date column"
+    (let [result (filter-menu/render {:col-key :created
+                                      :col-label "Created"
+                                      :col-type :date
+                                      :data-url "/data"})
+          apply-url (find-apply-button-url result)]
+      (is (clojure.string/includes? apply-url "filterType=date")
+          "Apply URL should include filterType=date")))
+
+  (testing "includes filterType=enum for :enum column"
+    (let [result (filter-menu/render {:col-key :status
+                                      :col-label "Status"
+                                      :col-type :enum
+                                      :data-url "/data"})
+          apply-url (find-apply-button-url result)]
+      (is (clojure.string/includes? apply-url "filterType=enum")
+          "Apply URL should include filterType=enum")))
+
+  (testing "defaults to filterType=string when no col-type"
+    (let [result (filter-menu/render {:col-key :name
+                                      :col-label "Name"
+                                      :data-url "/data"})
+          apply-url (find-apply-button-url result)]
+      (is (clojure.string/includes? apply-url "filterType=string")
+          "Apply URL should default to filterType=string"))))
