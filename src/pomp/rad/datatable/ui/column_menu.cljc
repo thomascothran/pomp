@@ -2,7 +2,7 @@
   (:require [pomp.rad.datatable.ui.primitives :as primitives]))
 
 (defn render
-  [{:keys [col-key col-label data-url table-id]}]
+  [{:keys [col-key col-label data-url table-id groupable?]}]
   (let [col-name (name col-key)
         popover-id (str "col-menu-" col-name)
         anchor-name (str "--col-menu-" col-name)
@@ -28,9 +28,10 @@
        [:li
         [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@get('" data-url "?sortCol=" col-name "&sortDir=desc')")}
          primitives/arrow-down-icon "Sort descending"]]
-       [:li
-        [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@get('" data-url "?groupBy=" col-name "')")}
-         primitives/list-icon "Group by " col-label]]
+       (when groupable?
+         [:li
+          [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@get('" data-url "?groupBy=" col-name "')")}
+           primitives/list-icon "Group by " col-label]])
        [:li
         [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "$datatable." table-id ".columns." col-name ".visible = false; @get('" data-url "')")}
          primitives/eye-slash-icon "Hide column"]]]])))

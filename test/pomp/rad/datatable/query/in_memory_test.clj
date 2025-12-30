@@ -22,11 +22,11 @@
 (deftest apply-filters-contains-test
   (testing "contains filter"
     (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}]
-           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value "lic"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "contains" :value "lic"}]}))
         "filters rows where name contains 'lic'")
 
     (is (= test-rows
-           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value ""}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "contains" :value ""}]}))
         "blank value returns all rows")))
 
 (deftest apply-filters-not-contains-test
@@ -35,21 +35,21 @@
             {:id 3 :name "Charlie" :age 35 :city "Chicago"}
             {:id 4 :name "Diana" :age 28 :city "Denver"}
             {:id 5 :name "Eve" :age 32 :city ""}]
-           (query/apply-filters test-rows {:name [{:type "text" :op "not-contains" :value "lic"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "not-contains" :value "lic"}]}))
         "filters rows where name does not contain 'lic'")
 
     (is (= test-rows
-           (query/apply-filters test-rows {:name [{:type "text" :op "not-contains" :value ""}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "not-contains" :value ""}]}))
         "blank value returns all rows")))
 
 (deftest apply-filters-equals-test
   (testing "equals filter"
     (is (= [{:id 2 :name "Bob" :age 25 :city "Boston"}]
-           (query/apply-filters test-rows {:name [{:type "text" :op "equals" :value "bob"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "equals" :value "bob"}]}))
         "filters rows where name equals 'bob' (case-insensitive)")
 
     (is (= []
-           (query/apply-filters test-rows {:name [{:type "text" :op "equals" :value "bobby"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "equals" :value "bobby"}]}))
         "returns empty when no match")))
 
 (deftest apply-filters-not-equals-test
@@ -58,13 +58,13 @@
             {:id 3 :name "Charlie" :age 35 :city "Chicago"}
             {:id 4 :name "Diana" :age 28 :city "Denver"}
             {:id 5 :name "Eve" :age 32 :city ""}]
-           (query/apply-filters test-rows {:name [{:type "text" :op "not-equals" :value "bob"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "not-equals" :value "bob"}]}))
         "filters rows where name does not equal 'bob'")))
 
 (deftest apply-filters-starts-with-test
   (testing "starts-with filter"
     (is (= [{:id 3 :name "Charlie" :age 35 :city "Chicago"}]
-           (query/apply-filters test-rows {:name [{:type "text" :op "starts-with" :value "ch"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "starts-with" :value "ch"}]}))
         "filters rows where name starts with 'ch'")))
 
 (deftest apply-filters-ends-with-test
@@ -72,26 +72,52 @@
     (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}
             {:id 3 :name "Charlie" :age 35 :city "Chicago"}
             {:id 5 :name "Eve" :age 32 :city ""}]
-           (query/apply-filters test-rows {:name [{:type "text" :op "ends-with" :value "e"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "ends-with" :value "e"}]}))
         "filters rows where name ends with 'e'")))
 
 (deftest apply-filters-is-empty-test
   (testing "is-empty filter"
     (is (= [{:id 5 :name "Eve" :age 32 :city ""}]
-           (query/apply-filters test-rows {:city [{:type "text" :op "is-empty" :value ""}]}))
+           (query/apply-filters test-rows {:city [{:type "string" :op "is-empty" :value ""}]}))
         "filters rows where city is empty")))
+
+(deftest apply-filters-is-not-empty-test
+  (testing "is-not-empty filter"
+    (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}
+            {:id 2 :name "Bob" :age 25 :city "Boston"}
+            {:id 3 :name "Charlie" :age 35 :city "Chicago"}
+            {:id 4 :name "Diana" :age 28 :city "Denver"}]
+           (query/apply-filters test-rows {:city [{:type "string" :op "is-not-empty" :value ""}]}))
+        "filters rows where city is not empty")))
+
+(deftest apply-filters-is-any-of-test
+  (testing "is-any-of filter with multiple values"
+    (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}
+            {:id 2 :name "Bob" :age 25 :city "Boston"}]
+           (query/apply-filters test-rows {:name [{:type "string" :op "is-any-of" :value ["alice" "bob"]}]}))
+        "filters rows where name is any of the specified values"))
+
+  (testing "is-any-of filter with single value"
+    (is (= [{:id 3 :name "Charlie" :age 35 :city "Chicago"}]
+           (query/apply-filters test-rows {:name [{:type "string" :op "is-any-of" :value ["charlie"]}]}))
+        "works with single value in array"))
+
+  (testing "is-any-of filter with no matches"
+    (is (= []
+           (query/apply-filters test-rows {:name [{:type "string" :op "is-any-of" :value ["xyz" "abc"]}]}))
+        "returns empty when no matches")))
 
 (deftest apply-filters-multiple-columns-test
   (testing "multiple column filters (AND logic)"
     (is (= [{:id 3 :name "Charlie" :age 35 :city "Chicago"}]
-           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value "ar"}]
-                                           :city [{:type "text" :op "starts-with" :value "ch"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "contains" :value "ar"}]
+                                           :city [{:type "string" :op "starts-with" :value "ch"}]}))
         "filters with multiple columns use AND logic")))
 
 (deftest apply-filters-case-insensitive-test
   (testing "case insensitivity"
     (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}]
-           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value "ALICE"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "contains" :value "ALICE"}]}))
         "filtering is case-insensitive")))
 
 (deftest apply-filters-multiple-same-column-test
@@ -101,8 +127,8 @@
     ;; AND logic: Alice, Charlie
     (is (= [{:id 1 :name "Alice" :age 30 :city "New York"}
             {:id 3 :name "Charlie" :age 35 :city "Chicago"}]
-           (query/apply-filters test-rows {:name [{:type "text" :op "contains" :value "a"}
-                                                  {:type "text" :op "ends-with" :value "e"}]}))
+           (query/apply-filters test-rows {:name [{:type "string" :op "contains" :value "a"}
+                                                  {:type "string" :op "ends-with" :value "e"}]}))
         "multiple filters on same column use AND logic")))
 
 ;; =============================================================================
@@ -196,9 +222,10 @@
       (is (= {:rows [{:id 4 :name "Diana" :age 28 :city "Denver"}]
               :total-rows 1
               :page {:size 1 :current 0}}
-             (qfn {:filters {:city [{:type "text" :op "starts-with" :value "d"}]}
+             (qfn {:filters {:city [{:type "string" :op "starts-with" :value "d"}]}
                    :sort [{:column "name" :direction "asc"}]
-                   :page {:size 1 :current 1}}))
+                   :page {:size 1 :current 1}}
+                  nil))
           "combines filter, sort, and pagination (clamps page when beyond range)"))
 
     (testing "no filters"
@@ -207,13 +234,276 @@
               :page {:size 10 :current 0}}
              (qfn {:filters {}
                    :sort []
-                   :page {:size 10 :current 0}}))
+                   :page {:size 10 :current 0}}
+                  nil))
           "returns all rows when no filters"))
 
     (testing "total-rows reflects filtered count"
       ;; name contains "e" matches: Alice, Charlie, Eve = 3
       (is (= 3
-             (:total-rows (qfn {:filters {:name [{:type "text" :op "contains" :value "e"}]}
+             (:total-rows (qfn {:filters {:name [{:type "string" :op "contains" :value "e"}]}
                                 :sort []
-                                :page {:size 10 :current 0}})))
+                                :page {:size 10 :current 0}}
+                               nil)))
           "total-rows is count after filtering, before pagination"))))
+
+;; =============================================================================
+;; Boolean Filter Tests
+;; =============================================================================
+
+(def bool-test-rows
+  [{:id 1 :name "Alice" :active true}
+   {:id 2 :name "Bob" :active false}
+   {:id 3 :name "Charlie" :active true}
+   {:id 4 :name "Diana" :active nil}
+   {:id 5 :name "Eve" :active false}])
+
+(deftest apply-filters-boolean-is-test
+  (testing "boolean is true"
+    (is (= [{:id 1 :name "Alice" :active true}
+            {:id 3 :name "Charlie" :active true}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is" :value "true"}]}))
+        "filters rows where active is true"))
+
+  (testing "boolean is false"
+    (is (= [{:id 2 :name "Bob" :active false}
+            {:id 5 :name "Eve" :active false}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is" :value "false"}]}))
+        "filters rows where active is false")))
+
+(deftest apply-filters-boolean-is-not-test
+  (testing "boolean is-not true"
+    (is (= [{:id 2 :name "Bob" :active false}
+            {:id 4 :name "Diana" :active nil}
+            {:id 5 :name "Eve" :active false}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is-not" :value "true"}]}))
+        "filters rows where active is not true (includes nil)"))
+
+  (testing "boolean is-not false"
+    (is (= [{:id 1 :name "Alice" :active true}
+            {:id 3 :name "Charlie" :active true}
+            {:id 4 :name "Diana" :active nil}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is-not" :value "false"}]}))
+        "filters rows where active is not false (includes nil)")))
+
+(deftest apply-filters-boolean-is-empty-test
+  (testing "boolean is-empty"
+    (is (= [{:id 4 :name "Diana" :active nil}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is-empty" :value ""}]}))
+        "filters rows where active is nil")))
+
+(deftest apply-filters-boolean-is-not-empty-test
+  (testing "boolean is-not-empty"
+    (is (= [{:id 1 :name "Alice" :active true}
+            {:id 2 :name "Bob" :active false}
+            {:id 3 :name "Charlie" :active true}
+            {:id 5 :name "Eve" :active false}]
+           (query/apply-filters bool-test-rows {:active [{:type "boolean" :op "is-not-empty" :value ""}]}))
+        "filters rows where active is not nil")))
+
+;; =============================================================================
+;; Date Filter Tests
+;; =============================================================================
+
+(def date-test-rows
+  [{:id 1 :name "Alice" :created "2024-01-15"}
+   {:id 2 :name "Bob" :created "2024-02-20"}
+   {:id 3 :name "Charlie" :created "2024-01-15"}
+   {:id 4 :name "Diana" :created "2024-03-10"}
+   {:id 5 :name "Eve" :created nil}])
+
+(deftest apply-filters-date-is-test
+  (testing "date is exact match"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "is" :value "2024-01-15"}]}))
+        "filters rows where created equals exact date")))
+
+(deftest apply-filters-date-is-not-test
+  (testing "date is-not"
+    (is (= [{:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 4 :name "Diana" :created "2024-03-10"}
+            {:id 5 :name "Eve" :created nil}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "is-not" :value "2024-01-15"}]}))
+        "filters rows where created does not equal date")))
+
+(deftest apply-filters-date-after-test
+  (testing "date after"
+    (is (= [{:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 4 :name "Diana" :created "2024-03-10"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "after" :value "2024-01-15"}]}))
+        "filters rows where created is after date (exclusive)")))
+
+(deftest apply-filters-date-on-or-after-test
+  (testing "date on-or-after"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}
+            {:id 4 :name "Diana" :created "2024-03-10"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "on-or-after" :value "2024-01-15"}]}))
+        "filters rows where created is on or after date (inclusive)")))
+
+(deftest apply-filters-date-before-test
+  (testing "date before"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "before" :value "2024-02-20"}]}))
+        "filters rows where created is before date (exclusive)")))
+
+(deftest apply-filters-date-on-or-before-test
+  (testing "date on-or-before"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "on-or-before" :value "2024-02-20"}]}))
+        "filters rows where created is on or before date (inclusive)")))
+
+(deftest apply-filters-date-is-empty-test
+  (testing "date is-empty"
+    (is (= [{:id 5 :name "Eve" :created nil}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "is-empty" :value ""}]}))
+        "filters rows where created is nil")))
+
+(deftest apply-filters-date-is-not-empty-test
+  (testing "date is-not-empty"
+    (is (= [{:id 1 :name "Alice" :created "2024-01-15"}
+            {:id 2 :name "Bob" :created "2024-02-20"}
+            {:id 3 :name "Charlie" :created "2024-01-15"}
+            {:id 4 :name "Diana" :created "2024-03-10"}]
+           (query/apply-filters date-test-rows {:created [{:type "date" :op "is-not-empty" :value ""}]}))
+        "filters rows where created is not nil")))
+
+;; =============================================================================
+;; Enum Filter Tests
+;; =============================================================================
+
+(def enum-test-rows
+  [{:id 1 :name "Alice" :status "active"}
+   {:id 2 :name "Bob" :status "pending"}
+   {:id 3 :name "Charlie" :status "active"}
+   {:id 4 :name "Diana" :status "inactive"}
+   {:id 5 :name "Eve" :status nil}])
+
+(deftest apply-filters-enum-is-test
+  (testing "enum is exact match"
+    (is (= [{:id 1 :name "Alice" :status "active"}
+            {:id 3 :name "Charlie" :status "active"}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is" :value "active"}]}))
+        "filters rows where status equals value")))
+
+(deftest apply-filters-enum-is-not-test
+  (testing "enum is-not"
+    (is (= [{:id 2 :name "Bob" :status "pending"}
+            {:id 4 :name "Diana" :status "inactive"}
+            {:id 5 :name "Eve" :status nil}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is-not" :value "active"}]}))
+        "filters rows where status does not equal value")))
+
+(deftest apply-filters-enum-is-any-of-test
+  (testing "enum is-any-of"
+    (is (= [{:id 1 :name "Alice" :status "active"}
+            {:id 2 :name "Bob" :status "pending"}
+            {:id 3 :name "Charlie" :status "active"}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is-any-of" :value ["active" "pending"]}]}))
+        "filters rows where status is any of the values")))
+
+(deftest apply-filters-enum-is-empty-test
+  (testing "enum is-empty"
+    (is (= [{:id 5 :name "Eve" :status nil}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is-empty" :value ""}]}))
+        "filters rows where status is nil")))
+
+(deftest apply-filters-enum-is-not-empty-test
+  (testing "enum is-not-empty"
+    (is (= [{:id 1 :name "Alice" :status "active"}
+            {:id 2 :name "Bob" :status "pending"}
+            {:id 3 :name "Charlie" :status "active"}
+            {:id 4 :name "Diana" :status "inactive"}]
+           (query/apply-filters enum-test-rows {:status [{:type "enum" :op "is-not-empty" :value ""}]}))
+        "filters rows where status is not nil")))
+
+;; =============================================================================
+;; Number Filter Tests
+;; =============================================================================
+
+(def number-test-rows
+  [{:id 1 :name "Alice" :age 30}
+   {:id 2 :name "Bob" :age 25}
+   {:id 3 :name "Charlie" :age 35}
+   {:id 4 :name "Diana" :age 30}
+   {:id 5 :name "Eve" :age nil}])
+
+(deftest apply-filters-number-equals-test
+  (testing "number equals"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "equals" :value "30"}]}))
+        "filters rows where age equals 30")))
+
+(deftest apply-filters-number-not-equals-test
+  (testing "number not-equals"
+    (is (= [{:id 2 :name "Bob" :age 25}
+            {:id 3 :name "Charlie" :age 35}
+            {:id 5 :name "Eve" :age nil}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "not-equals" :value "30"}]}))
+        "filters rows where age does not equal 30")))
+
+(deftest apply-filters-number-greater-than-test
+  (testing "number greater-than"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 3 :name "Charlie" :age 35}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "greater-than" :value "25"}]}))
+        "filters rows where age > 25")))
+
+(deftest apply-filters-number-greater-than-or-equal-test
+  (testing "number greater-than-or-equal"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 3 :name "Charlie" :age 35}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "greater-than-or-equal" :value "30"}]}))
+        "filters rows where age >= 30")))
+
+(deftest apply-filters-number-less-than-test
+  (testing "number less-than"
+    (is (= [{:id 2 :name "Bob" :age 25}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "less-than" :value "30"}]}))
+        "filters rows where age < 30")))
+
+(deftest apply-filters-number-less-than-or-equal-test
+  (testing "number less-than-or-equal"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 2 :name "Bob" :age 25}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "less-than-or-equal" :value "30"}]}))
+        "filters rows where age <= 30")))
+
+(deftest apply-filters-number-is-empty-test
+  (testing "number is-empty"
+    (is (= [{:id 5 :name "Eve" :age nil}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "is-empty" :value ""}]}))
+        "filters rows where age is nil")))
+
+(deftest apply-filters-number-is-not-empty-test
+  (testing "number is-not-empty"
+    (is (= [{:id 1 :name "Alice" :age 30}
+            {:id 2 :name "Bob" :age 25}
+            {:id 3 :name "Charlie" :age 35}
+            {:id 4 :name "Diana" :age 30}]
+           (query/apply-filters number-test-rows {:age [{:type "number" :op "is-not-empty" :value ""}]}))
+        "filters rows where age is not nil")))
+
+(deftest apply-filters-number-with-negative-values-test
+  (testing "number comparisons with negative values"
+    (let [rows [{:id 1 :name "Socrates" :century -5}
+                {:id 2 :name "Plato" :century -4}
+                {:id 3 :name "Seneca" :century 1}
+                {:id 4 :name "Kant" :century 18}]]
+      (is (= [{:id 1 :name "Socrates" :century -5}
+              {:id 2 :name "Plato" :century -4}]
+             (query/apply-filters rows {:century [{:type "number" :op "less-than" :value "0"}]}))
+          "filters BC centuries (negative values)")
+      (is (= [{:id 3 :name "Seneca" :century 1}
+              {:id 4 :name "Kant" :century 18}]
+             (query/apply-filters rows {:century [{:type "number" :op "greater-than" :value "0"}]}))
+          "filters AD centuries (positive values)"))))
