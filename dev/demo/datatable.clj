@@ -21,7 +21,7 @@
     (str abs-n suffix era)))
 
 (def columns
-  [{:key :name :label "Name" :type :string}
+  [{:key :name :label "Name" :type :string :editable true}
    {:key :century :label "Century" :type :number :display-fn format-century}
    {:key :school :label "School" :type :enum :groupable true}
    {:key :region :label "Region" :type :enum :groupable true}])
@@ -81,11 +81,16 @@
       (jdbc/execute! ds ["INSERT INTO philosophers (id, name, century, school, region) VALUES (?, ?, ?, ?, ?)"
                          (:id p) (:name p) (:century p) (:school p) (:region p)]))))
 
+(defonce db-initialized? (atom false))
+
 (defn init-db!
-  "Initializes the H2 database with schema and seed data."
+  "Initializes the H2 database with schema and seed data.
+   Only runs once per JVM session."
   []
-  (create-schema!)
-  (seed-data!))
+  (when-not @db-initialized?
+    (create-schema!)
+    (seed-data!)
+    (reset! db-initialized? true)))
 
 (def data-url "/demo/datatable/data")
 
@@ -102,13 +107,15 @@
 
 (defn make-data-handler
   []
-  (let [execute! (fn [sqlvec]
-                   (jdbc/execute! (get-datasource) sqlvec
+  (let [ds (get-datasource)
+        execute! (fn [sqlvec]
+                   (jdbc/execute! ds sqlvec
                                   {:builder-fn rs/as-unqualified-lower-maps}))]
     (datatable/make-handler
      {:id "datatable"
       :columns columns
       :query-fn (sqlq/query-fn {:table-name "philosophers"} execute!)
+      :save-fn (sqlq/save-fn {:table "philosophers"} execute!)
       :data-url data-url
       :render-html-fn ->html
       :page-sizes [10 25 100 250]

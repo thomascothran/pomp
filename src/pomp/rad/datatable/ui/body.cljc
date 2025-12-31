@@ -32,7 +32,7 @@
        [:td])]))
 
 (defn render-group
-  [{:keys [group cols selectable? row-id-fn table-id group-idx row-idx-offset]}]
+  [{:keys [group cols selectable? row-id-fn table-id group-idx row-idx-offset data-url]}]
   (let [{:keys [group-value rows row-ids count]} group
         expanded-signal (str "datatable." table-id ".expanded." group-idx)
         row-idx-offset (or row-idx-offset 0)]
@@ -46,20 +46,28 @@
                         :count count})
      (for [[idx r] (map-indexed vector rows)]
        (let [signal-path (str "datatable." table-id ".selections." (row-id-fn r))
-             row-idx (+ row-idx-offset idx)]
+             row-idx (+ row-idx-offset idx)
+             row-id (row-id-fn r)]
          [:tr {:data-show (str "$" expanded-signal)}
           (when selectable?
             (row/render-selection-cell {:signal-path signal-path}))
           [:td]
           (for [[col-idx col] (map-indexed vector cols)]
-            (row/render-cell {:value (get r (:key col))
-                              :row r
-                              :col col
-                              :row-idx row-idx
-                              :col-idx col-idx
-                              :table-id table-id}))])))))
+            (let [raw-value (get r (:key col))
+                  display-value (if-let [display-fn (:display-fn col)]
+                                  (display-fn r)
+                                  raw-value)]
+              (row/render-cell {:value display-value
+                                :raw-value raw-value
+                                :row r
+                                :col col
+                                :row-idx row-idx
+                                :col-idx col-idx
+                                :table-id table-id
+                                :row-id row-id
+                                :data-url data-url})))])))))
 
-(defn render [{:keys [cols rows groups selectable? row-id-fn table-id render-row render-cell]}]
+(defn render [{:keys [cols rows groups selectable? row-id-fn table-id data-url render-row render-cell]}]
   (let [row-id-fn (or row-id-fn :id)
         render-row-fn (or render-row row/render-row)
         grouped? (seq groups)]
@@ -80,6 +88,7 @@
                           :selectable? selectable?
                           :row-id-fn row-id-fn
                           :table-id table-id
+                          :data-url data-url
                           :group-idx idx
                           :row-idx-offset row-idx-offset})))
        (for [[row-idx r] (map-indexed vector rows)]
@@ -89,6 +98,7 @@
                          :row-id (row-id-fn r)
                          :row-idx row-idx
                          :table-id table-id
+                         :data-url data-url
                          :grouped? false
                          :render-cell render-cell})))]))
 

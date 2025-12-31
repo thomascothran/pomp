@@ -130,3 +130,66 @@
       ;; Handler should be created successfully
       (is (fn? handler)
           "make-handler should return a function when :filter-operations is provided"))))
+
+;; =============================================================================
+;; make-handler tests - save-fn support
+;; =============================================================================
+
+(deftest make-handler-accepts-save-fn-test
+  (testing "make-handler accepts :save-fn without error"
+    (let [columns [{:key :name :label "Name" :type :string :editable true}]
+          save-fn (fn [_] {:success true})
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns columns
+                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn (fn [_] "<html>")
+                                           :save-fn save-fn})]
+      ;; Handler should be created successfully
+      (is (fn? handler)
+          "make-handler should return a function when :save-fn is provided"))))
+
+(deftest extract-cell-edit-from-signals-test
+  (testing "extracts cell edit from signals using :editing state"
+    ;; The :editing state indicates which cell is being edited
+    ;; The :cells map contains the actual values
+    (let [signals {:editing {:rowId "123" :colKey "name"}
+                   :cells {:123 {:name "New Name"}}}
+          result (datatable/extract-cell-edit signals)]
+      (is (= {:row-id "123" :col-key :name :value "New Name"} result))))
+
+  (testing "returns nil when no editing state"
+    (is (nil? (datatable/extract-cell-edit {})))
+    (is (nil? (datatable/extract-cell-edit {:cells {:123 {:name "Value"}}})))
+    (is (nil? (datatable/extract-cell-edit {:editing {:rowId nil :colKey nil}}))))
+
+  (testing "uses editing state to select correct cell from multiple"
+    ;; When multiple cells are present, :editing determines which one we want
+    (let [signals {:editing {:rowId "456" :colKey "age"}
+                   :cells {:123 {:name "Name1"} :456 {:age "30"}}}
+          result (datatable/extract-cell-edit signals)]
+      (is (= {:row-id "456" :col-key :age :value "30"} result))))
+
+  (testing "returns nil value when cell not in cells map"
+    ;; Edge case: editing is set but cell value was cleared
+    (let [signals {:editing {:rowId "123" :colKey "name"}
+                   :cells {}}
+          result (datatable/extract-cell-edit signals)]
+      (is (= {:row-id "123" :col-key :name :value nil} result)))))
+
+(deftest has-editable-columns-test
+  (testing "returns true when any column is editable"
+    (let [cols [{:key :name :editable true}
+                {:key :age}]]
+      (is (true? (datatable/has-editable-columns? cols)))))
+
+  (testing "returns false when no columns are editable"
+    (let [cols [{:key :name}
+                {:key :age}]]
+      (is (false? (datatable/has-editable-columns? cols)))))
+
+  (testing "returns false for empty columns"
+    (is (false? (datatable/has-editable-columns? [])))
+    (is (false? (datatable/has-editable-columns? nil)))))
+
+

@@ -36,6 +36,7 @@
                      :selectable? selectable?
                      :row-id-fn row-id-fn
                      :table-id id
+                     :data-url data-url
                      :render-row render-row
                      :render-cell render-cell})]]
      (pagination/render {:total-rows total-rows

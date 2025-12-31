@@ -20,6 +20,114 @@
         (for [col cols]
           (row/render-cell {:value (get row (:key col)) :row row :col col}))])")
 
+(defn- escape-js-string
+  "Escapes a string for use in JavaScript."
+  [s]
+  (-> (str s)
+      (clojure.string/replace "\\" "\\\\")
+      (clojure.string/replace "'" "\\'")
+      (clojure.string/replace "\n" "\\n")
+      (clojure.string/replace "\r" "\\r")))
+
+(defn render-editable-cell
+  "Renders an editable data cell with inline editing support.
+   
+   Uses a pencil icon to enter edit mode and a checkmark icon to save,
+   avoiding conflicts with cell selection (which uses click/drag).
+   
+   ctx contains:
+   - :value    - The cell value to display
+   - :row-id   - The row's unique identifier (for signal path)
+   - :col      - The column definition {:key :label :editable ...}
+   - :table-id - Table element ID (for signals)
+   - :data-url - URL for save POST requests
+   - :row-idx  - Row index (0-based, for cell selection)
+   - :col-idx  - Column index (0-based, for cell selection)
+   
+   Signal paths used:
+   - datatable.<table-id>.editing = {rowId: '...', colKey: '...'} - tracks which cell is being edited
+   - datatable.<table-id>.cells.<row-id>.<col-key> - holds the current edit value
+   - datatable.<table-id>.submitInProgress - prevents double-submit on blur after Enter"
+  [{:keys [value row-id col table-id data-url row-idx col-idx]}]
+  (let [col-key (name (:key col))
+        cell-key (str row-idx "-" col-idx)
+        signal-base (str "datatable." table-id)
+        cell-signal-path (str signal-base ".cells." row-id "." col-key)
+        editing-signal (str signal-base ".editing")
+        submit-flag (str signal-base ".submitInProgress")
+        ;; Unique ref for this input (to focus it when entering edit mode)
+        input-ref (str "editInput_" row-id "_" col-key)
+        ;; Unique ID for the display span (for patching after save)
+        span-id (str "cell-" table-id "-" row-id "-" col-key)
+        ;; Condition to check if this cell is being edited
+        editing-check (str "$" editing-signal ".rowId === '" row-id "' && $" editing-signal ".colKey === '" col-key "'")
+        escaped-value (escape-js-string value)
+        ;; Click pencil: clear cell selection, enter edit mode, set initial value, and focus input
+        edit-handler (str "evt.stopPropagation(); "
+                          "$" signal-base ".cellSelection = {}; "
+                          "$" editing-signal " = {rowId: '" row-id "', colKey: '" col-key "'}; "
+                          "$" cell-signal-path " = '" escaped-value "'; "
+                          "setTimeout(() => $" input-ref "?.focus(), 0)")
+        ;; Save: set flag, post, clear editing
+        save-handler (str "evt.stopPropagation(); "
+                          "$" submit-flag " = true; "
+                          "@post('" data-url "?action=save'); "
+                          "$" editing-signal " = {rowId: null, colKey: null}")
+        ;; Cancel: clear editing, remove cell value
+        cancel-edit (str "$" editing-signal " = {rowId: null, colKey: null}; "
+                         "$" cell-signal-path " = null")
+        ;; Blur: cancel edit unless submitInProgress (Enter/Escape already handled it)
+        blur-handler (str "if ($" submit-flag ") { $" submit-flag " = false; return; } "
+                          cancel-edit)
+        ;; Keydown: handle Enter and Escape
+        keydown-handler (str "if (evt.key === 'Enter') { evt.stopPropagation(); "
+                             "$" submit-flag " = true; "
+                             "@post('" data-url "?action=save'); "
+                             "$" editing-signal " = {rowId: null, colKey: null} } "
+                             "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")]
+    [:td {:data-row row-idx
+          :data-col col-idx
+          :data-value (str value)
+          :data-class (str "{'bg-info/20': $" signal-base ".cellSelection['" cell-key "']}")
+          :data-on:mousedown (str "if ($" editing-signal ".rowId) return; "
+                                  "$" signal-base ".cellSelectDragging = true; "
+                                  "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
+                                  "$" signal-base ".cellSelection = {'" cell-key "': true}")}
+     ;; Edit mode: input + checkmark button
+     [:div.flex.items-center.gap-1 {:data-show editing-check}
+      [:input.input.input-xs.flex-1
+       {:data-ref input-ref
+        :data-bind cell-signal-path
+        :data-on:keydown keydown-handler
+        :data-on:blur blur-handler}]
+      ;; Checkmark button to save
+      [:button.btn.btn-ghost.btn-xs.p-0
+       {:data-on:click save-handler
+        :title "Save"}
+       [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
+                                   :fill "none"
+                                   :viewBox "0 0 24 24"
+                                   :stroke-width "1.5"
+                                   :stroke "currentColor"}
+        [:path {:stroke-linecap "round"
+                :stroke-linejoin "round"
+                :d "m4.5 12.75 6 6 9-13.5"}]]]]
+     ;; Display mode: value + pencil button
+     [:div.flex.items-center.gap-1 {:data-show (str "!(" editing-check ")")}
+      [:span.flex-1 {:id span-id} value]
+      ;; Pencil button to edit
+      [:button.btn.btn-ghost.btn-xs.p-0.opacity-30.hover:opacity-100
+       {:data-on:click edit-handler
+        :title "Edit"}
+       [:svg.w-4.h-4 {:xmlns "http://www.w3.org/2000/svg"
+                      :fill "none"
+                      :viewBox "0 0 24 24"
+                      :stroke-width "1.5"
+                      :stroke "currentColor"}
+        [:path {:stroke-linecap "round"
+                :stroke-linejoin "round"
+                :d "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"}]]]]]))
+
 (defn render-cell
   "Renders a single data cell.
 
@@ -27,24 +135,31 @@
    - :value    - The cell value (possibly transformed by :display-fn)
    - :raw-value - The raw cell value from the row (for data-value attribute)
    - :row      - The full row data
-   - :col      - The column definition {:key :label :render ...}
+   - :col      - The column definition {:key :label :render :editable ...}
    - :row-idx  - Row index (0-based, for cell selection)
    - :col-idx  - Column index (0-based, for cell selection)
-   - :table-id - Table element ID (for cell selection signals)"
-  [{:keys [value raw-value row col row-idx col-idx table-id]}]
-  (let [{:keys [render]} col
-        cell-key (str row-idx "-" col-idx)
-        ;; Use raw-value for data-value if provided, otherwise fall back to value
-        data-val (if (some? raw-value) raw-value value)
-        display-value (if render (render value row) value)]
-    [:td {:data-row row-idx
-          :data-col col-idx
-          :data-value (str data-val)
-          :data-class (str "{'bg-info/20': $datatable." table-id ".cellSelection['" cell-key "']}")
-          :data-on:mousedown (str "$datatable." table-id ".cellSelectDragging = true; "
-                                  "$datatable." table-id ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
-                                  "$datatable." table-id ".cellSelection = {'" cell-key "': true}")}
-     display-value]))
+   - :table-id - Table element ID (for cell selection signals)
+   - :row-id   - The row's unique identifier (required for editable cells)
+   - :data-url - URL for save POST requests (required for editable cells)"
+  [{:keys [value raw-value row col row-idx col-idx table-id row-id data-url] :as ctx}]
+  (if (:editable col)
+    ;; Delegate to editable cell rendering
+    (render-editable-cell ctx)
+    ;; Standard cell rendering
+    (let [{:keys [render]} col
+          cell-key (str row-idx "-" col-idx)
+          ;; Use raw-value for data-value if provided, otherwise fall back to value
+          data-val (if (some? raw-value) raw-value value)
+          display-value (if render (render value row) value)]
+      [:td {:data-row row-idx
+            :data-col col-idx
+            :data-value (str data-val)
+            :data-class (str "{'bg-info/20': $datatable." table-id ".cellSelection['" cell-key "']}")
+            :data-on:mousedown (str "if ($datatable." table-id ".editing?.rowId) return; "
+                                    "$datatable." table-id ".cellSelectDragging = true; "
+                                    "$datatable." table-id ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
+                                    "$datatable." table-id ".cellSelection = {'" cell-key "': true}")}
+       display-value])))
 
 (defn render-selection-cell
   "Renders a selection checkbox cell.
@@ -70,11 +185,13 @@
    - :table-id    - The table's element ID
    - :grouped?    - Whether this row is inside a group (adds empty cell for indent)
    - :render-cell - Optional custom cell render function
+   - :data-url    - URL for save POST requests (passed to editable cells)
    
    Column definitions can include:
    - :display-fn  - Function (fn [row] ...) to compute display value
-                    Raw value from :key is still used for data-value attribute"
-  [{:keys [cols row selectable? row-id row-idx table-id grouped?] :as ctx}]
+                    Raw value from :key is still used for data-value attribute
+   - :editable    - If true, cell can be edited inline"
+  [{:keys [cols row selectable? row-id row-idx table-id grouped? data-url] :as ctx}]
   (let [signal-path (str "datatable." table-id ".selections." row-id)
         render-cell-fn (or (:render-cell ctx) render-cell)]
     [:tr
@@ -92,4 +209,6 @@
                           :col col
                           :row-idx row-idx
                           :col-idx col-idx
-                          :table-id table-id})))]))
+                          :table-id table-id
+                          :row-id row-id
+                          :data-url data-url})))]))
