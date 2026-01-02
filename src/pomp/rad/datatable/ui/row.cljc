@@ -31,10 +31,10 @@
 
 (defn render-editable-cell
   "Renders an editable data cell with inline editing support.
-   
+
    Uses a pencil icon to enter edit mode and a checkmark icon to save,
    avoiding conflicts with cell selection (which uses click/drag).
-   
+
    ctx contains:
    - :value    - The cell value to display
    - :row-id   - The row's unique identifier (for signal path)
@@ -43,7 +43,7 @@
    - :data-url - URL for save POST requests
    - :row-idx  - Row index (0-based, for cell selection)
    - :col-idx  - Column index (0-based, for cell selection)
-   
+
    Signal paths used:
    - datatable.<table-id>.editing = {rowId: '...', colKey: '...'} - tracks which cell is being edited
    - datatable.<table-id>.cells.<row-id>.<col-key> - holds the current edit value
@@ -93,40 +93,45 @@
                                   "$" signal-base ".cellSelectDragging = true; "
                                   "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
                                   "$" signal-base ".cellSelection = {'" cell-key "': true}")}
-     ;; Edit mode: input + checkmark button
-     [:div.flex.items-center.gap-1 {:data-show editing-check}
-      [:input.input.input-xs.flex-1
-       {:data-ref input-ref
-        :data-bind cell-signal-path
-        :data-on:keydown keydown-handler
-        :data-on:blur blur-handler}]
-      ;; Checkmark button to save
-      [:button.btn.btn-ghost.btn-xs.p-0
-       {:data-on:click save-handler
-        :title "Save"}
-       [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
-                                   :fill "none"
-                                   :viewBox "0 0 24 24"
-                                   :stroke-width "1.5"
-                                   :stroke "currentColor"}
-        [:path {:stroke-linecap "round"
-                :stroke-linejoin "round"
-                :d "m4.5 12.75 6 6 9-13.5"}]]]]
-     ;; Display mode: value + pencil button
-     [:div.flex.items-center.gap-1 {:data-show (str "!(" editing-check ")")}
-      [:span.flex-1 {:id span-id} value]
-      ;; Pencil button to edit
-      [:button.btn.btn-ghost.btn-xs.p-0.opacity-30.hover:opacity-100
-       {:data-on:click edit-handler
-        :title "Edit"}
-       [:svg.w-4.h-4 {:xmlns "http://www.w3.org/2000/svg"
-                      :fill "none"
-                      :viewBox "0 0 24 24"
-                      :stroke-width "1.5"
-                      :stroke "currentColor"}
-        [:path {:stroke-linecap "round"
-                :stroke-linejoin "round"
-                :d "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"}]]]]]))
+     ;; Use relative container so edit overlay doesn't cause width jump
+     [:div.relative
+      ;; Display mode: value + pencil button (always in flow, determines cell width)
+      ;; Use visibility instead of display to preserve layout space
+      [:div.flex.items-center.gap-1
+       {:data-class (str "{'invisible': " editing-check "}")}
+       [:span.flex-1 {:id span-id} value]
+       ;; Pencil button to edit
+       [:button.btn.btn-ghost.btn-xs.p-0.opacity-30.hover:opacity-100
+        {:data-on:click edit-handler
+         :title "Edit"}
+        [:svg.w-4.h-4 {:xmlns "http://www.w3.org/2000/svg"
+                       :fill "none"
+                       :viewBox "0 0 24 24"
+                       :stroke-width "1.5"
+                       :stroke "currentColor"}
+         [:path {:stroke-linecap "round"
+                 :stroke-linejoin "round"
+                 :d "m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"}]]]]
+      ;; Edit mode: input + checkmark button (absolute overlay, doesn't affect layout)
+      [:div.absolute.inset-0.flex.items-center.gap-1.bg-base-100
+       {:data-show editing-check}
+       [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200
+        {:data-ref input-ref
+         :data-bind cell-signal-path
+         :data-on:keydown keydown-handler
+         :data-on:blur blur-handler}]
+       ;; Checkmark button to save
+       [:button.btn.btn-ghost.btn-xs.p-0
+        {:data-on:click save-handler
+         :title "Save"}
+        [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
+                                    :fill "none"
+                                    :viewBox "0 0 24 24"
+                                    :stroke-width "1.5"
+                                    :stroke "currentColor"}
+         [:path {:stroke-linecap "round"
+                 :stroke-linejoin "round"
+                 :d "m4.5 12.75 6 6 9-13.5"}]]]]]]))
 
 (defn render-cell
   "Renders a single data cell.
@@ -186,7 +191,7 @@
    - :grouped?    - Whether this row is inside a group (adds empty cell for indent)
    - :render-cell - Optional custom cell render function
    - :data-url    - URL for save POST requests (passed to editable cells)
-   
+
    Column definitions can include:
    - :display-fn  - Function (fn [row] ...) to compute display value
                     Raw value from :key is still used for data-value attribute

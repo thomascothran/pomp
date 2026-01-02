@@ -118,7 +118,7 @@
                                (let [{:keys [row-id col-key value]} cell-edit
                                      span-id (str "cell-" id "-" row-id "-" (name col-key))]
                                  (d*/patch-elements! sse (render-html-fn
-                                                          [:span {:id span-id} value]))))
+                                                          [:span.flex-1 {:id span-id} value]))))
                              ;; Clear the cells signal to remove the edit state
                              ;; Use empty object {} instead of nil to avoid "Cannot set properties of undefined" errors
                              (d*/patch-signals! sse (json/write-str
