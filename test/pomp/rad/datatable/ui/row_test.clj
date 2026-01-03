@@ -481,82 +481,92 @@
       (is (nil? (:min attrs)))
       (is (nil? (:max attrs))))))
 
-(deftest render-editable-cell-boolean-test
-  (testing "boolean type renders toggle checkbox"
-    (let [result (row/render-editable-cell {:value true
-                                            :row-id "123"
-                                            :col {:key :verified
-                                                  :type :boolean
-                                                  :editable true}
-                                            :table-id "philosophers"
-                                            :data-url "/data"
-                                            :row-idx 0
-                                            :col-idx 0})
-          toggle (find-toggle result)]
-      ;; Has toggle input
+(deftest render-boolean-cell-test
+  (testing "boolean cell renders as toggle (not pencil/save flow)"
+    ;; Boolean cells use auto-save toggle, not the pencil/save UI
+    (let [result (row/render-cell {:value true
+                                   :row-id "123"
+                                   :col {:key :verified
+                                         :type :boolean
+                                         :editable true}
+                                   :table-id "philosophers"
+                                   :data-url "/data"
+                                   :row-idx 0
+                                   :col-idx 0})
+          toggle (find-toggle result)
+          buttons (find-button result)]
+      ;; Has toggle input directly (not hidden behind edit mode)
       (is (some? toggle))
       ;; Is a checkbox
       (let [attrs (second toggle)]
-        (is (= "checkbox" (:type attrs)))
-        ;; Has correct data-bind
-        (is (clojure.string/includes? (:data-bind attrs) "datatable.philosophers.cells.123.verified")))))
+        (is (= "checkbox" (:type attrs))))
+      ;; No pencil/save buttons - just the toggle
+      (is (empty? buttons))))
 
-  (testing "boolean true displays checkmark icon"
-    (let [result (row/render-editable-cell {:value true
-                                            :row-id "123"
-                                            :col {:key :verified
-                                                  :type :boolean
-                                                  :editable true}
-                                            :table-id "philosophers"
-                                            :data-url "/data"
-                                            :row-idx 0
-                                            :col-idx 0})
-          svgs (find-svg result)]
-      ;; Should have SVG elements (checkmark in display, checkmark in save button)
-      (is (>= (count svgs) 2))
-      ;; One should have text-success class (the display checkmark)
-      (is (some #(let [tag (name (first %))]
-                   (clojure.string/includes? tag "text-success"))
-                svgs))))
+  (testing "boolean true has checked attribute"
+    (let [result (row/render-cell {:value true
+                                   :row-id "123"
+                                   :col {:key :verified
+                                         :type :boolean
+                                         :editable true}
+                                   :table-id "philosophers"
+                                   :data-url "/data"
+                                   :row-idx 0
+                                   :col-idx 0})
+          toggle (find-toggle result)
+          attrs (second toggle)]
+      (is (true? (:checked attrs)))))
 
-  (testing "boolean false displays X icon"
-    (let [result (row/render-editable-cell {:value false
-                                            :row-id "123"
-                                            :col {:key :verified
-                                                  :type :boolean
-                                                  :editable true}
-                                            :table-id "philosophers"
-                                            :data-url "/data"
-                                            :row-idx 0
-                                            :col-idx 0})
-          svgs (find-svg result)]
-      ;; Should have SVG elements
-      (is (>= (count svgs) 2))
-      ;; One should have opacity-30 class (the X icon)
-      (is (some #(let [tag (name (first %))]
-                   (clojure.string/includes? tag "opacity-30"))
-                svgs))))
+  (testing "boolean false does not have checked attribute"
+    (let [result (row/render-cell {:value false
+                                   :row-id "123"
+                                   :col {:key :verified
+                                         :type :boolean
+                                         :editable true}
+                                   :table-id "philosophers"
+                                   :data-url "/data"
+                                   :row-idx 0
+                                   :col-idx 0})
+          toggle (find-toggle result)
+          attrs (second toggle)]
+      (is (false? (:checked attrs)))))
 
-  (testing "boolean edit handler reads and converts data-value to boolean"
-    (let [result (row/render-editable-cell {:value true
-                                            :row-id "123"
-                                            :col {:key :verified
-                                                  :type :boolean
-                                                  :editable true}
-                                            :table-id "philosophers"
-                                            :data-url "/data"
-                                            :row-idx 0
-                                            :col-idx 0})
-          buttons (find-button result)
-          edit-button (first (filter #(let [attrs (second %)]
-                                        (and (:data-on:click attrs)
-                                             (clojure.string/includes? (:data-on:click attrs) "editing")
-                                             (not (clojure.string/includes? (:data-on:click attrs) "@post"))))
-                                     buttons))
-          click-handler (-> edit-button second :data-on:click)]
-      ;; Reads from dataset.value and converts to boolean using === 'true'
-      (is (clojure.string/includes? click-handler "dataset.value"))
-      (is (clojure.string/includes? click-handler "=== 'true'")))))
+  (testing "toggle has auto-save on change handler"
+    (let [result (row/render-cell {:value true
+                                   :row-id "123"
+                                   :col {:key :verified
+                                         :type :boolean
+                                         :editable true}
+                                   :table-id "philosophers"
+                                   :data-url "/data"
+                                   :row-idx 0
+                                   :col-idx 0})
+          toggle (find-toggle result)
+          attrs (second toggle)
+          change-handler (:data-on:change attrs)]
+      ;; Has change handler
+      (is (some? change-handler))
+      ;; Sets editing signal
+      (is (clojure.string/includes? change-handler "editing"))
+      ;; Sets cell value from checkbox state
+      (is (clojure.string/includes? change-handler "evt.target.checked"))
+      ;; Posts immediately
+      (is (clojure.string/includes? change-handler "@post"))
+      (is (clojure.string/includes? change-handler "/data"))))
+
+  (testing "toggle has correct ID for server patching"
+    (let [result (row/render-cell {:value true
+                                   :row-id "123"
+                                   :col {:key :verified
+                                         :type :boolean
+                                         :editable true}
+                                   :table-id "philosophers"
+                                   :data-url "/data"
+                                   :row-idx 0
+                                   :col-idx 0})
+          toggle (find-toggle result)
+          attrs (second toggle)]
+      (is (= "cell-philosophers-123-verified" (:id attrs))))))
 
 (deftest render-editable-cell-string-default-test
   (testing "string type uses text input (same as default)"
@@ -642,27 +652,5 @@
       ;; or    $cell_philosophers_123_name.dataset.value
       (is (or (clojure.string/includes? click-handler "dataset.value")
               (clojure.string/includes? click-handler "getAttribute"))
-          "Edit handler must read current value from data attribute, not use hardcoded SSR value")))
-
-  (testing "boolean edit handler reads value from data-value attribute"
-    (let [result (row/render-editable-cell {:value true
-                                            :row-id "123"
-                                            :col {:key :verified
-                                                  :type :boolean
-                                                  :editable true}
-                                            :table-id "philosophers"
-                                            :data-url "/data"
-                                            :row-idx 0
-                                            :col-idx 0})
-          spans (find-span result)
-          display-span (first (filter #(and (map? (second %))
-                                            (:id (second %))
-                                            (clojure.string/includes? (:id (second %)) "cell-"))
-                                      spans))
-          span-attrs (second display-span)]
-      ;; Boolean values should also have data-value for consistency
-      (is (some? (:data-value span-attrs))
-          "Boolean display span must have data-value attribute")
-      (is (= "true" (:data-value span-attrs))
-          "Boolean data-value should be string 'true' or 'false'"))))
+          "Edit handler must read current value from data attribute, not use hardcoded SSR value"))))
 

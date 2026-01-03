@@ -29,6 +29,47 @@
       (clojure.string/replace "\n" "\\n")
       (clojure.string/replace "\r" "\\r")))
 
+(defn render-boolean-cell
+  "Renders a boolean cell as a toggle switch that auto-saves on change.
+   
+   Unlike other editable cells, booleans don't need pencil/save buttons -
+   they show a toggle that saves immediately when clicked.
+   
+   ctx contains:
+   - :value    - The boolean value
+   - :row-id   - The row's unique identifier
+   - :col      - The column definition
+   - :table-id - Table element ID
+   - :data-url - URL for save POST requests
+   - :row-idx  - Row index (0-based, for cell selection)
+   - :col-idx  - Column index (0-based, for cell selection)"
+  [{:keys [value row-id col table-id data-url row-idx col-idx]}]
+  (let [col-key (name (:key col))
+        cell-key (str row-idx "-" col-idx)
+        signal-base (str "datatable." table-id)
+        cell-signal-path (str signal-base ".cells." row-id "." col-key)
+        editing-signal (str signal-base ".editing")
+        ;; Unique ID for the toggle (for patching after save)
+        toggle-id (str "cell-" table-id "-" row-id "-" col-key)
+        ;; On change: set editing signal, set cell value, and post immediately
+        change-handler (str "evt.stopPropagation(); "
+                            "$" editing-signal " = {rowId: '" row-id "', colKey: '" col-key "'}; "
+                            "$" cell-signal-path " = evt.target.checked; "
+                            "@post('" data-url "?action=save')")]
+    [:td {:data-row row-idx
+          :data-col col-idx
+          :data-value (str value)
+          :data-class (str "{'bg-info/20': $" signal-base ".cellSelection['" cell-key "']}")
+          :data-on:mousedown (str "if ($" editing-signal ".rowId) return; "
+                                  "$" signal-base ".cellSelectDragging = true; "
+                                  "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
+                                  "$" signal-base ".cellSelection = {'" cell-key "': true}")}
+     [:input.toggle.toggle-xs.toggle-success
+      {:id toggle-id
+       :type "checkbox"
+       :checked value
+       :data-on:change change-handler}]]))
+
 (defn render-editable-cell
   "Renders an editable data cell with inline editing support.
 
@@ -205,31 +246,40 @@
    - :value    - The cell value (possibly transformed by :display-fn)
    - :raw-value - The raw cell value from the row (for data-value attribute)
    - :row      - The full row data
-   - :col      - The column definition {:key :label :render :editable ...}
+   - :col      - The column definition {:key :label :render :editable :type ...}
    - :row-idx  - Row index (0-based, for cell selection)
    - :col-idx  - Column index (0-based, for cell selection)
    - :table-id - Table element ID (for cell selection signals)
    - :row-id   - The row's unique identifier (required for editable cells)
    - :data-url - URL for save POST requests (required for editable cells)"
   [{:keys [value raw-value row col row-idx col-idx table-id row-id data-url] :as ctx}]
-  (if (:editable col)
-    ;; Delegate to editable cell rendering
-    (render-editable-cell ctx)
-    ;; Standard cell rendering
-    (let [{:keys [render]} col
-          cell-key (str row-idx "-" col-idx)
-          ;; Use raw-value for data-value if provided, otherwise fall back to value
-          data-val (if (some? raw-value) raw-value value)
-          display-value (if render (render value row) value)]
-      [:td {:data-row row-idx
-            :data-col col-idx
-            :data-value (str data-val)
-            :data-class (str "{'bg-info/20': $datatable." table-id ".cellSelection['" cell-key "']}")
-            :data-on:mousedown (str "if ($datatable." table-id ".editing?.rowId) return; "
-                                    "$datatable." table-id ".cellSelectDragging = true; "
-                                    "$datatable." table-id ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
-                                    "$datatable." table-id ".cellSelection = {'" cell-key "': true}")}
-       display-value])))
+  (let [editable? (:editable col)
+        col-type (:type col)]
+    (cond
+      ;; Editable boolean: use auto-save toggle
+      (and editable? (= col-type :boolean))
+      (render-boolean-cell ctx)
+
+      ;; Other editable types: use pencil/save flow
+      editable?
+      (render-editable-cell ctx)
+
+      ;; Non-editable: standard cell rendering
+      :else
+      (let [{:keys [render]} col
+            cell-key (str row-idx "-" col-idx)
+            ;; Use raw-value for data-value if provided, otherwise fall back to value
+            data-val (if (some? raw-value) raw-value value)
+            display-value (if render (render value row) value)]
+        [:td {:data-row row-idx
+              :data-col col-idx
+              :data-value (str data-val)
+              :data-class (str "{'bg-info/20': $datatable." table-id ".cellSelection['" cell-key "']}")
+              :data-on:mousedown (str "if ($datatable." table-id ".editing?.rowId) return; "
+                                      "$datatable." table-id ".cellSelectDragging = true; "
+                                      "$datatable." table-id ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
+                                      "$datatable." table-id ".cellSelection = {'" cell-key "': true}")}
+         display-value]))))
 
 (defn render-selection-cell
   "Renders a selection checkbox cell.
