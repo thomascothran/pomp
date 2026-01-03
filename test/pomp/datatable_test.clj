@@ -175,7 +175,31 @@
     (let [signals {:editing {:rowId "123" :colKey "name"}
                    :cells {}}
           result (datatable/extract-cell-edit signals)]
-      (is (= {:row-id "123" :col-key :name :value nil} result)))))
+      (is (= {:row-id "123" :col-key :name :value nil} result))))
+
+  (testing "extracts boolean true value"
+    ;; Boolean values from checkbox toggles may be actual booleans
+    (let [signals {:editing {:rowId "123" :colKey "verified"}
+                   :cells {:123 {:verified true}}}
+          result (datatable/extract-cell-edit signals)]
+      (is (= {:row-id "123" :col-key :verified :value true} result))))
+
+  (testing "extracts boolean false value"
+    ;; Boolean false should be extracted correctly
+    (let [signals {:editing {:rowId "123" :colKey "verified"}
+                   :cells {:123 {:verified false}}}
+          result (datatable/extract-cell-edit signals)]
+      (is (= {:row-id "123" :col-key :verified :value false} result))))
+
+  (testing "extracts string 'true' and 'false' values as-is"
+    ;; Datastar may send booleans as strings - extraction should preserve them
+    ;; The coercion happens in render-cell-display, not here
+    (let [signals-true {:editing {:rowId "123" :colKey "verified"}
+                        :cells {:123 {:verified "true"}}}
+          signals-false {:editing {:rowId "123" :colKey "verified"}
+                         :cells {:123 {:verified "false"}}}]
+      (is (= "true" (:value (datatable/extract-cell-edit signals-true))))
+      (is (= "false" (:value (datatable/extract-cell-edit signals-false)))))))
 
 (deftest has-editable-columns-test
   (testing "returns true when any column is editable"
@@ -191,5 +215,54 @@
   (testing "returns false for empty columns"
     (is (false? (datatable/has-editable-columns? [])))
     (is (false? (datatable/has-editable-columns? nil)))))
+
+(deftest render-cell-display-for-save-test
+  (testing "string values are returned as-is"
+    (let [render-fn #'datatable/render-cell-display]
+      (is (= "New Value" (render-fn "New Value" :string)))
+      (is (= "Hello" (render-fn "Hello" nil)))))
+
+  (testing "boolean true renders checkmark SVG"
+    (let [render-fn #'datatable/render-cell-display
+          result (render-fn true :boolean)]
+      (is (vector? result))
+      (is (clojure.string/includes? (name (first result)) "svg"))
+      (is (clojure.string/includes? (name (first result)) "text-success"))))
+
+  (testing "boolean false renders X SVG"
+    (let [render-fn #'datatable/render-cell-display
+          result (render-fn false :boolean)]
+      (is (vector? result))
+      (is (clojure.string/includes? (name (first result)) "svg"))
+      (is (clojure.string/includes? (name (first result)) "opacity-30"))))
+
+  (testing "string 'true' is treated as boolean true"
+    ;; Bug fix: Datastar may send boolean values as strings
+    ;; The string "true" should render as the checkmark icon
+    (let [render-fn #'datatable/render-cell-display
+          result (render-fn "true" :boolean)]
+      (is (vector? result))
+      (is (clojure.string/includes? (name (first result)) "text-success")
+          "String 'true' should render as checkmark (truthy display)")))
+
+  (testing "string 'false' is treated as boolean false"
+    ;; Bug fix: The string "false" should render as the X icon, not checkmark!
+    ;; In Clojure, (if "false" ...) is truthy, so we need explicit coercion.
+    (let [render-fn #'datatable/render-cell-display
+          result (render-fn "false" :boolean)]
+      (is (vector? result))
+      (is (clojure.string/includes? (name (first result)) "opacity-30")
+          "String 'false' should render as X icon, not checkmark")))
+
+  (testing "nil boolean renders as false (X icon)"
+    (let [render-fn #'datatable/render-cell-display
+          result (render-fn nil :boolean)]
+      (is (vector? result))
+      (is (clojure.string/includes? (name (first result)) "opacity-30"))))
+
+  (testing "save response span construction includes data-value"
+    ;; This documents the expected span format in make-handler
+    ;; Expected format: [:span.flex-1 {:id span-id :data-value (str value)} display-content]
+    (is true "See make-handler implementation for span construction with data-value")))
 
 

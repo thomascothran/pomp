@@ -38,11 +38,17 @@
    ctx contains:
    - :value    - The cell value to display
    - :row-id   - The row's unique identifier (for signal path)
-   - :col      - The column definition {:key :label :editable ...}
+   - :col      - The column definition {:key :label :editable :type :options :min :max ...}
    - :table-id - Table element ID (for signals)
    - :data-url - URL for save POST requests
    - :row-idx  - Row index (0-based, for cell selection)
    - :col-idx  - Column index (0-based, for cell selection)
+
+   Type-aware inputs (based on :type in col):
+   - :string/:text/nil - Text input (default)
+   - :enum             - Select dropdown (requires :options list of strings)
+   - :number           - Number input (optional :min/:max)
+   - :boolean          - Toggle switch
 
    Signal paths used:
    - datatable.<table-id>.editing = {rowId: '...', colKey: '...'} - tracks which cell is being edited
@@ -50,6 +56,7 @@
    - datatable.<table-id>.submitInProgress - prevents double-submit on blur after Enter"
   [{:keys [value row-id col table-id data-url row-idx col-idx]}]
   (let [col-key (name (:key col))
+        col-type (:type col)
         cell-key (str row-idx "-" col-idx)
         signal-base (str "datatable." table-id)
         cell-signal-path (str signal-base ".cells." row-id "." col-key)
@@ -61,12 +68,16 @@
         span-id (str "cell-" table-id "-" row-id "-" col-key)
         ;; Condition to check if this cell is being edited
         editing-check (str "$" editing-signal ".rowId === '" row-id "' && $" editing-signal ".colKey === '" col-key "'")
-        escaped-value (escape-js-string value)
-        ;; Click pencil: clear cell selection, enter edit mode, set initial value, and focus input
+        ;; For booleans, we need to read the data-value and convert to boolean
+        ;; For other types, we read it as a string
+        read-current-value (if (= col-type :boolean)
+                             (str "document.getElementById('" span-id "').dataset.value === 'true'")
+                             (str "document.getElementById('" span-id "').dataset.value"))
+        ;; Click pencil: clear cell selection, enter edit mode, set initial value from data-value, and focus input
         edit-handler (str "evt.stopPropagation(); "
                           "$" signal-base ".cellSelection = {}; "
                           "$" editing-signal " = {rowId: '" row-id "', colKey: '" col-key "'}; "
-                          "$" cell-signal-path " = '" escaped-value "'; "
+                          "$" cell-signal-path " = " read-current-value "; "
                           "setTimeout(() => $" input-ref "?.focus(), 0)")
         ;; Save: set flag, post, clear editing
         save-handler (str "evt.stopPropagation(); "
@@ -84,7 +95,63 @@
                              "$" submit-flag " = true; "
                              "@post('" data-url "?action=save'); "
                              "$" editing-signal " = {rowId: null, colKey: null} } "
-                             "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")]
+                             "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")
+        ;; Display value rendering based on type
+        display-content (case col-type
+                          :boolean (if value
+                                     [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
+                                                                 :fill "none"
+                                                                 :viewBox "0 0 24 24"
+                                                                 :stroke-width "2"
+                                                                 :stroke "currentColor"}
+                                      [:path {:stroke-linecap "round"
+                                              :stroke-linejoin "round"
+                                              :d "m4.5 12.75 6 6 9-13.5"}]]
+                                     [:svg.w-4.h-4.text-base-content.opacity-30 {:xmlns "http://www.w3.org/2000/svg"
+                                                                                 :fill "none"
+                                                                                 :viewBox "0 0 24 24"
+                                                                                 :stroke-width "2"
+                                                                                 :stroke "currentColor"}
+                                      [:path {:stroke-linecap "round"
+                                              :stroke-linejoin "round"
+                                              :d "M6 18 18 6M6 6l12 12"}]])
+                          ;; Default: show the value as text
+                          value)
+        ;; Edit input rendering based on type
+        edit-input (case col-type
+                     :enum
+                     [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
+                      {:data-ref input-ref
+                       :data-bind cell-signal-path
+                       :data-on:keydown keydown-handler
+                       :data-on:blur blur-handler}
+                      (for [opt (:options col)]
+                        [:option {:value opt} opt])]
+
+                     :number
+                     [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200
+                      (cond-> {:type "number"
+                               :data-ref input-ref
+                               :data-bind cell-signal-path
+                               :data-on:keydown keydown-handler
+                               :data-on:blur blur-handler}
+                        (:min col) (assoc :min (:min col))
+                        (:max col) (assoc :max (:max col)))]
+
+                     :boolean
+                     [:input.toggle.toggle-xs.toggle-success
+                      {:type "checkbox"
+                       :data-ref input-ref
+                       :data-bind cell-signal-path
+                       :data-on:keydown keydown-handler
+                       :data-on:blur blur-handler}]
+
+                     ;; Default: text input (for :string, :text, nil, or unknown)
+                     [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200
+                      {:data-ref input-ref
+                       :data-bind cell-signal-path
+                       :data-on:keydown keydown-handler
+                       :data-on:blur blur-handler}])]
     [:td {:data-row row-idx
           :data-col col-idx
           :data-value (str value)
@@ -99,7 +166,8 @@
       ;; Use visibility instead of display to preserve layout space
       [:div.flex.items-center.gap-1
        {:data-class (str "{'invisible': " editing-check "}")}
-       [:span.flex-1 {:id span-id} value]
+       ;; Span with data-value attribute for dynamic value reading on re-edit
+       [:span.flex-1 {:id span-id :data-value (str value)} display-content]
        ;; Pencil button to edit
        [:button.btn.btn-ghost.btn-xs.p-0.opacity-30.hover:opacity-100
         {:data-on:click edit-handler
@@ -115,14 +183,11 @@
       ;; Edit mode: input + checkmark button (absolute overlay, doesn't affect layout)
       [:div.absolute.inset-0.flex.items-center.gap-1.bg-base-100
        {:data-show editing-check}
-       [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200
-        {:data-ref input-ref
-         :data-bind cell-signal-path
-         :data-on:keydown keydown-handler
-         :data-on:blur blur-handler}]
+       edit-input
        ;; Checkmark button to save
+       ;; Use mousedown (not click) so submitInProgress is set BEFORE blur fires
        [:button.btn.btn-ghost.btn-xs.p-0
-        {:data-on:click save-handler
+        {:data-on:mousedown save-handler
          :title "Save"}
         [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
                                     :fill "none"

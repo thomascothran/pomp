@@ -677,3 +677,37 @@
       (is (= "Updated School" (-> (jdbc/execute! ds ["SELECT school FROM philosophers WHERE id = ?" 3]
                                                  {:builder-fn rs/as-unqualified-lower-maps})
                                   first :school))))))
+
+(deftest save-fn-boolean-value-test
+  (testing "handles boolean true value"
+    (let [ds (jdbc/get-datasource h2-db)
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec))]
+      ;; Create a table with a boolean column
+      (jdbc/execute! ds ["CREATE TABLE IF NOT EXISTS bool_test (
+                           id INT PRIMARY KEY,
+                           verified BOOLEAN)"])
+      (jdbc/execute! ds ["DELETE FROM bool_test"])
+      (jdbc/execute! ds ["INSERT INTO bool_test (id, verified) VALUES (?, ?)" 1 false])
+      ;; Save with boolean true
+      (let [save! (sql/save-fn {:table "bool_test"} execute!)]
+        (save! {:row-id 1 :col-key :verified :value true}))
+      (is (= true (-> (jdbc/execute! ds ["SELECT verified FROM bool_test WHERE id = ?" 1]
+                                     {:builder-fn rs/as-unqualified-lower-maps})
+                      first :verified)))
+      (jdbc/execute! ds ["DROP TABLE bool_test"])))
+
+  (testing "handles boolean false value"
+    (let [ds (jdbc/get-datasource h2-db)
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec))]
+      (jdbc/execute! ds ["CREATE TABLE IF NOT EXISTS bool_test (
+                           id INT PRIMARY KEY,
+                           verified BOOLEAN)"])
+      (jdbc/execute! ds ["DELETE FROM bool_test"])
+      (jdbc/execute! ds ["INSERT INTO bool_test (id, verified) VALUES (?, ?)" 1 true])
+      ;; Save with boolean false
+      (let [save! (sql/save-fn {:table "bool_test"} execute!)]
+        (save! {:row-id 1 :col-key :verified :value false}))
+      (is (= false (-> (jdbc/execute! ds ["SELECT verified FROM bool_test WHERE id = ?" 1]
+                                      {:builder-fn rs/as-unqualified-lower-maps})
+                       first :verified)))
+      (jdbc/execute! ds ["DROP TABLE bool_test"]))))

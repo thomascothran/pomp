@@ -67,6 +67,40 @@
   [columns]
   (boolean (some :editable columns)))
 
+(defn- render-cell-display
+  "Renders the display content for a cell based on column type.
+   
+   For boolean columns, renders a checkmark or X icon.
+   Handles both boolean values (true/false) and string representations (\"true\"/\"false\")
+   since Datastar may send checkbox values as strings.
+   
+   For other types, returns the value as-is."
+  [value col-type]
+  (case col-type
+    :boolean (let [bool-value (cond
+                                (boolean? value) value
+                                (= "true" value) true
+                                :else false)]
+               (if bool-value
+                 [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
+                                             :fill "none"
+                                             :viewBox "0 0 24 24"
+                                             :stroke-width "2"
+                                             :stroke "currentColor"}
+                  [:path {:stroke-linecap "round"
+                          :stroke-linejoin "round"
+                          :d "m4.5 12.75 6 6 9-13.5"}]]
+                 [:svg.w-4.h-4.text-base-content.opacity-30 {:xmlns "http://www.w3.org/2000/svg"
+                                                             :fill "none"
+                                                             :viewBox "0 0 24 24"
+                                                             :stroke-width "2"
+                                                             :stroke "currentColor"}
+                  [:path {:stroke-linecap "round"
+                          :stroke-linejoin "round"
+                          :d "M6 18 18 6M6 6l12 12"}]]))
+    ;; Default: return value as-is
+    value))
+
 (defn make-handler
   "Creates a Ring handler for a datatable.
 
@@ -116,9 +150,12 @@
                              ;; Update the cell's display span with the new value
                              (when cell-edit
                                (let [{:keys [row-id col-key value]} cell-edit
-                                     span-id (str "cell-" id "-" row-id "-" (name col-key))]
+                                     span-id (str "cell-" id "-" row-id "-" (name col-key))
+                                     col (some #(when (= (:key %) col-key) %) columns)
+                                     col-type (:type col)
+                                     display-content (render-cell-display value col-type)]
                                  (d*/patch-elements! sse (render-html-fn
-                                                          [:span.flex-1 {:id span-id} value]))))
+                                                          [:span.flex-1 {:id span-id :data-value (str value)} display-content]))))
                              ;; Clear the cells signal to remove the edit state
                              ;; Use empty object {} instead of nil to avoid "Cannot set properties of undefined" errors
                              (d*/patch-signals! sse (json/write-str
