@@ -1,0 +1,276 @@
+### Basic Hiccup Syntax Example
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Demonstrates the basic syntax of Hiccup for generating HTML. It shows how to create a span element with a class attribute and text content using Hiccup's vector-based representation.
+
+```Clojure
+user=> (require '[hiccup2.core :as h])
+nil
+user=> (str (h/html [:span {:class "foo"} "bar"]))
+"<span class=\"foo\">bar</span>"
+```
+
+--------------------------------
+
+### Expanding Seq Contents into Element Body
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Shows how Hiccup expands the contents of a seq into the element body. This example uses a for loop to generate a list of li elements within a ul element.
+
+```Clojure
+user=> (str (h/html [:ul
+                     (for [x (range 1 4)]
+                       [:li x])]))
+"<ul><li>1</li><li>2</li><li>3</li></ul>"
+```
+
+--------------------------------
+
+### CSS-like Shortcut for ID and Class
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Demonstrates Hiccup's CSS-like shortcut for specifying id and class attributes. It shows how to create a div element with multiple classes and an id using a concise syntax.
+
+```Clojure
+user=> (str (h/html [:div#foo.bar.baz "bang"]))
+"<div id=\"foo\" class=\"bar baz\">bang</div>"
+```
+
+--------------------------------
+
+### Using Iteration with Seqs
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Demonstrates using a for loop to generate a sequence of list items within an unordered list. This shows how seqs can be used with iteration.
+
+```Clojure
+[:ul (for [i (range 3)] [:li i])]
+```
+
+--------------------------------
+
+### Basic HTML Element Creation
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Creates a simple HTML span element using Hiccup's vector-based syntax. The keyword :span represents the HTML element.
+
+```Clojure
+[:span]
+```
+
+--------------------------------
+
+### Rendering HTML Elements
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Illustrates how Hiccup renders different HTML elements, accommodating browser quirks. It shows the difference in rendering self-closing tags like script and p.
+
+```Clojure
+user=> (str (h/html [:script]))
+"<script></script>"
+user=> (str (h/html [:p]))
+"<p />"
+```
+
+--------------------------------
+
+### Doctype Declaration with raw
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Demonstrates how to use the hiccup2.core/raw function for doctype declarations. It shows how to include a doctype declaration and an html tag with a language attribute.
+
+```Clojure
+user=> (str (h/html (h/raw "<!DOCTYPE html>") [:html {:lang "en"}]))
+"<!DOCTYPE html><html lang=\"en\"></html>"
+```
+
+--------------------------------
+
+### Add Hiccup dependency using deps.edn
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Adds the Hiccup library as a dependency to a Clojure project using the deps.edn configuration file. This allows the project to use Hiccup's HTML generation capabilities.
+
+```Clojure
+hiccup/hiccup {:mvn/version "2.0.0-RC5"}
+```
+
+--------------------------------
+
+### Add Hiccup dependency using Leiningen
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Adds the Hiccup library as a dependency to a Clojure project using the Leiningen build tool. This allows the project to use Hiccup's HTML generation capabilities.
+
+```Clojure
+[hiccup "2.0.0-RC5"]
+```
+
+--------------------------------
+
+### Rendering Text in HTML
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Renders plain text within a span element. Strings are automatically rendered as text content.
+
+```Clojure
+[:span "Hello world"]
+```
+
+--------------------------------
+
+### Bypassing String Escaping with raw
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Shows how to bypass automatic string escaping using the hiccup2.core/raw function. This is useful for including raw HTML in the output.
+
+```Clojure
+user=> (str (h/html [:p (h/raw "Hello <em>World</em>")]))
+"<p>Hello <em>World</em></p>"
+```
+
+--------------------------------
+
+### Automatic String Escaping
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Demonstrates how Hiccup automatically escapes strings to prevent HTML injection. It shows how special characters like < and > are converted to their corresponding HTML entities.
+
+```Clojure
+user=> (str (h/html [:p "Tags in HTML are written with <>"]))
+"<p>Tags in HTML are written with &lt;&gt;</p>"
+```
+
+--------------------------------
+
+### Hiccup 2 String Escaping
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Shows how strings are automatically escaped in Hiccup 2. The return value from the html macro is a RawString, ensuring that the macro can still be nested.
+
+```Clojure
+(str (h2/html [:div "Username: " username]))
+```
+
+--------------------------------
+
+### Hiccup 1 String Escaping
+
+Source: https://github.com/weavejester/hiccup/blob/master/README.md
+
+Illustrates how to escape strings in Hiccup 1 using the h function. This ensures that unsafe characters are converted into their equivalent entity codes.
+
+```Clojure
+(h1/html [:div "Username: " (h1/h username)])
+```
+
+--------------------------------
+
+### Combining ID and Class Selectors
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Combines the # and . characters to specify both the id and class attributes of a span element. This demonstrates how to set both attributes concisely.
+
+```Clojure
+[:span#foo.bar.baz "Hello world"]
+```
+
+--------------------------------
+
+### Nested HTML Elements
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Demonstrates nesting HTML elements within a div element.  Multiple span elements are nested within the div.
+
+```Clojure
+[:div [:span] [:span]]
+```
+
+--------------------------------
+
+### Specifying Class with CSS Selectors
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Specifies the class attribute of a span element using the . character. This is a concise way to set the class.
+
+```Clojure
+[:span.foo "Hello world"]
+```
+
+--------------------------------
+
+### Converting Objects to Strings
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Converts a number to a string within a span element. Values of types that have no special meaning are converted into strings before being rendered.
+
+```Clojure
+[:span 42]
+```
+
+--------------------------------
+
+### Adding Attributes to HTML Elements
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Adds a class attribute to a span element. A map is used to specify the attributes, with keywords as keys and strings as values.
+
+```Clojure
+[:span {:class "foo"} "Hello world"]
+```
+
+--------------------------------
+
+### Expanding Seqs
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Expands a seq (list) into individual elements within a span element. Seqs are automatically expanded out.
+
+```Clojure
+[:span '("foo" "bar")]
+```
+
+--------------------------------
+
+### Specifying ID with CSS Selectors
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Specifies the id attribute of a span element using the # character. This is a concise way to set the id.
+
+```Clojure
+[:span#foo "Hello world"]
+```
+
+--------------------------------
+
+### Concatenating Adjacent Strings
+
+Source: https://github.com/weavejester/hiccup/blob/master/doc/syntax.md
+
+Concatenates adjacent strings within a span element. Multiple strings are combined into a single text node.
+
+```Clojure
+[:span "foo" "bar"]
+```
+
+=== COMPLETE CONTENT === This response contains all available snippets from this library. No additional content exists. Do not make further requests.
