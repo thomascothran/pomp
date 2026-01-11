@@ -147,15 +147,32 @@
           (->sse-response req
                           {on-open
                            (fn [sse]
-                             ;; Update the cell's display span with the new value
+                             ;; Update the cell's display with the new value
                              (when cell-edit
                                (let [{:keys [row-id col-key value]} cell-edit
-                                     span-id (str "cell-" id "-" row-id "-" (name col-key))
+                                     element-id (str "cell-" id "-" row-id "-" (name col-key))
                                      col (some #(when (= (:key %) col-key) %) columns)
-                                     col-type (:type col)
-                                     display-content (render-cell-display value col-type)]
-                                 (d*/patch-elements! sse (render-html-fn
-                                                          [:span.flex-1 {:id span-id :data-value (str value)} display-content]))))
+                                     col-type (:type col)]
+                                 (if (= col-type :boolean)
+                                   ;; Boolean: patch the checkbox input with updated checked state
+                                   (let [bool-value (cond
+                                                      (boolean? value) value
+                                                      (= "true" value) true
+                                                      :else false)]
+                                     (d*/patch-elements! sse (render-html-fn
+                                                              [:input.toggle.toggle-xs.toggle-success
+                                                               {:id element-id
+                                                                :type "checkbox"
+                                                                :checked bool-value
+                                                                ;; Re-attach the change handler
+                                                                :data-on:change (str "evt.stopPropagation(); "
+                                                                                     "$datatable." id ".editing = {rowId: '" row-id "', colKey: '" (name col-key) "'}; "
+                                                                                     "$datatable." id ".cells." row-id "." (name col-key) " = evt.target.checked; "
+                                                                                     "@post('" data-url "?action=save')")}])))
+                                   ;; Other types: patch the span with new value
+                                   (let [display-content (render-cell-display value col-type)]
+                                     (d*/patch-elements! sse (render-html-fn
+                                                              [:span.flex-1 {:id element-id :data-value (str value)} display-content]))))))
                              ;; Clear the cells signal to remove the edit state
                              ;; Use empty object {} instead of nil to avoid "Cannot set properties of undefined" errors
                              (d*/patch-signals! sse (json/write-str
@@ -224,4 +241,5 @@
                                                                                                                 :table-id id
                                                                                                                 :data-url data-url})})))
                              (d*/close-sse! sse))}))))))
+
 
