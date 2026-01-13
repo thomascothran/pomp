@@ -30,8 +30,28 @@
   "agent": {
     "qa": {
       "description": "uses playwright to check functionality and aesthetics in a browser",
-      "model": "anthropic/claude-sonnet-4-5-20250929",
+      "model": "openai/gpt-5",
       "prompt": "{file:./prompts/qa.md}"
-    }
+    },
+    "code-explorer": {
+      "description": "query and understand the behavior of the code base",
+      "model": "openai/gpt-5",
+      "prompt": "{file:./prompts/code-explorer.md}"
+    },
+    "tdd-orchestrator": {
+      "description": "plan tdd cycles and manage other agents in doing so",
+      "model": "openai/gpt-5",
+      "prompt": "{file:./prompts/tdd-orchestrator.md}"
+    },
+    "implementer": {
+      "description": "a subagent used for implementing code within a tdd cycle",
+      "model": "openai/gpt-5",
+      "prompt": "{file:./prompts/implementer.md}"
+    },
+    "tester": {
+      "description": "a subagent used for writing tests in a tdd cycle",
+      "model": "openai/gpt-5",
+      "prompt": "{file:./prompts/tester.md}"
+    },
   }
 }
