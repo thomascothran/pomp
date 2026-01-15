@@ -1,7 +1,10 @@
 (ns pomp.datatable-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.data.json :as json]
+            [clojure.test :refer [deftest is testing]]
             [pomp.datatable :as datatable]
-            [pomp.rad.datatable.core :as dt]))
+            [pomp.rad.datatable.core :as dt]
+            [starfederation.datastar.clojure.adapter.ring :as ring]
+            [starfederation.datastar.clojure.api :as d*]))
 
 ;; =============================================================================
 ;; Test helpers
@@ -148,6 +151,76 @@
       ;; Handler should be created successfully
       (is (fn? handler)
           "make-handler should return a function when :save-fn is provided"))))
+
+(deftest make-handler-save-clears-edit-signals-test
+  (testing "save clears edit signals with null merge patch"
+    (let [patches (atom [])
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string :editable true}]
+                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn (fn [_] "<html>")
+                                           :save-fn (fn [_] {:success true})})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                         (when-let [on-open-fn (get opts ring/on-open)]
+                                           (on-open-fn ::fake-sse))
+                                         {:status 200})
+                    d*/patch-signals! (fn [_ payload]
+                                        (swap! patches conj payload))
+                    d*/patch-elements! (fn [& _])
+                    d*/execute-script! (fn [& _])
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {"action" "save"}
+                  :headers {"datastar-request" "true"}
+                  :body-params {:datatable {:test-table {:editing {:rowId "123" :colKey "name"}
+                                                        :cells {:123 {:name "Updated"}}}}}})
+        (is (seq @patches) "Expected patch-signals on save")
+        (let [payload (last @patches)
+              signals (json/read-str payload {:key-fn keyword})
+              table-signals (get-in signals [:datatable :test-table])]
+          (is (contains? table-signals :cells) "Save should patch :cells key")
+          (is (nil? (:cells table-signals))
+              "Save should clear :cells using null merge patch")
+          (is (contains? table-signals :editing) "Save should patch :editing key")
+          (is (nil? (:editing table-signals))
+              "Save should clear :editing using null merge patch"))))))
+
+(deftest make-handler-initial-patch-omits-per-row-signals-test
+  (testing "initial signal patch omits per-row/per-cell signals"
+    (let [patches (atom [])
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string :editable true}
+                                                     {:key :status :label "Status" :type :string}]
+                                           :query-fn (fn [_ _]
+                                                       {:rows [{:id "1" :name "Ada" :status "active"}
+                                                               {:id "2" :name "Bob" :status "inactive"}]
+                                                        :total-rows 2
+                                                        :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn (fn [_] "<html>")})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                         (when-let [on-open-fn (get opts ring/on-open)]
+                                           (on-open-fn ::fake-sse))
+                                         {:status 200})
+                    d*/patch-signals! (fn [_ payload]
+                                        (swap! patches conj payload))
+                    d*/patch-elements! (fn [& _])
+                    d*/execute-script! (fn [& _])
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {"groupBy" "status"}})
+        (is (seq @patches) "Expected patch-signals to be emitted on load")
+        (let [payload (first @patches)
+              signals (json/read-str payload {:key-fn keyword})
+              table-signals (get-in signals [:datatable :test-table])]
+          (is (map? table-signals) "Expected initial patch-signals payload")
+          (is (not (contains? table-signals :expanded))
+              "Expanded signals should be absent on initial render")
+          (is (not (contains? table-signals :editing))
+              "Editing signals should be absent on initial render")
+          (is (not (contains? table-signals :cells))
+              "Cell signals should be absent on initial render")
+          (is (not (contains? table-signals :submitInProgress))
+              "Submit flag should be absent on initial render"))))))
 
 (deftest extract-cell-edit-from-signals-test
   (testing "extracts cell edit from signals using :editing state"

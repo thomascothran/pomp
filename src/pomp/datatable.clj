@@ -174,10 +174,10 @@
                                      (d*/patch-elements! sse (render-html-fn
                                                               [:span.flex-1 {:id element-id :data-value (str value)} display-content]))))))
                              ;; Clear the cells signal to remove the edit state
-                             ;; Use empty object {} instead of nil to avoid "Cannot set properties of undefined" errors
+                             ;; Use nil so merge-patch removes the signals
                              (d*/patch-signals! sse (json/write-str
-                                                     {:datatable {(keyword id) {:cells {}
-                                                                                :editing {:rowId nil :colKey nil}
+                                                     {:datatable {(keyword id) {:cells nil
+                                                                                :editing nil
                                                                                 :submitInProgress false}}}))
                              (d*/close-sse! sse))}))
         ;; Normal query/render flow
@@ -205,20 +205,14 @@
                                                                                             :selectable? selectable?})))
                                (d*/execute-script! sse cell-select-script))
                              (d*/patch-signals! sse (json/write-str
-                                                     {:datatable {(keyword id) (cond-> {:sort (:sort signals)
-                                                                                        :page (:page signals)
-                                                                                        :filters filters-patch
-                                                                                        :groupBy (mapv name group-by)
-                                                                                        :openFilter ""
-                                                                                        :columnOrder column-order
-                                                                                        :dragging nil
-                                                                                        :dragOver nil}
-                                                                                 expanded-signals (assoc :expanded expanded-signals)
-                                                                                 ;; Include editing signals when editable cells are present
-                                                                                 (or save-fn (has-editable-columns? columns))
-                                                                                 (assoc :editing {:rowId nil :colKey nil}
-                                                                                        :submitInProgress false
-                                                                                        :cells {}))}}))
+                                                     {:datatable {(keyword id) {:sort (:sort signals)
+                                                                                :page (:page signals)
+                                                                                :filters filters-patch
+                                                                                :groupBy (mapv name group-by)
+                                                                                :openFilter ""
+                                                                                :columnOrder column-order
+                                                                                :dragging nil
+                                                                                :dragOver nil}}}))
                              (d*/patch-elements! sse (render-html-fn (dt/render {:id id
                                                                                  :cols visible-cols
                                                                                  :rows rows

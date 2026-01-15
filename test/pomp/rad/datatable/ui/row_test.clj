@@ -103,6 +103,58 @@
       (is (= "-5" (:data-value attrs))))))
 
 ;; =============================================================================
+;; Row selection signal initialization tests
+;; =============================================================================
+
+(deftest render-row-does-not-init-selection-signals-test
+  (testing "row selection checkbox does not pre-create selection signals"
+    (letfn [(find-selection-input [hiccup]
+              (cond
+                (and (vector? hiccup)
+                     (keyword? (first hiccup))
+                     (clojure.string/starts-with? (name (first hiccup)) "input"))
+                hiccup
+
+                (vector? hiccup)
+                (some find-selection-input hiccup)
+
+                (seq? hiccup)
+                (some find-selection-input hiccup)
+
+                :else
+                nil))]
+      (let [result (row/render-row {:cols [{:key :name :label "Name"}]
+                                    :row {:id "row-1" :name "Ada"}
+                                    :row-id "row-1"
+                                    :row-idx 0
+                                    :table-id "people"
+                                    :selectable? true})
+            input (find-selection-input result)
+            attrs (second input)]
+        (is (nil? (:data-bind attrs))
+            "Selection checkbox should not bind on render")
+        (is (nil? (:data-signals attrs))
+            "Row rendering should not pre-create selection signals")
+        (let [change-handler (:data-on:change attrs)]
+          (is (some? change-handler)
+              "Selection checkbox should update signal on change")
+          (when change-handler
+            (is (clojure.string/includes? change-handler "$datatable.people.selections['row-1']")
+                "Change handler should target row selection signal")
+            (is (clojure.string/includes? change-handler "evt.target.checked")
+                "Change handler should use checkbox checked state")))))))
+
+(deftest render-selection-cell-initializes-selections-test
+  (testing "selection change handler initializes selections with safe row keys"
+    (let [result (row/render-selection-cell {:signal-path "datatable.people.selections['row-1']"})
+          change-handler (-> result second second :data-on:change)]
+      (is (some? change-handler))
+      (is (clojure.string/includes? change-handler "selections ||= {}")
+          "Selection handler should initialize selections map")
+      (is (clojure.string/includes? change-handler "selections['row-1'] = evt.target.checked")
+          "Selection handler should use bracket notation for row-id"))))
+
+;; =============================================================================
 ;; Editable cell tests
 ;; =============================================================================
 
@@ -156,9 +208,19 @@
       (is (= :td (first result)))
       ;; Contains input
       (is (some? input))
-      ;; Input has correct data-bind to cell signal path
-      (let [attrs (second input)]
-        (is (clojure.string/includes? (:data-bind attrs) "datatable.philosophers.cells.123.name")))))
+      ;; Input should not create the cell signal on render
+      (let [attrs (second input)
+            handler (or (:data-on:input attrs)
+                        (:data-on:change attrs))]
+        (is (nil? (:data-bind attrs))
+            "Editable input should not bind on render")
+        (is (nil? (:data-ref attrs))
+            "Editable input should not create a data-ref signal")
+        (is (some? handler)
+            "Editable input should update cell signal on input/change")
+        (when handler
+          (is (clojure.string/includes? (or handler "") "$datatable.philosophers.cells['123']['name']")
+              "Input handler should target cell signal path")))))
 
   (testing "editable cell renders span with display value"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -234,6 +296,35 @@
       ;; Stops propagation to avoid cell selection
       (is (clojure.string/includes? click-handler "stopPropagation")))))
 
+(deftest render-editable-cell-initializes-cells-test
+  (testing "edit and input handlers initialize cells with safe row keys"
+    (let [result (row/render-editable-cell {:value "Plato"
+                                            :row-id "row-1"
+                                            :col {:key :name :editable true}
+                                            :table-id "people"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          input (find-input result)
+          input-handler (let [attrs (second input)]
+                          (or (:data-on:input attrs)
+                              (:data-on:change attrs)))
+          buttons (find-button result)
+          edit-button (first (filter #(let [attrs (second %)]
+                                        (and (:data-on:click attrs)
+                                             (clojure.string/includes? (:data-on:click attrs) "editing")
+                                             (not (clojure.string/includes? (:data-on:click attrs) "@post"))))
+                                      buttons))
+          edit-handler (-> edit-button second :data-on:click)]
+      (is (some? input-handler))
+      (is (clojure.string/includes? input-handler "cells ||= {}"))
+      (is (clojure.string/includes? input-handler "cells['row-1'] ||= {}"))
+      (is (clojure.string/includes? input-handler "cells['row-1']['name']"))
+      (is (some? edit-handler))
+      (is (clojure.string/includes? edit-handler "cells ||= {}"))
+      (is (clojure.string/includes? edit-handler "cells['row-1'] ||= {}"))
+      (is (clojure.string/includes? edit-handler "cells['row-1']['name']")))))
+
 (deftest render-editable-cell-mousedown-skips-when-editing-test
   (testing "mousedown on editable cell is skipped when editing"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -245,7 +336,7 @@
                                             :col-idx 0})
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
-      (is (clojure.string/includes? mousedown-handler "if ($datatable.philosophers.editing.rowId) return"))))
+      (is (clojure.string/includes? mousedown-handler "if ($datatable.philosophers.editing?.rowId) return"))))
 
   (testing "mousedown on non-editable cell is skipped when any cell is editing"
     (let [result (row/render-cell {:value "Athens"
@@ -400,9 +491,18 @@
           options (find-options result)]
       ;; Has select element
       (is (some? select))
-      ;; Select has correct data-bind
-      (let [attrs (second select)]
-        (is (clojure.string/includes? (:data-bind attrs) "datatable.philosophers.cells.123.school")))
+      ;; Select should not create cell signal on render
+      (let [attrs (second select)
+            handler (or (:data-on:change attrs)
+                        (:data-on:input attrs))]
+        (is (nil? (:data-bind attrs))
+            "Select should not bind on render")
+        (is (nil? (:data-ref attrs))
+            "Select should not create a data-ref signal")
+        (is (some? handler)
+            "Select should update cell signal on change")
+        (is (clojure.string/includes? (or handler "") "$datatable.philosophers.cells['123']['school']")
+            "Select handler should target cell signal path"))
       ;; Has all options
       (is (= 3 (count options)))
       ;; Options have correct values
@@ -446,8 +546,17 @@
       ;; Has input element with type="number"
       (is (some? input))
       (is (= "number" (:type attrs)))
-      ;; Has correct data-bind
-      (is (clojure.string/includes? (:data-bind attrs) "datatable.philosophers.cells.123.age"))))
+      ;; Uses handler to update cell signal
+      (let [handler (or (:data-on:input attrs)
+                        (:data-on:change attrs))]
+        (is (nil? (:data-bind attrs))
+            "Number input should not bind on render")
+        (is (nil? (:data-ref attrs))
+            "Number input should not create a data-ref signal")
+        (is (some? handler)
+            "Number input should update cell signal on input/change")
+        (is (clojure.string/includes? (or handler "") "$datatable.philosophers.cells['123']['age']")
+            "Number input handler should target cell signal path"))))
 
   (testing "number type respects min/max constraints"
     (let [result (row/render-editable-cell {:value 25
@@ -499,7 +608,9 @@
       (is (some? toggle))
       ;; Is a checkbox
       (let [attrs (second toggle)]
-        (is (= "checkbox" (:type attrs))))
+        (is (= "checkbox" (:type attrs)))
+        (is (nil? (:data-ref attrs))
+            "Toggle input should not create a data-ref signal"))
       ;; No pencil/save buttons - just the toggle
       (is (empty? buttons))))
 
@@ -554,6 +665,24 @@
       (is (clojure.string/includes? change-handler "@post"))
       (is (clojure.string/includes? change-handler "/data"))))
 
+  (testing "toggle initializes cells with safe row keys"
+    (let [result (row/render-cell {:value true
+                                   :row-id "row-1"
+                                   :col {:key :verified
+                                         :type :boolean
+                                         :editable true}
+                                   :table-id "philosophers"
+                                   :data-url "/data"
+                                   :row-idx 0
+                                   :col-idx 0})
+          toggle (find-toggle result)
+          attrs (second toggle)
+          change-handler (:data-on:change attrs)]
+      (is (some? change-handler))
+      (is (clojure.string/includes? change-handler "cells ||= {}"))
+      (is (clojure.string/includes? change-handler "cells['row-1'] ||= {}"))
+      (is (clojure.string/includes? change-handler "cells['row-1']['verified']"))))
+
   (testing "toggle has correct ID for server patching"
     (let [result (row/render-cell {:value true
                                    :row-id "123"
@@ -585,8 +714,17 @@
       (is (some? input))
       ;; No type attribute means text input
       (is (nil? (:type attrs)))
-      ;; Has correct data-bind
-      (is (clojure.string/includes? (:data-bind attrs) "datatable.philosophers.cells.123.name"))))
+      ;; Uses handler to update cell signal
+      (let [handler (or (:data-on:input attrs)
+                        (:data-on:change attrs))]
+        (is (nil? (:data-bind attrs))
+            "Text input should not bind on render")
+        (is (nil? (:data-ref attrs))
+            "Text input should not create a data-ref signal")
+        (is (some? handler)
+            "Text input should update cell signal on input/change")
+        (is (clojure.string/includes? (or handler "") "$datatable.philosophers.cells['123']['name']")
+            "Text input handler should target cell signal path"))))
 
   (testing "nil type uses text input (default)"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -653,4 +791,3 @@
       (is (or (clojure.string/includes? click-handler "dataset.value")
               (clojure.string/includes? click-handler "getAttribute"))
           "Edit handler must read current value from data attribute, not use hardcoded SSR value"))))
-

@@ -47,12 +47,15 @@
   (let [col-key (name (:key col))
         cell-key (str row-idx "-" col-idx)
         signal-base (str "datatable." table-id)
-        cell-signal-path (str signal-base ".cells." row-id "." col-key)
+        cell-base (str signal-base ".cells")
+        cell-signal-path (str cell-base "['" row-id "']['" col-key "']")
+        init-cells (str "$" cell-base " ||= {}; $" cell-base "['" row-id "'] ||= {}; ")
         editing-signal (str signal-base ".editing")
         ;; Unique ID for the toggle (for patching after save)
         toggle-id (str "cell-" table-id "-" row-id "-" col-key)
         ;; On change: set editing signal, set cell value, and post immediately
         change-handler (str "evt.stopPropagation(); "
+                            init-cells
                             "$" editing-signal " = {rowId: '" row-id "', colKey: '" col-key "'}; "
                             "$" cell-signal-path " = evt.target.checked; "
                             "@post('" data-url "?action=save')")]
@@ -60,7 +63,7 @@
           :data-col col-idx
           :data-value (str value)
           :data-class (str "{'bg-info/20': $" signal-base ".cellSelection['" cell-key "']}")
-          :data-on:mousedown (str "if ($" editing-signal ".rowId) return; "
+          :data-on:mousedown (str "if ($" editing-signal "?.rowId) return; "
                                   "$" signal-base ".cellSelectDragging = true; "
                                   "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
                                   "$" signal-base ".cellSelection = {'" cell-key "': true}")}
@@ -100,15 +103,17 @@
         col-type (:type col)
         cell-key (str row-idx "-" col-idx)
         signal-base (str "datatable." table-id)
-        cell-signal-path (str signal-base ".cells." row-id "." col-key)
+        cell-base (str signal-base ".cells")
+        cell-signal-path (str cell-base "['" row-id "']['" col-key "']")
+        init-cells (str "$" cell-base " ||= {}; $" cell-base "['" row-id "'] ||= {}; ")
         editing-signal (str signal-base ".editing")
         submit-flag (str signal-base ".submitInProgress")
-        ;; Unique ref for this input (to focus it when entering edit mode)
-        input-ref (str "editInput_" row-id "_" col-key)
+        ;; Unique ID for this input (to focus it when entering edit mode)
+        input-id (str "editInput-" row-id "-" col-key)
         ;; Unique ID for the display span (for patching after save)
         span-id (str "cell-" table-id "-" row-id "-" col-key)
         ;; Condition to check if this cell is being edited
-        editing-check (str "$" editing-signal ".rowId === '" row-id "' && $" editing-signal ".colKey === '" col-key "'")
+        editing-check (str "$" editing-signal "?.rowId === '" row-id "' && $" editing-signal "?.colKey === '" col-key "'")
         ;; For booleans, we need to read the data-value and convert to boolean
         ;; For other types, we read it as a string
         read-current-value (if (= col-type :boolean)
@@ -118,8 +123,9 @@
         edit-handler (str "evt.stopPropagation(); "
                           "$" signal-base ".cellSelection = {}; "
                           "$" editing-signal " = {rowId: '" row-id "', colKey: '" col-key "'}; "
+                          init-cells
                           "$" cell-signal-path " = " read-current-value "; "
-                          "setTimeout(() => $" input-ref "?.focus(), 0)")
+                          "setTimeout(() => document.getElementById('" input-id "')?.focus(), 0)")
         ;; Save: set flag, post, clear editing
         save-handler (str "evt.stopPropagation(); "
                           "$" submit-flag " = true; "
@@ -127,6 +133,7 @@
                           "$" editing-signal " = {rowId: null, colKey: null}")
         ;; Cancel: clear editing, remove cell value
         cancel-edit (str "$" editing-signal " = {rowId: null, colKey: null}; "
+                         init-cells
                          "$" cell-signal-path " = null")
         ;; Blur: cancel edit unless submitInProgress (Enter/Escape already handled it)
         blur-handler (str "if ($" submit-flag ") { $" submit-flag " = false; return; } "
@@ -137,6 +144,7 @@
                              "@post('" data-url "?action=save'); "
                              "$" editing-signal " = {rowId: null, colKey: null} } "
                              "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")
+        input-handler (str init-cells "$" cell-signal-path " = evt.target.value")
         ;; Display value rendering based on type
         display-content (case col-type
                           :boolean (if value
@@ -162,8 +170,8 @@
         edit-input (case col-type
                      :enum
                      [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
-                      {:data-ref input-ref
-                       :data-bind cell-signal-path
+                      {:id input-id
+                       :data-on:input input-handler
                        :data-on:keydown keydown-handler
                        :data-on:blur blur-handler}
                       (for [opt (:options col)]
@@ -171,9 +179,9 @@
 
                      :number
                      [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200
-                      (cond-> {:type "number"
-                               :data-ref input-ref
-                               :data-bind cell-signal-path
+                      (cond-> {:id input-id
+                               :type "number"
+                               :data-on:input input-handler
                                :data-on:keydown keydown-handler
                                :data-on:blur blur-handler}
                         (:min col) (assoc :min (:min col))
@@ -181,23 +189,23 @@
 
                      :boolean
                      [:input.toggle.toggle-xs.toggle-success
-                      {:type "checkbox"
-                       :data-ref input-ref
+                      {:id input-id
+                       :type "checkbox"
                        :data-bind cell-signal-path
                        :data-on:keydown keydown-handler
                        :data-on:blur blur-handler}]
 
                      ;; Default: text input (for :string, :text, nil, or unknown)
                      [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200
-                      {:data-ref input-ref
-                       :data-bind cell-signal-path
+                      {:id input-id
+                       :data-on:input input-handler
                        :data-on:keydown keydown-handler
                        :data-on:blur blur-handler}])]
     [:td {:data-row row-idx
           :data-col col-idx
           :data-value (str value)
           :data-class (str "{'bg-info/20': $" signal-base ".cellSelection['" cell-key "']}")
-          :data-on:mousedown (str "if ($" editing-signal ".rowId) return; "
+          :data-on:mousedown (str "if ($" editing-signal "?.rowId) return; "
                                   "$" signal-base ".cellSelectDragging = true; "
                                   "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
                                   "$" signal-base ".cellSelection = {'" cell-key "': true}")}
@@ -287,11 +295,15 @@
    ctx contains:
    - :signal-path - The datastar signal path for this row's selection"
   [{:keys [signal-path]}]
-  [:td.w-3
-   [:input.checkbox.checkbox-sm
-    {:type "checkbox"
-     :data-signals (str "{\"" signal-path "\": false}")
-     :data-bind signal-path}]])
+  (let [[_ selections-path row-id]
+        (or (re-matches #"^(.*\.selections)\.([^.]*)$" signal-path)
+            (re-matches #"^(.*\.selections)\['(.+)'\]$" signal-path))
+        change-handler (str "$" selections-path " ||= {}; "
+                            "$" selections-path "['" row-id "'] = evt.target.checked")]
+    [:td.w-3
+     [:input.checkbox.checkbox-sm
+      {:type "checkbox"
+       :data-on:change change-handler}]]))
 
 (defn render-row
   "Renders a data row with optional selection checkbox.
