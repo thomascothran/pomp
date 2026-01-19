@@ -209,18 +209,18 @@
       ;; Contains input
       (is (some? input))
       ;; Input should not create the cell signal on render
-      (let [attrs (second input)
-            handler (or (:data-on:input attrs)
-                        (:data-on:change attrs))]
-        (is (nil? (:data-bind attrs))
-            "Editable input should not bind on render")
-        (is (nil? (:data-ref attrs))
-            "Editable input should not create a data-ref signal")
-        (is (some? handler)
-            "Editable input should update cell signal on input/change")
-        (when handler
-          (is (clojure.string/includes? (or handler "") "$datatable.philosophers.cells['123']['name']")
-              "Input handler should target cell signal path")))))
+       (let [attrs (second input)
+             handler (or (:data-on:input attrs)
+                         (:data-on:change attrs))]
+         (is (nil? (:data-bind attrs))
+             "Editable input should not bind on render")
+         (is (nil? (:data-ref attrs))
+             "Editable input should not create a data-ref signal")
+         (is (some? handler)
+             "Editable input should update cell signal on input/change")
+         (when handler
+           (is (clojure.string/includes? (or handler "") "$datatable.philosophers.cells['123']['name']")
+               "Input handler should target cell signal path")))))
 
   (testing "editable cell renders span with display value"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -294,7 +294,10 @@
       ;; Sets cell value signal
       (is (clojure.string/includes? click-handler "cells"))
       ;; Stops propagation to avoid cell selection
-      (is (clojure.string/includes? click-handler "stopPropagation")))))
+      (is (clojure.string/includes? click-handler "stopPropagation"))
+      (is (clojure.string/includes? click-handler "editInput-123-name"))
+      (is (clojure.string/includes? click-handler "input.value"))
+      (is (clojure.string/includes? click-handler "currentValue")))))
 
 (deftest render-editable-cell-initializes-cells-test
   (testing "edit and input handlers initialize cells with safe row keys"
@@ -336,7 +339,11 @@
                                             :col-idx 0})
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
-      (is (clojure.string/includes? mousedown-handler "if ($datatable.philosophers.editing?.rowId) return"))))
+      (is (clojure.string/includes? mousedown-handler "editing?.rowId"))
+      (is (clojure.string/includes? mousedown-handler "editing?.colKey"))
+      (is (clojure.string/includes? mousedown-handler "editing = {rowId: null, colKey: null}"))
+      (is (clojure.string/includes? mousedown-handler "cells[editingRow][editingCol] = null"))
+      (is (clojure.string/includes? mousedown-handler "else { return; }"))))
 
   (testing "mousedown on editable cell does not assign cellSelection"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -377,7 +384,11 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       ;; Uses optional chaining since editing signal may not exist in non-editable tables
-      (is (clojure.string/includes? mousedown-handler "if ($datatable.philosophers.editing?.rowId) return"))))
+      (is (clojure.string/includes? mousedown-handler "editing?.rowId"))
+      (is (clojure.string/includes? mousedown-handler "editing?.colKey"))
+      (is (clojure.string/includes? mousedown-handler "editing = {rowId: null, colKey: null}"))
+      (is (clojure.string/includes? mousedown-handler "cells[editingRow][editingCol] = null"))
+      (is (clojure.string/includes? mousedown-handler "else { return; }"))))
 
   (testing "mousedown on non-editable cell skips selection when clicking inputs"
     (let [result (row/render-cell {:value "Athens"
@@ -585,7 +596,9 @@
                                      buttons))
           click-handler (-> edit-button second :data-on:click)]
       ;; Reads initial value dynamically from dataset.value (not hardcoded SSR value)
-      (is (clojure.string/includes? click-handler "dataset.value"))))
+      (is (clojure.string/includes? click-handler "dataset.value"))
+      (is (clojure.string/includes? click-handler "editInput-123-school"))
+      (is (clojure.string/includes? click-handler "input.value"))))
 
   (testing "enum select autosaves on change without blur"
     (let [result (row/render-editable-cell {:value "Stoicism"

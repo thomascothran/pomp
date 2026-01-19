@@ -31,10 +31,10 @@
 
 (defn render-boolean-cell
   "Renders a boolean cell as a toggle switch that auto-saves on change.
-   
+
    Unlike other editable cells, booleans don't need pencil/save buttons -
    they show a toggle that saves immediately when clicked.
-   
+
    ctx contains:
    - :value    - The boolean value
    - :row-id   - The row's unique identifier
@@ -128,7 +128,10 @@
                           "$" signal-base ".cellSelection = {}; "
                           "$" editing-signal " = {rowId: '" row-id "', colKey: '" col-key "'}; "
                           init-cells
-                          "$" cell-signal-path " = " read-current-value "; "
+                          "const currentValue = " read-current-value "; "
+                          "$" cell-signal-path " = currentValue; "
+                          "const input = document.getElementById('" input-id "'); "
+                          "if (input) { if (input.type === 'checkbox') { input.checked = currentValue; } else { input.value = (currentValue ?? ''); } } "
                           "setTimeout(() => document.getElementById('" input-id "')?.focus(), 0)")
         ;; Cancel: clear editing, remove cell value
         cancel-edit (str "$" editing-signal " = {rowId: null, colKey: null}; "
@@ -179,13 +182,12 @@
         ;; Edit input rendering based on type
         edit-input (case col-type
                      :enum
-                      [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
-                       {:id input-id
-                        :data-on:change enum-change-handler
-                        :data-on:keydown enum-keydown-handler}
-                       (for [opt (:options col)]
-                         [:option {:value opt} opt])]
-
+                     [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
+                      {:id input-id
+                       :data-on:change enum-change-handler
+                       :data-on:keydown enum-keydown-handler}
+                      (for [opt (:options col)]
+                        [:option {:value opt} opt])]
 
                      :number
                      [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200
@@ -201,16 +203,16 @@
                      [:input.toggle.toggle-xs.toggle-success
                       {:id input-id
                        :type "checkbox"
-                       :data-bind cell-signal-path
                        :data-on:keydown keydown-handler
                        :data-on:blur blur-handler}]
 
-                     ;; Default: text input (for :string, :text, nil, or unknown)
+                      ;; Default: text input (for :string, :text, nil, or unknown)
                      [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200
                       {:id input-id
                        :data-on:input input-handler
                        :data-on:keydown keydown-handler
                        :data-on:blur blur-handler}])]
+
     [:td {:data-row row-idx
           :data-col col-idx
           :data-value (str value)

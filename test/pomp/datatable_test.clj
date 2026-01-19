@@ -152,14 +152,15 @@
       (is (fn? handler)
           "make-handler should return a function when :save-fn is provided"))))
 
-(deftest make-handler-save-clears-edit-signals-test
-  (testing "save clears edit signals with null merge patch"
+(deftest make-handler-save-patches-elements-test
+  (testing "save patches cell display without signal patch"
     (let [patches (atom [])
+          element-patches (atom [])
           handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string :editable true}]
                                            :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :data-url "/data"
-                                           :render-html-fn (fn [_] "<html>")
+                                           :render-html-fn identity
                                            :save-fn (fn [_] {:success true})})]
       (with-redefs [ring/->sse-response (fn [_ opts]
                                          (when-let [on-open-fn (get opts ring/on-open)]
@@ -167,23 +168,21 @@
                                          {:status 200})
                     d*/patch-signals! (fn [_ payload]
                                         (swap! patches conj payload))
-                    d*/patch-elements! (fn [& _])
+                    d*/patch-elements! (fn [_ payload]
+                                         (swap! element-patches conj payload))
                     d*/execute-script! (fn [& _])
                     d*/close-sse! (fn [& _])]
         (handler {:query-params {"action" "save"}
                   :headers {"datastar-request" "true"}
                   :body-params {:datatable {:test-table {:editing {:rowId "123" :colKey "name"}
                                                         :cells {:123 {:name "Updated"}}}}}})
-        (is (seq @patches) "Expected patch-signals on save")
-        (let [payload (last @patches)
-              signals (json/read-str payload {:key-fn keyword})
-              table-signals (get-in signals [:datatable :test-table])]
-          (is (contains? table-signals :cells) "Save should patch :cells key")
-          (is (nil? (:cells table-signals))
-              "Save should clear :cells using null merge patch")
-          (is (contains? table-signals :editing) "Save should patch :editing key")
-          (is (nil? (:editing table-signals))
-              "Save should clear :editing using null merge patch"))))))
+        (is (empty? @patches) "Save should not patch signals")
+        (is (seq @element-patches) "Save should patch elements")
+        (let [payload (last @element-patches)
+              attrs (second payload)]
+          (is (= :span.flex-1 (first payload)) "Save should patch span display")
+          (is (= "cell-test-table-123-name" (:id attrs)) "Span id should target saved cell")
+          (is (= "Updated" (:data-value attrs)) "Span should carry updated data value"))))))
 
 (deftest make-handler-initial-patch-omits-per-row-signals-test
   (testing "initial signal patch omits per-row/per-cell signals"
