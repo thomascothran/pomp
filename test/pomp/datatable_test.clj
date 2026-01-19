@@ -338,4 +338,10 @@
     ;; Expected format: [:span.flex-1 {:id span-id :data-value (str value)} display-content]
     (is true "See make-handler implementation for span construction with data-value")))
 
+(deftest selection-map-guard-test
+  (testing "selection map should skip start cell hover"
+    (let [js-source (slurp "resources/public/pomp/js/datatable.js")]
+      (is (re-find #"if \(row === start\.row && col === start\.col\) return;" js-source)
+          "Expected guard to avoid selection map when hovering start cell"))))
+
 

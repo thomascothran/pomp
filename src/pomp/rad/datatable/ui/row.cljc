@@ -51,6 +51,9 @@
         cell-signal-path (str cell-base "['" row-id "']['" col-key "']")
         init-cells (str "$" cell-base " ||= {}; $" cell-base "['" row-id "'] ||= {}; ")
         editing-signal (str signal-base ".editing")
+        cancel-edit (str "$" editing-signal " = {rowId: null, colKey: null}; "
+                         init-cells
+                         "$" cell-signal-path " = null")
         ;; Unique ID for the toggle (for patching after save)
         toggle-id (str "cell-" table-id "-" row-id "-" col-key)
         ;; On change: set editing signal, set cell value, and post immediately
@@ -58,15 +61,16 @@
                             init-cells
                             "$" editing-signal " = {rowId: '" row-id "', colKey: '" col-key "'}; "
                             "$" cell-signal-path " = evt.target.checked; "
-                            "@post('" data-url "?action=save')")]
+                            "@post('" data-url "?action=save'); "
+                            cancel-edit)]
     [:td {:data-row row-idx
           :data-col col-idx
           :data-value (str value)
           :data-class (str "{'bg-info/20': $" signal-base ".cellSelection['" cell-key "']}")
-          :data-on:mousedown (str "if ($" editing-signal "?.rowId) return; "
+          :data-on:mousedown (str "if (evt.target.closest('input, button, select, textarea')) return; "
+                                  "if ($" editing-signal "?.rowId) return; "
                                   "$" signal-base ".cellSelectDragging = true; "
-                                  "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
-                                  "$" signal-base ".cellSelection = {'" cell-key "': true}")}
+                                  "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; ")}
      [:input.toggle.toggle-xs.toggle-success
       {:id toggle-id
        :type "checkbox"
@@ -126,15 +130,15 @@
                           init-cells
                           "$" cell-signal-path " = " read-current-value "; "
                           "setTimeout(() => document.getElementById('" input-id "')?.focus(), 0)")
-        ;; Save: set flag, post, clear editing
-        save-handler (str "evt.stopPropagation(); "
-                          "$" submit-flag " = true; "
-                          "@post('" data-url "?action=save'); "
-                          "$" editing-signal " = {rowId: null, colKey: null}")
         ;; Cancel: clear editing, remove cell value
         cancel-edit (str "$" editing-signal " = {rowId: null, colKey: null}; "
                          init-cells
                          "$" cell-signal-path " = null")
+        ;; Save: set flag, post, clear edit state
+        save-handler (str "evt.stopPropagation(); "
+                          "$" submit-flag " = true; "
+                          "@post('" data-url "?action=save'); "
+                          cancel-edit)
         ;; Blur: cancel edit unless submitInProgress (Enter/Escape already handled it)
         blur-handler (str "if ($" submit-flag ") { $" submit-flag " = false; return; } "
                           cancel-edit)
@@ -142,9 +146,15 @@
         keydown-handler (str "if (evt.key === 'Enter') { evt.stopPropagation(); "
                              "$" submit-flag " = true; "
                              "@post('" data-url "?action=save'); "
-                             "$" editing-signal " = {rowId: null, colKey: null} } "
+                             cancel-edit " } "
                              "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")
+        enum-keydown-handler (str "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")
         input-handler (str init-cells "$" cell-signal-path " = evt.target.value")
+        enum-change-handler (str "evt.stopPropagation(); "
+                                 "$" submit-flag " = false; "
+                                 input-handler
+                                 "; @post('" data-url "?action=save'); "
+                                 cancel-edit)
         ;; Display value rendering based on type
         display-content (case col-type
                           :boolean (if value
@@ -169,13 +179,13 @@
         ;; Edit input rendering based on type
         edit-input (case col-type
                      :enum
-                     [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
-                      {:id input-id
-                       :data-on:input input-handler
-                       :data-on:keydown keydown-handler
-                       :data-on:blur blur-handler}
-                      (for [opt (:options col)]
-                        [:option {:value opt} opt])]
+                      [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
+                       {:id input-id
+                        :data-on:change enum-change-handler
+                        :data-on:keydown enum-keydown-handler}
+                       (for [opt (:options col)]
+                         [:option {:value opt} opt])]
+
 
                      :number
                      [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200
@@ -205,10 +215,18 @@
           :data-col col-idx
           :data-value (str value)
           :data-class (str "{'bg-info/20': $" signal-base ".cellSelection['" cell-key "']}")
-          :data-on:mousedown (str "if ($" editing-signal "?.rowId) return; "
+          :data-on:mousedown (str "if (evt.target.closest('input, button, select, textarea')) return; "
+                                  "if ($" editing-signal "?.rowId) { "
+                                  "if (!(" editing-check ")) { "
+                                  "const editingRow = $" editing-signal ".rowId; "
+                                  "const editingCol = $" editing-signal ".colKey; "
+                                  "$" editing-signal " = {rowId: null, colKey: null}; "
+                                  "$" cell-base " ||= {}; "
+                                  "if ($" cell-base "[editingRow]) { $" cell-base "[editingRow][editingCol] = null; } "
+                                  "} else { return; } "
+                                  "} "
                                   "$" signal-base ".cellSelectDragging = true; "
-                                  "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
-                                  "$" signal-base ".cellSelection = {'" cell-key "': true}")}
+                                  "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; ")}
      ;; Use relative container so edit overlay doesn't cause width jump
      [:div.relative
       ;; Display mode: value + pencil button (always in flow, determines cell width)
@@ -235,17 +253,18 @@
        edit-input
        ;; Checkmark button to save
        ;; Use mousedown (not click) so submitInProgress is set BEFORE blur fires
-       [:button.btn.btn-ghost.btn-xs.p-0
-        {:data-on:mousedown save-handler
-         :title "Save"}
-        [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
-                                    :fill "none"
-                                    :viewBox "0 0 24 24"
-                                    :stroke-width "1.5"
-                                    :stroke "currentColor"}
-         [:path {:stroke-linecap "round"
-                 :stroke-linejoin "round"
-                 :d "m4.5 12.75 6 6 9-13.5"}]]]]]]))
+       (when (not= col-type :enum)
+         [:button.btn.btn-ghost.btn-xs.p-0
+          {:data-on:mousedown save-handler
+           :title "Save"}
+          [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
+                                      :fill "none"
+                                      :viewBox "0 0 24 24"
+                                      :stroke-width "1.5"
+                                      :stroke "currentColor"}
+           [:path {:stroke-linecap "round"
+                   :stroke-linejoin "round"
+                   :d "m4.5 12.75 6 6 9-13.5"}]]])]]]))
 
 (defn render-cell
   "Renders a single data cell.
@@ -275,7 +294,12 @@
       ;; Non-editable: standard cell rendering
       :else
       (let [{:keys [render]} col
+            col-key (name (:key col))
             cell-key (str row-idx "-" col-idx)
+            signal-base (str "datatable." table-id)
+            cell-base (str signal-base ".cells")
+            editing-signal (str signal-base ".editing")
+            editing-check (str "$" editing-signal "?.rowId === '" row-id "' && $" editing-signal "?.colKey === '" col-key "'")
             ;; Use raw-value for data-value if provided, otherwise fall back to value
             data-val (if (some? raw-value) raw-value value)
             display-value (if render (render value row) value)]
@@ -283,10 +307,18 @@
               :data-col col-idx
               :data-value (str data-val)
               :data-class (str "{'bg-info/20': $datatable." table-id ".cellSelection['" cell-key "']}")
-              :data-on:mousedown (str "if ($datatable." table-id ".editing?.rowId) return; "
-                                      "$datatable." table-id ".cellSelectDragging = true; "
-                                      "$datatable." table-id ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "
-                                      "$datatable." table-id ".cellSelection = {'" cell-key "': true}")}
+              :data-on:mousedown (str "if (evt.target.closest('input, button, select, textarea')) return; "
+                                      "if ($" editing-signal "?.rowId) { "
+                                      "if (!(" editing-check ")) { "
+                                      "const editingRow = $" editing-signal ".rowId; "
+                                      "const editingCol = $" editing-signal ".colKey; "
+                                      "$" editing-signal " = {rowId: null, colKey: null}; "
+                                      "$" cell-base " ||= {}; "
+                                      "if ($" cell-base "[editingRow]) { $" cell-base "[editingRow][editingCol] = null; } "
+                                      "} else { return; } "
+                                      "} "
+                                      "$" signal-base ".cellSelectDragging = true; "
+                                      "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; ")}
          display-value]))))
 
 (defn render-selection-cell

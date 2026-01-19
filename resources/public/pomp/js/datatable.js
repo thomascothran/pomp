@@ -7,6 +7,8 @@ window.pompCellSelectMove = function(evt, tableId, isDragging, start) {
   
   const row = parseInt(cell.dataset.row);
   const col = parseInt(cell.dataset.col);
+
+  if (row === start.row && col === start.col) return;
   
   // Build rectangular selection
   const selection = {};

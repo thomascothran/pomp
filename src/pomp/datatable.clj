@@ -173,13 +173,8 @@
                                    (let [display-content (render-cell-display value col-type)]
                                      (d*/patch-elements! sse (render-html-fn
                                                               [:span.flex-1 {:id element-id :data-value (str value)} display-content]))))))
-                             ;; Clear the cells signal to remove the edit state
-                             ;; Use nil so merge-patch removes the signals
-                             (d*/patch-signals! sse (json/write-str
-                                                     {:datatable {(keyword id) {:cells nil
-                                                                                :editing nil
-                                                                                :submitInProgress false}}}))
-                             (d*/close-sse! sse))}))
+                              (d*/close-sse! sse))}))
+
         ;; Normal query/render flow
         (let [current-signals (-> raw-signals
                                   (assoc :group-by (mapv keyword (:groupBy raw-signals))))

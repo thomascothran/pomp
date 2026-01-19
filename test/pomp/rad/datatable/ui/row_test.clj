@@ -338,6 +338,35 @@
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (clojure.string/includes? mousedown-handler "if ($datatable.philosophers.editing?.rowId) return"))))
 
+  (testing "mousedown on editable cell does not assign cellSelection"
+    (let [result (row/render-editable-cell {:value "Plato"
+                                            :row-id "123"
+                                            :col {:key :name :editable true}
+                                            :table-id "philosophers"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          td-attrs (second result)
+          mousedown-handler (:data-on:mousedown td-attrs)]
+      (is (some? mousedown-handler))
+      (is (not (clojure.string/includes? mousedown-handler "cellSelection ="))
+          "mousedown should not assign cellSelection directly")))
+
+  (testing "mousedown on editable cell skips selection when clicking inputs"
+    (let [result (row/render-editable-cell {:value "Plato"
+                                            :row-id "123"
+                                            :col {:key :name :editable true}
+                                            :table-id "philosophers"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          td-attrs (second result)
+          mousedown-handler (:data-on:mousedown td-attrs)]
+      (is (some? mousedown-handler))
+      (is (or (clojure.string/includes? mousedown-handler "evt.target.closest('input, button, select, textarea')")
+              (clojure.string/includes? mousedown-handler "evt.target.closest(\"input, button, select, textarea\")"))
+          "Editable cell should guard against selection when interacting with inputs")))
+
   (testing "mousedown on non-editable cell is skipped when any cell is editing"
     (let [result (row/render-cell {:value "Athens"
                                    :row {:id 123 :name "Plato" :city "Athens"}
@@ -348,7 +377,35 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       ;; Uses optional chaining since editing signal may not exist in non-editable tables
-      (is (clojure.string/includes? mousedown-handler "if ($datatable.philosophers.editing?.rowId) return")))))
+      (is (clojure.string/includes? mousedown-handler "if ($datatable.philosophers.editing?.rowId) return"))))
+
+  (testing "mousedown on non-editable cell skips selection when clicking inputs"
+    (let [result (row/render-cell {:value "Athens"
+                                   :row {:id 123 :name "Plato" :city "Athens"}
+                                   :col {:key :city}
+                                   :table-id "philosophers"
+                                   :row-idx 0
+                                   :col-idx 1})
+          td-attrs (second result)
+          mousedown-handler (:data-on:mousedown td-attrs)]
+      (is (some? mousedown-handler))
+      (is (or (clojure.string/includes? mousedown-handler "evt.target.closest('input, button, select, textarea')")
+              (clojure.string/includes? mousedown-handler "evt.target.closest(\"input, button, select, textarea\")"))
+          "Non-editable cell should guard against selection when interacting with inputs")))
+
+  (testing "mousedown on non-editable cell does not assign cellSelection"
+    (let [result (row/render-cell {:value "Athens"
+                                   :row {:id 123 :name "Plato" :city "Athens"}
+                                   :col {:key :city}
+                                   :table-id "philosophers"
+                                   :row-idx 0
+                                   :col-idx 1})
+          td-attrs (second result)
+          mousedown-handler (:data-on:mousedown td-attrs)]
+      (is (some? mousedown-handler))
+      (is (not (clojure.string/includes? mousedown-handler "cellSelection ="))
+          "mousedown should not assign cellSelection directly")))
+)
 
 (deftest render-editable-cell-escape-test
   (testing "escape clears editing signal and removes cell value"
@@ -528,7 +585,66 @@
                                      buttons))
           click-handler (-> edit-button second :data-on:click)]
       ;; Reads initial value dynamically from dataset.value (not hardcoded SSR value)
-      (is (clojure.string/includes? click-handler "dataset.value")))))
+      (is (clojure.string/includes? click-handler "dataset.value"))))
+
+  (testing "enum select autosaves on change without blur"
+    (let [result (row/render-editable-cell {:value "Stoicism"
+                                            :row-id "123"
+                                            :col {:key :school
+                                                  :type :enum
+                                                  :editable true
+                                                  :options ["Stoicism" "Platonism"]}
+                                            :table-id "philosophers"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          select (find-select result)
+          attrs (second select)
+          change-handler (:data-on:change attrs)
+          keydown-handler (:data-on:keydown attrs)]
+      (is (nil? (:data-on:blur attrs))
+          "Enum select should not use blur to cancel editing")
+      (is (some? change-handler)
+          "Enum select should autosave on change")
+      (when change-handler
+        (is (clojure.string/includes? change-handler "@post")
+            "Enum change handler should post")
+        (is (clojure.string/includes? change-handler "action=save")
+            "Enum change handler should post to save action")
+        (is (or (clojure.string/includes? change-handler "editing")
+                (clojure.string/includes? change-handler "rowId"))
+            "Enum change handler should clear editing")
+        (is (clojure.string/includes? change-handler "submitInProgress")
+            "Enum change handler should manage submitInProgress")
+        (is (clojure.string/includes? change-handler "submitInProgress = false")
+            "Enum change handler should clear submitInProgress"))
+      (is (some? keydown-handler)
+          "Enum select should keep keydown handler")
+      (is (clojure.string/includes? keydown-handler "Escape")
+          "Escape should cancel enum editing")
+      (is (not (clojure.string/includes? keydown-handler "Enter"))
+          "Enum keydown should not submit on Enter")
+      (is (not (clojure.string/includes? keydown-handler "@post"))
+          "Enum keydown should not post on Enter")))
+
+  (testing "enum edit overlay omits checkmark button"
+    (let [result (row/render-editable-cell {:value "Stoicism"
+                                            :row-id "123"
+                                            :col {:key :school
+                                                  :type :enum
+                                                  :editable true
+                                                  :options ["Stoicism" "Platonism"]}
+                                            :table-id "philosophers"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          buttons (find-button result)
+          save-button (some #(when-let [handler (:data-on:mousedown (second %))]
+                               (when (clojure.string/includes? handler "@post")
+                                 %))
+                             buttons)]
+      (is (nil? save-button)
+          "Enum editing should not render a checkmark submit button"))))
 
 (deftest render-editable-cell-number-test
   (testing "number type renders number input"
@@ -614,7 +730,41 @@
       ;; No pencil/save buttons - just the toggle
       (is (empty? buttons))))
 
+  (testing "boolean cell mousedown does not assign cellSelection"
+    (let [result (row/render-cell {:value true
+                                   :row-id "123"
+                                   :col {:key :verified
+                                         :type :boolean
+                                         :editable true}
+                                   :table-id "philosophers"
+                                   :data-url "/data"
+                                   :row-idx 0
+                                   :col-idx 0})
+          td-attrs (second result)
+          mousedown-handler (:data-on:mousedown td-attrs)]
+      (is (some? mousedown-handler))
+      (is (not (clojure.string/includes? mousedown-handler "cellSelection ="))
+          "mousedown should not assign cellSelection directly")))
+
+  (testing "boolean cell mousedown skips selection when clicking inputs"
+    (let [result (row/render-cell {:value true
+                                   :row-id "123"
+                                   :col {:key :verified
+                                         :type :boolean
+                                         :editable true}
+                                   :table-id "philosophers"
+                                   :data-url "/data"
+                                   :row-idx 0
+                                   :col-idx 0})
+          td-attrs (second result)
+          mousedown-handler (:data-on:mousedown td-attrs)]
+      (is (some? mousedown-handler))
+      (is (or (clojure.string/includes? mousedown-handler "evt.target.closest('input, button, select, textarea')")
+              (clojure.string/includes? mousedown-handler "evt.target.closest(\"input, button, select, textarea\")"))
+          "Boolean cell should guard against selection when interacting with inputs")))
+
   (testing "boolean true has checked attribute"
+
     (let [result (row/render-cell {:value true
                                    :row-id "123"
                                    :col {:key :verified
