@@ -151,7 +151,8 @@
                              "@post('" data-url "?action=save'); "
                              cancel-edit " } "
                              "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")
-        enum-keydown-handler (str "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")
+        enum-keydown-handler (str "if (evt.key === 'Escape' || evt.key === 'Esc') { evt.stopPropagation(); $" submit-flag " = true; " cancel-edit " }")
+        enum-blur-handler (str "setTimeout(() => { if ($" editing-signal "?.rowId === '" row-id "' && $" editing-signal "?.colKey === '" col-key "') { " cancel-edit " } }, 0)")
         input-handler (str init-cells "$" cell-signal-path " = evt.target.value")
         enum-change-handler (str "evt.stopPropagation(); "
                                  "$" submit-flag " = false; "
@@ -181,13 +182,15 @@
                           value)
         ;; Edit input rendering based on type
         edit-input (case col-type
-                     :enum
-                     [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
-                      {:id input-id
-                       :data-on:change enum-change-handler
-                       :data-on:keydown enum-keydown-handler}
-                      (for [opt (:options col)]
-                        [:option {:value opt} opt])]
+                      :enum
+                      [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
+                       {:id input-id
+                        :data-on:change enum-change-handler
+                        :data-on:keydown enum-keydown-handler
+                        :data-on:blur enum-blur-handler}
+                       (for [opt (:options col)]
+                         [:option {:value opt} opt])]
+
 
                      :number
                      [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200

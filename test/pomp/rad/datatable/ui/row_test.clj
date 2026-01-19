@@ -614,9 +614,16 @@
           select (find-select result)
           attrs (second select)
           change-handler (:data-on:change attrs)
-          keydown-handler (:data-on:keydown attrs)]
-      (is (nil? (:data-on:blur attrs))
-          "Enum select should not use blur to cancel editing")
+          keydown-handler (:data-on:keydown attrs)
+          blur-handler (:data-on:blur attrs)]
+      (is (some? blur-handler)
+          "Enum select should cancel on blur")
+      (is (clojure.string/includes? blur-handler "setTimeout")
+          "Enum blur should defer cancellation")
+      (is (clojure.string/includes? blur-handler "editing?.rowId")
+          "Enum blur should check editing row")
+      (is (clojure.string/includes? blur-handler "editing?.colKey")
+          "Enum blur should check editing column")
       (is (some? change-handler)
           "Enum select should autosave on change")
       (when change-handler
