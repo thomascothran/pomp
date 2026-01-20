@@ -20,15 +20,6 @@
         (for [col cols]
           (row/render-cell {:value (get row (:key col)) :row row :col col}))])")
 
-(defn- escape-js-string
-  "Escapes a string for use in JavaScript."
-  [s]
-  (-> (str s)
-      (clojure.string/replace "\\" "\\\\")
-      (clojure.string/replace "'" "\\'")
-      (clojure.string/replace "\n" "\\n")
-      (clojure.string/replace "\r" "\\r")))
-
 (defn render-boolean-cell
   "Renders a boolean cell as a toggle switch that auto-saves on change.
 
@@ -112,6 +103,7 @@
         init-cells (str "$" cell-base " ||= {}; $" cell-base "['" row-id "'] ||= {}; ")
         editing-signal (str signal-base ".editing")
         submit-flag (str signal-base ".submitInProgress")
+        enum-blur-lock (str signal-base ".enumBlurLock")
         ;; Unique ID for this input (to focus it when entering edit mode)
         input-id (str "editInput-" row-id "-" col-key)
         ;; Unique ID for the display span (for patching after save)
@@ -151,8 +143,15 @@
                              "@post('" data-url "?action=save'); "
                              cancel-edit " } "
                              "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")
-        enum-keydown-handler (str "if (evt.key === 'Escape' || evt.key === 'Esc') { evt.stopPropagation(); $" submit-flag " = true; " cancel-edit " }")
-        enum-blur-handler (str "setTimeout(() => { if ($" editing-signal "?.rowId === '" row-id "' && $" editing-signal "?.colKey === '" col-key "') { " cancel-edit " } }, 0)")
+        enum-mousedown-handler (str "evt.stopPropagation(); $" enum-blur-lock " = Date.now()")
+        enum-keydown-handler (str "if (evt.key === 'Escape' || evt.key === 'Esc') { evt.stopPropagation(); $" submit-flag " = true; " cancel-edit " } "
+                                  "if (evt.key === 'ArrowDown' || evt.key === 'ArrowUp' || evt.key === 'Enter' || evt.key === ' ') { $" enum-blur-lock " = Date.now(); }")
+        enum-blur-handler (str "setTimeout(() => { "
+                               "const now = Date.now(); "
+                               "if ($" enum-blur-lock " && (now - $" enum-blur-lock " < 200)) { return; } "
+                               "if ($" editing-signal "?.rowId === '" row-id "' && $" editing-signal "?.colKey === '" col-key "') { "
+                               cancel-edit
+                               " } }, 0)")
         input-handler (str init-cells "$" cell-signal-path " = evt.target.value")
         enum-change-handler (str "evt.stopPropagation(); "
                                  "$" submit-flag " = false; "
@@ -182,15 +181,15 @@
                           value)
         ;; Edit input rendering based on type
         edit-input (case col-type
-                      :enum
-                      [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
-                       {:id input-id
-                        :data-on:change enum-change-handler
-                        :data-on:keydown enum-keydown-handler
-                        :data-on:blur enum-blur-handler}
-                       (for [opt (:options col)]
-                         [:option {:value opt} opt])]
-
+                     :enum
+                     [:select.select.select-xs.select-ghost.flex-1.min-w-0.bg-base-200
+                      {:id input-id
+                       :data-on:mousedown enum-mousedown-handler
+                       :data-on:change enum-change-handler
+                       :data-on:keydown enum-keydown-handler
+                       :data-on:blur enum-blur-handler}
+                      (for [opt (:options col)]
+                        [:option {:value opt} opt])]
 
                      :number
                      [:input.input.input-xs.input-ghost.flex-1.min-w-0.bg-base-200

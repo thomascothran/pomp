@@ -562,7 +562,8 @@
       ;; Select should not create cell signal on render
       (let [attrs (second select)
             handler (or (:data-on:change attrs)
-                        (:data-on:input attrs))]
+                        (:data-on:input attrs))
+            mousedown-handler (:data-on:mousedown attrs)]
         (is (nil? (:data-bind attrs))
             "Select should not bind on render")
         (is (nil? (:data-ref attrs))
@@ -570,7 +571,11 @@
         (is (some? handler)
             "Select should update cell signal on change")
         (is (clojure.string/includes? (or handler "") "$datatable.philosophers.cells['123']['school']")
-            "Select handler should target cell signal path"))
+            "Select handler should target cell signal path")
+        (is (some? mousedown-handler)
+            "Select should set mousedown handler")
+        (is (clojure.string/includes? (or mousedown-handler "") "enumBlurLock")
+            "Select mousedown should set enum blur lock"))
       ;; Has all options
       (is (= 3 (count options)))
       ;; Options have correct values
@@ -620,6 +625,10 @@
           "Enum select should cancel on blur")
       (is (clojure.string/includes? blur-handler "setTimeout")
           "Enum blur should defer cancellation")
+      (is (clojure.string/includes? blur-handler "Date.now")
+          "Enum blur should compare timestamps")
+      (is (clojure.string/includes? blur-handler "enumBlurLock")
+          "Enum blur should honor blur lock")
       (is (clojure.string/includes? blur-handler "editing?.rowId")
           "Enum blur should check editing row")
       (is (clojure.string/includes? blur-handler "editing?.colKey")
@@ -642,8 +651,10 @@
           "Enum select should keep keydown handler")
       (is (clojure.string/includes? keydown-handler "Escape")
           "Escape should cancel enum editing")
-      (is (not (clojure.string/includes? keydown-handler "Enter"))
-          "Enum keydown should not submit on Enter")
+      (is (clojure.string/includes? keydown-handler "ArrowDown")
+          "ArrowDown should update blur lock")
+      (is (clojure.string/includes? keydown-handler "ArrowUp")
+          "ArrowUp should update blur lock")
       (is (not (clojure.string/includes? keydown-handler "@post"))
           "Enum keydown should not post on Enter")))
 
