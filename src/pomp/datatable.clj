@@ -1,12 +1,20 @@
 (ns pomp.datatable
   "Main entry point for the datatable component.
 
-   Use `make-handler` to create a Ring handler for your datatable."
+   Use `make-handler` to create a Ring handler for your datatable.
+
+   For more control, you can require the sub-namespaces directly:
+   - `pomp.rad.datatable.state.*` for state transition functions
+   - `pomp.rad.datatable.ui.*` for rendering functions
+   - `pomp.rad.datatable.ui.row` for default row/cell render functions
+   - `pomp.rad.datatable.query.*` for query implementations
+  "
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.ring :refer [->sse-response on-open]]
             [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [pomp.rad.datatable.core :as dt]
+            [pomp.rad.datatable.state.table :as state]
+            [pomp.rad.datatable.ui.table :as table]
             [pomp.rad.datatable.state.column :as column-state]
             [pomp.rad.datatable.state.group :as group-state]
             [pomp.rad.datatable.state.filter :as filter-state]
@@ -42,13 +50,13 @@
 
 (defn extract-cell-edit
   "Extracts a cell edit from the signals.
-   
+
    Uses the :editing state to determine which cell is being edited,
    then retrieves the value from the :cells map.
-   
+
    The :editing signal format: {:rowId \"...\" :colKey \"...\"}
    The :cells signal format: {row-id-keyword {col-key-keyword \"value\"}}
-   
+
    Returns {:row-id \"...\" :col-key :keyword :value \"...\"} or nil if no edit found."
   [signals]
   (when-let [editing (:editing signals)]
@@ -69,11 +77,11 @@
 
 (defn- render-cell-display
   "Renders the display content for a cell based on column type.
-   
+
    For boolean columns, renders a checkmark or X icon.
    Handles both boolean values (true/false) and string representations (\"true\"/\"false\")
    since Datastar may send checkbox values as strings.
-   
+
    For other types, returns the value as-is."
   [value col-type]
   (case col-type
@@ -173,7 +181,7 @@
                                    (let [display-content (render-cell-display value col-type)]
                                      (d*/patch-elements! sse (render-html-fn
                                                               [:span.flex-1 {:id element-id :data-value (str value)} display-content]))))))
-                              (d*/close-sse! sse))}))
+                             (d*/close-sse! sse))}))
 
         ;; Normal query/render flow
         (let [current-signals (-> raw-signals
@@ -183,21 +191,18 @@
               column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
               ordered-cols (column-state/reorder columns column-order)
               visible-cols (column-state/filter-visible ordered-cols columns-state)
-              {:keys [signals rows total-rows]} (dt/query current-signals query-params req query-fn)
+              {:keys [signals rows total-rows]} (state/query current-signals query-params req query-fn)
               group-by (:group-by signals)
               groups (when (seq group-by) (group-state/group-rows rows group-by))
-              filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))
-              ;; Initialize expanded state for each group (all collapsed by default)
-              expanded-signals (when (seq groups)
-                                 (into {} (map (fn [idx] [(keyword (str idx)) false]) groups)))]
+              filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))]
           (->sse-response req
                           {on-open
                            (fn [sse]
                              (when initial-load?
-                               (d*/patch-elements! sse (render-html-fn (dt/render-skeleton {:id id
-                                                                                            :cols visible-cols
-                                                                                            :n skeleton-rows
-                                                                                            :selectable? selectable?})))
+                               (d*/patch-elements! sse (render-html-fn (table/render-skeleton {:id id
+                                                                                               :cols visible-cols
+                                                                                               :n skeleton-rows
+                                                                                               :selectable? selectable?})))
                                (d*/execute-script! sse cell-select-script))
                              (d*/patch-signals! sse (json/write-str
                                                      {:datatable {(keyword id) {:sort (:sort signals)
@@ -208,27 +213,25 @@
                                                                                 :columnOrder column-order
                                                                                 :dragging nil
                                                                                 :dragOver nil}}}))
-                             (d*/patch-elements! sse (render-html-fn (dt/render {:id id
-                                                                                 :cols visible-cols
-                                                                                 :rows rows
-                                                                                 :groups groups
-                                                                                 :sort-state (:sort signals)
-                                                                                 :filters (:filters signals)
-                                                                                 :group-by group-by
-                                                                                 :total-rows total-rows
-                                                                                 :page-size (get-in signals [:page :size])
-                                                                                 :page-current (get-in signals [:page :current])
-                                                                                 :page-sizes page-sizes
-                                                                                 :data-url data-url
-                                                                                 :selectable? selectable?
-                                                                                 :render-row render-row
-                                                                                 :render-header render-header
-                                                                                 :render-cell render-cell
-                                                                                 :filter-operations filter-operations
-                                                                                 :toolbar (columns-menu/render {:cols ordered-cols
-                                                                                                                :columns-state columns-state
-                                                                                                                :table-id id
-                                                                                                                :data-url data-url})})))
+                             (d*/patch-elements! sse (render-html-fn (table/render {:id id
+                                                                                    :cols visible-cols
+                                                                                    :rows rows
+                                                                                    :groups groups
+                                                                                    :sort-state (:sort signals)
+                                                                                    :filters (:filters signals)
+                                                                                    :group-by group-by
+                                                                                    :total-rows total-rows
+                                                                                    :page-size (get-in signals [:page :size])
+                                                                                    :page-current (get-in signals [:page :current])
+                                                                                    :page-sizes page-sizes
+                                                                                    :data-url data-url
+                                                                                    :selectable? selectable?
+                                                                                    :render-row render-row
+                                                                                    :render-header render-header
+                                                                                    :render-cell render-cell
+                                                                                    :filter-operations filter-operations
+                                                                                    :toolbar (columns-menu/render {:cols ordered-cols
+                                                                                                                   :columns-state columns-state
+                                                                                                                   :table-id id
+                                                                                                                   :data-url data-url})})))
                              (d*/close-sse! sse))}))))))
-
-

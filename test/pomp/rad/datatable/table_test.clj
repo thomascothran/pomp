@@ -1,8 +1,6 @@
 (ns pomp.rad.datatable.table-test
-  (:require [clojure.edn :as edn]
-            [clojure.test :refer [deftest is testing]]
-            [pomp.rad.datatable.core :as dt]
-            [pomp.rad.datatable.ui.table :as table]))
+  (:require
+   [clojure.test :refer [deftest is testing]] [pomp.rad.datatable.ui.table :as table]))
 
 (defn- strip-script-content
   "Strips the content from [:script ...] forms, keeping only [:script :present].

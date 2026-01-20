@@ -2,7 +2,7 @@
   (:require [clojure.data.json :as json]
             [clojure.test :refer [deftest is testing]]
             [pomp.datatable :as datatable]
-            [pomp.rad.datatable.core :as dt]
+            [pomp.rad.datatable.ui.table :as table]
             [starfederation.datastar.clojure.adapter.ring :as ring]
             [starfederation.datastar.clojure.api :as d*]))
 
@@ -59,22 +59,22 @@
 ;; =============================================================================
 
 (deftest dt-render-accepts-filter-operations-test
-  (testing "dt/render passes :filter-operations to table, affecting filter menu operations"
+  (testing "render passes :filter-operations to table, affecting filter menu operations"
     (let [cols [{:key :name :label "Name" :type :string}
                 {:key :status :label "Status" :type :enum}]
           filter-ops {:string [{:value "custom-str" :label "Custom String Op"}]
                       :enum [{:value "custom-enum" :label "Custom Enum Op"}]}
-          rendered (dt/render {:id "test-table"
-                               :cols cols
-                               :rows []
-                               :sort-state []
-                               :filters {}
-                               :total-rows 0
-                               :page-size 10
-                               :page-current 0
-                               :page-sizes [10 25]
-                               :data-url "/data"
-                               :filter-operations filter-ops})
+          rendered (table/render {:id "test-table"
+                                  :cols cols
+                                  :rows []
+                                  :sort-state []
+                                  :filters {}
+                                  :total-rows 0
+                                  :page-size 10
+                                  :page-current 0
+                                  :page-sizes [10 25]
+                                  :data-url "/data"
+                                  :filter-operations filter-ops})
           name-ops (find-operations-for-column rendered :name)
           status-ops (find-operations-for-column rendered :status)]
 
@@ -84,7 +84,7 @@
       (is (not (contains? name-ops "contains"))
           "String column should NOT have default 'contains' when overridden")
 
-      ;; Enum column should use custom operations  
+      ;; Enum column should use custom operations
       (is (contains? status-ops "Custom Enum Op")
           "Enum column should have custom filter operation")
       (is (not (contains? status-ops "is any of"))
@@ -93,16 +93,16 @@
   (testing "columns use type-appropriate defaults when no filter-operations provided"
     (let [cols [{:key :name :label "Name" :type :string}
                 {:key :active :label "Active" :type :boolean}]
-          rendered (dt/render {:id "test-table"
-                               :cols cols
-                               :rows []
-                               :sort-state []
-                               :filters {}
-                               :total-rows 0
-                               :page-size 10
-                               :page-current 0
-                               :page-sizes [10 25]
-                               :data-url "/data"})
+          rendered (table/render {:id "test-table"
+                                  :cols cols
+                                  :rows []
+                                  :sort-state []
+                                  :filters {}
+                                  :total-rows 0
+                                  :page-size 10
+                                  :page-current 0
+                                  :page-sizes [10 25]
+                                  :data-url "/data"})
           name-ops (find-operations-for-column rendered :name)
           active-ops (find-operations-for-column rendered :active)]
 
@@ -163,9 +163,9 @@
                                            :render-html-fn identity
                                            :save-fn (fn [_] {:success true})})]
       (with-redefs [ring/->sse-response (fn [_ opts]
-                                         (when-let [on-open-fn (get opts ring/on-open)]
-                                           (on-open-fn ::fake-sse))
-                                         {:status 200})
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
                     d*/patch-signals! (fn [_ payload]
                                         (swap! patches conj payload))
                     d*/patch-elements! (fn [_ payload]
@@ -175,7 +175,7 @@
         (handler {:query-params {"action" "save"}
                   :headers {"datastar-request" "true"}
                   :body-params {:datatable {:test-table {:editing {:rowId "123" :colKey "name"}
-                                                        :cells {:123 {:name "Updated"}}}}}})
+                                                         :cells {:123 {:name "Updated"}}}}}})
         (is (empty? @patches) "Save should not patch signals")
         (is (seq @element-patches) "Save should patch elements")
         (let [payload (last @element-patches)
@@ -198,9 +198,9 @@
                                            :data-url "/data"
                                            :render-html-fn (fn [_] "<html>")})]
       (with-redefs [ring/->sse-response (fn [_ opts]
-                                         (when-let [on-open-fn (get opts ring/on-open)]
-                                           (on-open-fn ::fake-sse))
-                                         {:status 200})
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
                     d*/patch-signals! (fn [_ payload]
                                         (swap! patches conj payload))
                     d*/patch-elements! (fn [& _])
@@ -342,5 +342,3 @@
     (let [js-source (slurp "resources/public/pomp/js/datatable.js")]
       (is (re-find #"if \(row === start\.row && col === start\.col\) return;" js-source)
           "Expected guard to avoid selection map when hovering start cell"))))
-
-
