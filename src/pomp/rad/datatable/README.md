@@ -11,6 +11,7 @@ A server-rendered datatable component for Clojure web applications using Datasta
 - **Column visibility**: Show/hide columns via menu
 - **Row grouping**: Group rows by any column
 - **Row selection**: Optional checkbox selection
+- **Editable cells**: Inline editing with save on Enter/blur
 - **Skeleton loading**: Smooth loading states
 
 ## Quick Start
@@ -67,14 +68,23 @@ Creates a Ring handler for datatable data updates. Handles filtering, sorting, p
 | `:row-id-fn` | `fn` | `:id` | Function to get unique row ID |
 | `:signal-path` | `[keyword]` | `[:datatable]` | Path in signals where table state lives |
 | `:skeleton-rows` | `int` | `10` | Number of skeleton rows on initial load |
+| `:save-fn` | `fn` | `nil` | Save function for editable cells (see below) |
 
 #### Column spec shape
 
 ```clojure
 {:key :name
  :label "Name"
- :type :text}  ;; :text or :enum
+ :type :text      ;; :text or :enum
+ :editable true}  ;; optional - enables inline editing
 ```
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `:key` | `keyword` | Yes | Column identifier, matches data key |
+| `:label` | `string` | Yes | Display label in header |
+| `:type` | `keyword` | Yes | `:text` or `:enum` |
+| `:editable` | `boolean` | No | Enable inline editing for this column |
 
 ### `query-fn`
 
@@ -124,3 +134,93 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 | `:rows`      | `[...]`| The rows for the current page after filtering/sorting |
 | `:total-rows`| `int`  | Total count of rows **after filtering** (for pagination) |
 | `:page`      | `map`  | `{:size int :current int}` - possibly clamped page state |
+
+### `save-fn`
+
+The `save-fn` is called when a user edits a cell and saves (via Enter key or blur). Use `sql/save-fn` for SQL databases, or implement your own for custom persistence.
+
+#### Signature
+
+```clojure
+(save-fn {:row-id row-id :col-key col-key :value value :req request}) => {:success true}
+```
+
+#### Input map
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:row-id` | `string` | The row identifier (from `:row-id-fn`) |
+| `:col-key` | `keyword` | The column key being edited |
+| `:value` | `any` | The new value |
+| `:req` | `map` | The Ring request (for context) |
+
+#### SQL save function
+
+The built-in SQL save function generates UPDATE statements:
+
+```clojure
+(require '[pomp.rad.datatable.query.sql :as sqlq])
+
+(def execute! (fn [sqlvec] (jdbc/execute! my-datasource sqlvec)))
+
+(def save! (sqlq/save-fn {:table "users"
+                          :id-column :id}   ;; :id-column defaults to :id
+                         execute!))
+```
+
+| Argument | Type | Description |
+|----------|------|-------------|
+| `config` | `map` | Configuration map (see below) |
+| `execute!` | `fn` | `(fn [sqlvec] ...)` - executes SQL (same as query-fn) |
+
+| Config Option | Type | Default | Description |
+|---------------|------|---------|-------------|
+| `:table` | `string` | required | Database table name |
+| `:id-column` | `keyword` | `:id` | Column for WHERE clause |
+
+## Editable Cells Example
+
+Complete example with inline editing and SQL persistence:
+
+```clojure
+(ns myapp.routes
+  (:require [pomp.datatable :as dt]
+            [pomp.rad.datatable.query.sql :as sqlq]
+            [next.jdbc :as jdbc]))
+
+(def execute! (fn [sqlvec] (jdbc/execute! my-ds sqlvec)))
+
+(def users-table-handler
+  (dt/make-handler
+    {:query-fn (sqlq/query-fn {:table-name "users"} execute!)
+     :save-fn (sqlq/save-fn {:table "users"} execute!)
+     :columns [{:key :name :label "Name" :type :text :editable true}
+               {:key :email :label "Email" :type :text :editable true}
+               {:key :role :label "Role" :type :enum}]
+     :id "users-table"
+     :data-url "/api/users"}))
+```
+
+### Editing behavior
+
+- **Double-click** a cell to enter edit mode
+- **Enter** saves and exits edit mode
+- **Escape** cancels and reverts to original value
+- **Blur** (clicking outside) saves and exits edit mode
+- Non-editable columns ignore double-click
+
+### Signal structure
+
+For advanced customization, the editing state is stored in signals:
+
+```javascript
+{
+  datatable: {
+    "table-id": {
+      editing: { rowId: "123", colKey: "name" },  // Currently editing
+      submitInProgress: false,                     // Prevents double-submit
+      cells: { "123": { "name": "New Value" } }   // Pending edits
+    }
+  }
+}
+```

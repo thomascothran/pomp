@@ -1,0 +1,834 @@
+# Datastar Framework
+
+## Introduction
+
+Datastar is a lightweight hypermedia framework for building everything from simple sites to real-time collaborative web applications. It provides a minimalist, attribute-based approach for state management, event handling, and DOM manipulation directly in HTML using declarative `data-*` attributes. The framework weighs only 10.23 KiB and can be added to any project via a single script tag. Datastar follows the "Hypermedia On Whatever you Like" (HOWL) philosophy, allowing backends in any language to send Server-Sent Events (SSE) that update the frontend declaratively.
+
+The architecture consists of three main components: a reactive signal system based on fine-grained reactivity with automatic dependency tracking, a plugin-based attribute system that processes `data-*` attributes on HTML elements, and a backend SDK specification that uses SSE to stream updates from servers. The frontend engine handles signal management, DOM morphing with state preservation, and event processing. Backend SDKs send events like `datastar-patch-elements` and `datastar-patch-signals` over SSE to update the UI reactively. The framework uses an intelligent DOM morphing algorithm that preserves element state and focus during updates.
+
+## Frontend APIs
+
+### data-bind: Two-way data binding
+
+Creates a signal (if one doesn't already exist) and sets up two-way data binding between it and an element's value. Supports all input types including text, checkbox, radio, select, textarea, and file inputs. For checkboxes and radios, automatically manages boolean/string values. For file inputs, converts files to base64 data URIs.
+
+```html
+<!-- Simple text input binding -->
+<input type="text" data-bind:username />
+<div data-text="$username"></div>
+
+<!-- Checkbox binding (boolean) -->
+<input type="checkbox" data-bind:agreed />
+
+<!-- Radio buttons (shares same signal) -->
+<input type="radio" data-bind:color value="red" />
+<input type="radio" data-bind:color value="blue" />
+
+<!-- Select dropdown -->
+<select data-bind:country>
+  <option value="us">United States</option>
+  <option value="ca">Canada</option>
+</select>
+
+<!-- Multi-select (binds to array) -->
+<select multiple data-bind:tags>
+  <option value="js">JavaScript</option>
+  <option value="py">Python</option>
+</select>
+
+<!-- File input (converts to base64) -->
+<input type="file" data-bind:avatar />
+```
+
+### data-on: Event handling
+
+Attaches an event listener to an element, executing an expression whenever the event is triggered. Supports modifiers for event behavior control like `prevent`, `stop`, `once`, `passive`, `capture`, `outside`, and `window`. Can call backend endpoints using the `@get()`, `@post()`, etc. action functions.
+
+```html
+<!-- Basic click event -->
+<button data-on:click="$count++">Increment</button>
+
+<!-- Prevent default form submission -->
+<form data-on:submit__prevent="@post('/save')">
+  <input data-bind:email />
+  <button type="submit">Submit</button>
+</form>
+
+<!-- Stop propagation -->
+<div data-on:click="console.log('outer')">
+  <button data-on:click__stop="console.log('inner')">Click</button>
+</div>
+
+<!-- Listen on window -->
+<div data-on:resize__window="$width = window.innerWidth"></div>
+
+<!-- Outside click (close dropdown) -->
+<div data-on:click__outside="$showMenu = false"></div>
+
+<!-- Debounced input -->
+<input data-on:input__debounce.500ms="@get('/search?q=' + $query)" />
+
+<!-- Once modifier -->
+<button data-on:click__once="$initialized = true">Initialize</button>
+
+<!-- With view transition -->
+<button data-on:click__viewtransition="@get('/page2')">Next</button>
+```
+
+### data-text: Text content binding
+
+Binds the text content of an element to an expression. The expression is evaluated and the result is converted to a string and set as the element's textContent. Updates automatically when dependent signals change.
+
+```html
+<!-- Display signal value -->
+<div data-text="$username"></div>
+
+<!-- Transform signal value -->
+<div data-text="$title.toUpperCase()"></div>
+
+<!-- Computed expression -->
+<div data-text="`Hello, ${$name}!`"></div>
+
+<!-- Math operations -->
+<div data-text="$price * $quantity"></div>
+
+<!-- Conditional text -->
+<div data-text="$count > 0 ? `${$count} items` : 'No items'"></div>
+
+<!-- Array join -->
+<div data-text="$tags.join(', ')"></div>
+```
+
+### data-show: Conditional visibility
+
+Shows or hides an element based on whether an expression evaluates to true or false. Uses CSS `display: none` to hide elements. The original display value is preserved and restored when showing.
+
+```html
+<!-- Simple boolean -->
+<div data-show="$isVisible">Content</div>
+
+<!-- Comparison -->
+<div data-show="$count > 0">You have items</div>
+
+<!-- Logical operators -->
+<div data-show="$isLoggedIn && !$isLoading">Welcome back!</div>
+
+<!-- Negation -->
+<div data-show="!$hasError">Everything is fine</div>
+
+<!-- Complex condition -->
+<div data-show="$user.role === 'admin' || $user.id === $currentUserId">
+  Admin controls
+</div>
+```
+
+### data-class: Dynamic CSS classes
+
+Adds or removes a class to or from an element based on an expression. Can bind a single class with key syntax or multiple classes with object syntax. Classes are added when the expression is truthy and removed when falsy.
+
+```html
+<!-- Single class binding -->
+<div data-class:active="$isActive">Item</div>
+
+<!-- Multiple classes with object -->
+<div data-class="{ 'text-red': $hasError, 'text-green': $isSuccess }">
+  Status message
+</div>
+
+<!-- Dynamic class name -->
+<div data-class="{ [$theme]: true }">Themed content</div>
+
+<!-- Combining with static classes -->
+<div class="btn" data-class:disabled="$isDisabled">Button</div>
+```
+
+### data-style: Dynamic inline styles
+
+Sets CSS styles on an element using either key-based or object syntax. Styles are kept in sync with reactive signals. The original styles are preserved and restored when the reactive styles are removed.
+
+```html
+<!-- Single style property -->
+<div data-style:color="$themeColor">Colored text</div>
+
+<!-- Multiple styles with object -->
+<div data-style="{
+  color: $textColor,
+  backgroundColor: $bgColor,
+  fontSize: $fontSize + 'px'
+}">Styled content</div>
+
+<!-- Conditional styling -->
+<div data-style:opacity="$isLoading ? 0.5 : 1">Content</div>
+
+<!-- CSS variables -->
+<div data-style:--theme-color="$primaryColor">
+  Uses CSS variable
+</div>
+
+<!-- Transform -->
+<div data-style:transform="`translateX(${$offset}px)`">Moved element</div>
+```
+
+### data-attr: Dynamic HTML attributes
+
+Sets the value of any HTML attribute to an expression and keeps it in sync. Can set a single attribute with key syntax or multiple attributes with object syntax. Handles boolean attributes, null/undefined values, and JSON serialization.
+
+```html
+<!-- Single attribute -->
+<img data-attr:src="$imageUrl" />
+
+<!-- Boolean attribute -->
+<button data-attr:disabled="$isLoading">Submit</button>
+
+<!-- Multiple attributes with object -->
+<input data-attr="{
+  placeholder: $placeholderText,
+  maxlength: $maxLength,
+  required: $isRequired
+}" />
+
+<!-- Data attributes -->
+<div data-attr:data-id="$userId">User info</div>
+
+<!-- ARIA attributes -->
+<button data-attr:aria-label="$buttonLabel">
+  Icon
+</button>
+
+<!-- href binding -->
+<a data-attr:href="`/user/${$userId}`">Profile</a>
+```
+
+### data-init: Element initialization
+
+Runs an expression when the element is loaded into the DOM. Useful for initialization logic, fetching data on load, or setting up initial state. Supports delay modifier for delayed execution.
+
+```html
+<!-- Fetch data on load -->
+<div data-init="@get('/api/data')"></div>
+
+<!-- Initialize signal -->
+<div data-init="$count = 0; $message = 'Hello'"></div>
+
+<!-- Delayed initialization -->
+<div data-init__delay.1s="@get('/api/data')"></div>
+
+<!-- Call function on mount -->
+<div data-init="$loading = true; @get('/api/users').then(() => $loading = false)"></div>
+
+<!-- With view transition -->
+<div data-init__viewtransition="@get('/initial-content')"></div>
+```
+
+### data-ref: Element references
+
+Creates a new signal that is a reference to the element on which the data attribute is placed. Useful for accessing DOM elements programmatically in expressions.
+
+```html
+<!-- Store element reference -->
+<input data-ref:searchInput type="text" />
+<button data-on:click="$searchInput.focus()">Focus Input</button>
+
+<!-- Using the short form -->
+<div data-ref="myElement"></div>
+<button data-on:click="$myElement.scrollIntoView()">Scroll to element</button>
+
+<!-- Access element properties -->
+<video data-ref:videoPlayer src="video.mp4"></video>
+<button data-on:click="$videoPlayer.play()">Play</button>
+<button data-on:click="$videoPlayer.pause()">Pause</button>
+```
+
+### data-signals: Signal initialization
+
+Patches (adds, updates, or removes) one or more signals into the existing signals. Can use key syntax for a single signal or object syntax for multiple signals. Supports `ifmissing` modifier to only set signals that don't already exist.
+
+```html
+<!-- Initialize multiple signals -->
+<div data-signals="{ count: 0, name: 'John', items: [] }"></div>
+
+<!-- Initialize single signal -->
+<div data-signals:user="{ name: 'Alice', email: 'alice@example.com' }"></div>
+
+<!-- Only set if missing -->
+<div data-signals__ifmissing="{ theme: 'dark', lang: 'en' }"></div>
+
+<!-- Using with expressions -->
+<div data-signals="{
+  timestamp: Date.now(),
+  random: Math.random(),
+  env: 'production'
+}"></div>
+```
+
+### data-computed: Computed signals
+
+Creates a signal that is computed based on an expression. The computed signal automatically updates when its dependencies change. Can define a single computed signal with key syntax or multiple with object syntax.
+
+```html
+<!-- Single computed signal -->
+<div data-computed:fullName="$firstName + ' ' + $lastName"></div>
+<div data-text="$fullName"></div>
+
+<!-- Multiple computed signals -->
+<div data-computed="{
+  total: $price * $quantity,
+  discount: $total * 0.1,
+  finalPrice: $total - $discount
+}"></div>
+
+<!-- Complex computation -->
+<div data-computed:filteredItems="
+  $items.filter(item => item.name.includes($searchQuery))
+"></div>
+
+<!-- Using in display -->
+<div data-computed:itemCount="$items.length"></div>
+<span data-text="`${$itemCount} items`"></span>
+```
+
+### data-effect: Side effects
+
+Executes an expression on page load and whenever any signals in the expression change. Unlike computed signals, effects are used for side effects rather than producing values.
+
+```html
+<!-- Log signal changes -->
+<div data-effect="console.log('Count changed:', $count)"></div>
+
+<!-- Update localStorage -->
+<div data-effect="localStorage.setItem('theme', $theme)"></div>
+
+<!-- Multiple operations -->
+<div data-effect="
+  $total = $price * $quantity;
+  $tax = $total * 0.08;
+  $grandTotal = $total + $tax;
+"></div>
+
+<!-- Conditional effect -->
+<div data-effect="
+  if ($isLoggedIn) {
+    @get('/api/user-data')
+  }
+"></div>
+```
+
+### data-on-intersect: Viewport intersection
+
+Runs an expression when the element intersects with the viewport using the Intersection Observer API. Supports modifiers for threshold (`full`, `half`) and `once` to run only the first time.
+
+```html
+<!-- Lazy load image -->
+<img data-on-intersect="this.src = $imageUrl" />
+
+<!-- Infinite scroll -->
+<div data-on-intersect="@get(`/api/posts?page=${$page++}`)"></div>
+
+<!-- Once modifier (run only first time) -->
+<div data-on-intersect__once="@get('/api/initial-data')"></div>
+
+<!-- Full visibility required -->
+<div data-on-intersect__full="$sectionVisible = true"></div>
+
+<!-- Half visibility -->
+<div data-on-intersect__half="console.log('50% visible')"></div>
+
+<!-- Animation trigger -->
+<div data-on-intersect__once="this.classList.add('fade-in')"></div>
+```
+
+### data-on-interval: Timed execution
+
+Runs an expression at a regular interval. The interval duration is specified in the modifier. Supports `leading` tag to run immediately before starting the interval.
+
+```html
+<!-- Auto-refresh every 5 seconds -->
+<div data-on-interval__duration.5s="@get('/api/status')"></div>
+
+<!-- Clock that updates every second -->
+<div data-on-interval__duration.1s="$time = new Date().toLocaleTimeString()"
+     data-text="$time"></div>
+
+<!-- With leading execution -->
+<div data-on-interval__duration.10s.leading="@get('/api/poll')"></div>
+
+<!-- Countdown timer -->
+<div data-signals:countdown="60"
+     data-on-interval__duration.1s="$countdown > 0 && $countdown--"
+     data-text="`Time left: ${$countdown}s`"></div>
+```
+
+### data-indicator: Loading state
+
+Creates a signal and sets its value to true while an SSE request is in flight, otherwise false. Useful for showing loading states during server requests initiated from the element.
+
+```html
+<!-- Loading indicator -->
+<button data-on:click="@get('/api/data')"
+        data-indicator:loading>
+  <span data-show="!$loading">Load Data</span>
+  <span data-show="$loading">Loading...</span>
+</button>
+
+<!-- Short form -->
+<div data-indicator="isFetching">
+  <button data-on:click="@post('/save')">Save</button>
+  <div data-show="$isFetching">Saving...</div>
+</div>
+
+<!-- Disable during request -->
+<button data-on:click="@post('/submit')"
+        data-indicator:submitting
+        data-attr:disabled="$submitting">
+  Submit
+</button>
+```
+
+### data-on-signal-patch: Signal change reactions
+
+Runs an expression whenever one or more signals are patched, either locally or from the server. Can filter which signals to watch using a filter attribute. Receives the patch object as an argument.
+
+```html
+<!-- React to any signal patch -->
+<div data-on-signal-patch="console.log('Signals updated:', patch)"></div>
+
+<!-- Filter specific signals -->
+<div data-on-signal-patch="@get('/sync')"
+     data-on-signal-patch-filter="{ include: 'user\..*' }"></div>
+
+<!-- Update UI on server updates -->
+<div data-on-signal-patch="
+  if (patch.notifications) {
+    $notificationCount = patch.notifications.length
+  }
+"></div>
+
+<!-- Debounced response -->
+<div data-on-signal-patch__debounce.500ms="@post('/autosave')"></div>
+```
+
+### data-json-signals: Debug display
+
+Sets the text content of an element to a reactive JSON stringified version of signals. Useful for debugging. Supports filtering and formatting options.
+
+```html
+<!-- Display all signals -->
+<pre data-json-signals></pre>
+
+<!-- Display with filters -->
+<pre data-json-signals="{ include: 'user\..*', exclude: '.*password.*' }"></pre>
+
+<!-- Terse output (no indentation) -->
+<pre data-json-signals__terse></pre>
+
+<!-- Filter by pattern -->
+<pre data-json-signals="{ include: 'form\..*' }"></pre>
+```
+
+## Frontend Actions
+
+### @get(), @post(), @put(), @patch(), @delete(): HTTP requests
+
+Makes an HTTP request to the specified URL and processes SSE responses. Automatically sends current signal state to the server and handles streaming updates. Supports various options for controlling the request behavior.
+
+```html
+<!-- Simple GET request -->
+<button data-on:click="@get('/api/users')">Load Users</button>
+
+<!-- POST with form data -->
+<form data-on:submit="@post('/api/submit', { contentType: 'form' })">
+  <input data-bind:username />
+  <button type="submit">Submit</button>
+</form>
+
+<!-- With signal filtering -->
+<button data-on:click="@post('/save', {
+  filterSignals: { include: 'form\..*', exclude: '.*temp.*' }
+})">Save Form</button>
+
+<!-- Custom selector for form -->
+<button data-on:click="@post('/submit', {
+  contentType: 'form',
+  selector: '#myForm'
+})">Submit Other Form</button>
+
+<!-- With custom headers -->
+<button data-on:click="@get('/api/data', {
+  headers: { 'X-Custom-Header': 'value' }
+})">Fetch with Headers</button>
+
+<!-- Control request cancellation -->
+<button data-on:click="@get('/api/data', {
+  requestCancellation: 'disabled'
+})">Multiple Requests Allowed</button>
+```
+
+### @setAll(): Bulk signal updates
+
+Sets the value of all matching signals (or all signals if no filter is used) to the expression provided in the first argument. Useful for bulk updates or resetting forms.
+
+```html
+<!-- Reset all signals to empty string -->
+<button data-on:click="@setAll('', { include: 'form\..*' })">Clear Form</button>
+
+<!-- Set all to zero -->
+<button data-on:click="@setAll(0, { include: 'counter.*' })">Reset Counters</button>
+
+<!-- Set all without filter -->
+<button data-on:click="@setAll(null)">Clear All</button>
+
+<!-- Set to specific value -->
+<button data-on:click="@setAll(false, { include: '.*Enabled' })">Disable All</button>
+```
+
+### @toggleAll(): Bulk signal toggling
+
+Toggles the boolean value of all matching signals (or all signals if no filter is used). Changes true to false and false to true.
+
+```html
+<!-- Toggle all checkboxes -->
+<button data-on:click="@toggleAll({ include: 'checkbox\..*' })">
+  Toggle All
+</button>
+
+<!-- Toggle all flags -->
+<button data-on:click="@toggleAll({ include: 'flag.*' })">
+  Toggle Flags
+</button>
+
+<!-- Toggle everything -->
+<button data-on:click="@toggleAll()">Toggle All Signals</button>
+```
+
+### @peek(): Non-reactive signal access
+
+Allows accessing signals without subscribing to their changes in expressions. Useful when you want to read a signal value without triggering reactivity.
+
+```html
+<!-- Read without triggering effect -->
+<div data-effect="
+  const currentValue = @peek(() => $counter);
+  if (currentValue > 10) {
+    console.log('Threshold exceeded');
+  }
+"></div>
+
+<!-- One-time read in computed -->
+<div data-computed:message="
+  @peek(() => $initialized) ? 'Ready' : 'Loading'
+"></div>
+```
+
+## Backend SDK APIs
+
+### ServerSentEventGenerator: SSE initialization
+
+Creates a new SSE generator that can send events to the browser. Automatically sets required headers and flushes the response to prevent timeouts. Available in all backend language SDKs.
+
+```go
+// Go example
+func Handler(w http.ResponseWriter, r *http.Request) {
+    sse := datastar.NewServerSentEventGenerator(w, r)
+
+    // Now you can send events using sse.PatchElements(), etc.
+}
+```
+
+```python
+# Python example
+@app.route('/endpoint')
+def handler():
+    sse = ServerSentEventGenerator(request, response)
+    # Send events...
+```
+
+```typescript
+// TypeScript/Node.js example
+app.get('/endpoint', (req, res) => {
+    const sse = new ServerSentEventGenerator(res);
+    // Send events...
+});
+```
+
+### PatchElements(): DOM updates
+
+Sends HTML elements to the browser for DOM manipulation. Elements can be morphed into existing elements by ID, or inserted/appended/removed based on selectors. The morphing algorithm preserves element state and focus.
+
+```go
+// Replace element by ID (morph/merge)
+sse.PatchElements("<div id='feed'><span>New content</span></div>")
+
+// Append to container
+sse.PatchElements("<div>New item</div>", datastar.WithSelector("#container"),
+    datastar.WithMode(datastar.ElementPatchModeAppend))
+
+// Prepend to container
+sse.PatchElements("<div>First item</div>", datastar.WithSelector("#container"),
+    datastar.WithMode(datastar.ElementPatchModePrepend))
+
+// Morph inner HTML only
+sse.PatchElements("<div>Updated content</div>",
+    datastar.WithSelector("#target"),
+    datastar.WithMode(datastar.ElementPatchModeInner))
+
+// Replace entire element (not morph)
+sse.PatchElements("<div id='target'>New element</div>",
+    datastar.WithSelector("#target"),
+    datastar.WithMode(datastar.ElementPatchModeReplace))
+
+// Remove elements
+sse.PatchElements("",
+    datastar.WithSelector(".toast"),
+    datastar.WithMode(datastar.ElementPatchModeRemove))
+
+// Multiple elements at once
+sse.PatchElements(`
+    <div id="user-1">Alice</div>
+    <div id="user-2">Bob</div>
+`)
+
+// With view transition
+sse.PatchElements("<div id='main'>New page</div>",
+    datastar.WithViewTransition(true))
+
+// Before/after insertion
+sse.PatchElements("<div>New row</div>",
+    datastar.WithSelector("#row-5"),
+    datastar.WithMode(datastar.ElementPatchModeBefore))
+
+sse.PatchElements("<div>New row</div>",
+    datastar.WithSelector("#row-5"),
+    datastar.WithMode(datastar.ElementPatchModeAfter))
+```
+
+### PatchSignals(): State updates
+
+Sends signals to the browser using RFC 7386 JSON Merge Patch semantics. Can add, update, or remove signals (by setting to null). Supports nested object updates.
+
+```go
+// Update multiple signals
+signals := map[string]interface{}{
+    "username": "alice",
+    "count": 42,
+    "items": []string{"apple", "banana"},
+}
+sse.PatchSignals(signals)
+
+// Update nested object
+signals := map[string]interface{}{
+    "user": map[string]interface{}{
+        "name": "Alice",
+        "email": "alice@example.com",
+    },
+}
+sse.PatchSignals(signals)
+
+// Remove signal (set to null)
+signals := map[string]interface{}{
+    "tempData": nil,
+}
+sse.PatchSignals(signals)
+
+// Only set if missing (don't overwrite)
+signals := map[string]interface{}{
+    "theme": "dark",
+    "language": "en",
+}
+sse.PatchSignals(signals, datastar.WithOnlyIfMissing(true))
+
+// Complex nested update
+signals := map[string]interface{}{
+    "app": map[string]interface{}{
+        "status": "ready",
+        "config": map[string]interface{}{
+            "debugMode": false,
+            "apiUrl": "https://api.example.com",
+        },
+    },
+}
+sse.PatchSignals(signals)
+```
+
+### ExecuteScript(): Remote script execution
+
+Sends JavaScript code to be executed in the browser. By default, the script tag is automatically removed after execution. Can add custom attributes to the script tag.
+
+```go
+// Simple script execution
+sse.ExecuteScript("console.log('Hello from server!')")
+
+// With auto-remove disabled
+sse.ExecuteScript("window.myGlobal = 'value'",
+    datastar.WithAutoRemove(false))
+
+// With custom attributes
+sse.ExecuteScript("console.log('Module script')",
+    datastar.WithAttributes(map[string]string{
+        "type": "module",
+        "async": "true",
+    }))
+
+// Multi-line script
+script := `
+    const data = JSON.parse('${jsonData}');
+    processData(data);
+    updateUI();
+`
+sse.ExecuteScript(script)
+
+// Initialize library
+sse.ExecuteScript("Alpine.start()")
+```
+
+### RemoveElements(): Remove DOM elements
+
+Convenience method for removing elements from the DOM. This is equivalent to calling `PatchElements()` with mode set to `remove`, but provides a cleaner API for the common use case of removing elements.
+
+```go
+// Remove elements by selector
+sse.RemoveElements("#notification")
+
+// Remove multiple elements
+sse.RemoveElements(".toast")
+
+// With view transition
+sse.RemoveElements("#modal", datastar.WithViewTransition(true))
+
+// This is equivalent to:
+sse.PatchElements("",
+    datastar.WithSelector("#notification"),
+    datastar.WithMode(datastar.ElementPatchModeRemove))
+```
+
+### RemoveSignals(): Remove signals
+
+Convenience method for removing signals. This is equivalent to calling `PatchSignals()` with signal values set to `null`, but provides a cleaner API for removing signals.
+
+```go
+// Remove a single signal
+sse.RemoveSignals(map[string]interface{}{
+    "tempData": nil,
+})
+
+// Remove multiple signals
+sse.RemoveSignals(map[string]interface{}{
+    "sessionToken": nil,
+    "tempForm": nil,
+})
+
+// Remove nested signal property
+sse.RemoveSignals(map[string]interface{}{
+    "user": map[string]interface{}{
+        "password": nil,
+    },
+})
+
+// This is equivalent to:
+sse.PatchSignals(map[string]interface{}{
+    "tempData": nil,
+})
+```
+
+### ReadSignals(): Parse incoming data
+
+Parses incoming signal data from the browser into backend objects. For GET requests, reads from the `datastar` query parameter. For other methods, reads from the request body.
+
+```go
+// Define struct for signals
+type FormData struct {
+    Username string `json:"username"`
+    Email    string `json:"email"`
+    Age      int    `json:"age"`
+}
+
+func Handler(w http.ResponseWriter, r *http.Request) {
+    var data FormData
+    err := datastar.ReadSignals(r, &data)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+
+    // Use the data
+    fmt.Printf("Username: %s, Email: %s\n", data.Username, data.Email)
+
+    sse := datastar.NewServerSentEventGenerator(w, r)
+    // Send response...
+}
+
+// With nested structures
+type UserProfile struct {
+    User struct {
+        Name  string `json:"name"`
+        Email string `json:"email"`
+    } `json:"user"`
+    Preferences struct {
+        Theme    string `json:"theme"`
+        Language string `json:"language"`
+    } `json:"preferences"`
+}
+```
+
+## Complete Example: Live Search
+
+```html
+<!DOCTYPE html>
+<html>
+<head>
+    <script type="module" src="https://cdn.jsdelivr.net/gh/starfederation/datastar@v1.0.0-RC.6/bundles/datastar.js"></script>
+</head>
+<body>
+    <div data-signals="{ query: '', results: [] }">
+        <input
+            type="text"
+            data-bind:query
+            data-on:input__debounce.300ms="@get('/search')"
+            placeholder="Search..." />
+
+        <div data-show="$query.length > 0">
+            <div data-show="$results.length === 0">No results found</div>
+            <div id="results">
+                <!-- Server will patch this with search results -->
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+```
+
+```go
+// Backend (Go)
+func SearchHandler(w http.ResponseWriter, r *http.Request) {
+    var input struct {
+        Query string `json:"query"`
+    }
+    datastar.ReadSignals(r, &input)
+
+    sse := datastar.NewServerSentEventGenerator(w, r)
+
+    // Perform search
+    results := performSearch(input.Query)
+
+    // Update results signal
+    sse.PatchSignals(map[string]interface{}{
+        "results": results,
+    })
+
+    // Update results HTML
+    html := "<ul>"
+    for _, result := range results {
+        html += fmt.Sprintf("<li>%s</li>", result.Title)
+    }
+    html += "</ul>"
+
+    sse.PatchElements(html,
+        datastar.WithSelector("#results"),
+        datastar.WithMode(datastar.ElementPatchModeInner))
+}
+```
+
+## Summary
+
+Datastar excels at building reactive hypermedia applications where the server maintains the source of truth and streams updates to clients. The most common pattern involves using `data-bind` for form inputs, `data-on` with HTTP action functions to send requests, and backend SDKs that respond with `PatchElements` or `PatchSignals` updates. For example, a live search feature binds the search input, sends debounced GET requests on input changes, and the server responds with updated result elements. Real-time collaboration is achieved through polling or WebSocket connections that send `PatchSignals` events to synchronize state across clients. Forms are handled by binding all inputs with `data-bind`, wrapping in a form with `data-on:submit` that calls `@post()` with `contentType: 'form'`, and the backend reads signals with `ReadSignals()`, validates, and responds with either success messages via `PatchElements` or error states via `PatchSignals`.
+
+The framework's lightweight nature (10KB) and attribute-based syntax make it ideal for adding reactivity to traditional server-rendered apps without a full SPA rewrite. Loading states are managed with `data-indicator` creating boolean signals that flip during requests, controlling spinner visibility and button states. The morphing algorithm intelligently preserves form input values, focus states, and scroll positions during updates, making the UX feel seamless even though HTML is being replaced. Progressive enhancement works by rendering initial HTML server-side with data attributes, then Datastar hydrates and makes it reactive. Use cases include infinite scroll with `data-on-intersect`, auto-refreshing dashboards with `data-on-interval`, live validation, shopping carts, chat applications, and any scenario where server-driven UI updates provide a simpler architecture than managing complex client-side state.

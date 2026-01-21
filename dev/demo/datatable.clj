@@ -21,28 +21,32 @@
     (str abs-n suffix era)))
 
 (def columns
-  [{:key :name :label "Name" :type :string}
-   {:key :century :label "Century" :type :number :display-fn format-century}
-   {:key :school :label "School" :type :enum :groupable true}
-   {:key :region :label "Region" :type :enum :groupable true}])
+  [{:key :name :label "Name" :type :string :editable true}
+   {:key :century :label "Century" :type :number :display-fn format-century :editable true}
+   {:key :school :label "School" :type :enum :groupable true :editable true
+    :options ["Classical Greek" "Platonism" "Peripatetic" "Confucianism" "Taoism"
+              "Epicureanism" "Stoicism" "Christian Platonism" "Scholasticism"
+              "Rationalism" "Empiricism" "German Idealism" "Existentialism"]}
+   {:key :region :label "Region" :type :enum :groupable true}
+   {:key :verified :label "Verified" :type :boolean :editable true}])
 
 (def philosophers
   "Seed data for the philosophers table."
-  [{:id 1 :name "Socrates" :century -5 :school "Classical Greek" :region "Greece"}
-   {:id 2 :name "Plato" :century -4 :school "Platonism" :region "Greece"}
-   {:id 3 :name "Aristotle" :century -4 :school "Peripatetic" :region "Greece"}
-   {:id 4 :name "Confucius" :century -5 :school "Confucianism" :region "China"}
-   {:id 5 :name "Laozi" :century -6 :school "Taoism" :region "China"}
-   {:id 6 :name "Epicurus" :century -3 :school "Epicureanism" :region "Greece"}
-   {:id 7 :name "Zeno of Citium" :century -3 :school "Stoicism" :region "Greece"}
-   {:id 8 :name "Marcus Aurelius" :century 2 :school "Stoicism" :region "Rome"}
-   {:id 9 :name "Seneca" :century 1 :school "Stoicism" :region "Rome"}
-   {:id 10 :name "Augustine" :century 4 :school "Christian Platonism" :region "North Africa"}
-   {:id 11 :name "Thomas Aquinas" :century 13 :school "Scholasticism" :region "Italy"}
-   {:id 12 :name "René Descartes" :century 17 :school "Rationalism" :region "France"}
-   {:id 13 :name "John Locke" :century 17 :school "Empiricism" :region "England"}
-   {:id 14 :name "Immanuel Kant" :century 18 :school "German Idealism" :region "Germany"}
-   {:id 15 :name "Friedrich Nietzsche" :century 19 :school "Existentialism" :region "Germany"}])
+  [{:id 1 :name "Socrates" :century -5 :school "Classical Greek" :region "Greece" :verified true}
+   {:id 2 :name "Plato" :century -4 :school "Platonism" :region "Greece" :verified true}
+   {:id 3 :name "Aristotle" :century -4 :school "Peripatetic" :region "Greece" :verified true}
+   {:id 4 :name "Confucius" :century -5 :school "Confucianism" :region "China" :verified true}
+   {:id 5 :name "Laozi" :century -6 :school "Taoism" :region "China" :verified false}
+   {:id 6 :name "Epicurus" :century -3 :school "Epicureanism" :region "Greece" :verified true}
+   {:id 7 :name "Zeno of Citium" :century -3 :school "Stoicism" :region "Greece" :verified true}
+   {:id 8 :name "Marcus Aurelius" :century 2 :school "Stoicism" :region "Rome" :verified true}
+   {:id 9 :name "Seneca" :century 1 :school "Stoicism" :region "Rome" :verified true}
+   {:id 10 :name "Augustine" :century 4 :school "Christian Platonism" :region "North Africa" :verified true}
+   {:id 11 :name "Thomas Aquinas" :century 13 :school "Scholasticism" :region "Italy" :verified true}
+   {:id 12 :name "René Descartes" :century 17 :school "Rationalism" :region "France" :verified true}
+   {:id 13 :name "John Locke" :century 17 :school "Empiricism" :region "England" :verified false}
+   {:id 14 :name "Immanuel Kant" :century 18 :school "German Idealism" :region "Germany" :verified true}
+   {:id 15 :name "Friedrich Nietzsche" :century 19 :school "Existentialism" :region "Germany" :verified false}])
 
 ;; =============================================================================
 ;; H2 Database Setup
@@ -69,7 +73,8 @@
                      name VARCHAR(100),
                      century INT,
                      school VARCHAR(100),
-                     region VARCHAR(100))"]))
+                     region VARCHAR(100),
+                     verified BOOLEAN)"]))
 
 (defn seed-data!
   "Inserts the philosophers data into the table.
@@ -78,14 +83,19 @@
   (let [ds (get-datasource)]
     (jdbc/execute! ds ["DELETE FROM philosophers"])
     (doseq [p philosophers]
-      (jdbc/execute! ds ["INSERT INTO philosophers (id, name, century, school, region) VALUES (?, ?, ?, ?, ?)"
-                         (:id p) (:name p) (:century p) (:school p) (:region p)]))))
+      (jdbc/execute! ds ["INSERT INTO philosophers (id, name, century, school, region, verified) VALUES (?, ?, ?, ?, ?, ?)"
+                         (:id p) (:name p) (:century p) (:school p) (:region p) (:verified p)]))))
+
+(defonce db-initialized? (atom false))
 
 (defn init-db!
-  "Initializes the H2 database with schema and seed data."
+  "Initializes the H2 database with schema and seed data.
+   Only runs once per JVM session."
   []
-  (create-schema!)
-  (seed-data!))
+  (when-not @db-initialized?
+    (create-schema!)
+    (seed-data!)
+    (reset! db-initialized? true)))
 
 (def data-url "/demo/datatable/data")
 
@@ -102,13 +112,15 @@
 
 (defn make-data-handler
   []
-  (let [execute! (fn [sqlvec]
-                   (jdbc/execute! (get-datasource) sqlvec
+  (let [ds (get-datasource)
+        execute! (fn [sqlvec]
+                   (jdbc/execute! ds sqlvec
                                   {:builder-fn rs/as-unqualified-lower-maps}))]
     (datatable/make-handler
      {:id "datatable"
       :columns columns
       :query-fn (sqlq/query-fn {:table-name "philosophers"} execute!)
+      :save-fn (sqlq/save-fn {:table "philosophers"} execute!)
       :data-url data-url
       :render-html-fn ->html
       :page-sizes [10 25 100 250]

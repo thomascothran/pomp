@@ -266,3 +266,25 @@
       {:rows rows
        :total-rows total-rows
        :page {:size size :current clamped-current}})))
+
+(defn save-fn
+  "Creates a save function for cell edits.
+   
+   config:
+   - :table      - Table name (string)
+   - :id-column  - Column to use for WHERE clause (default :id)
+   
+   execute!: (fn [sqlvec] result) - executes SQL (same as query-fn)
+   
+   Returns a function with signature:
+   (fn [{:keys [row-id col-key value]}] {:success true})
+   
+   Example:
+     (def save! (save-fn {:table \"philosophers\"} execute!))
+     (save! {:row-id 1 :col-key :name :value \"Socrates the Wise\"})"
+  [{:keys [table id-column] :or {id-column :id}} execute!]
+  (fn [{:keys [row-id col-key value]}]
+    (let [sql (str "UPDATE " table " SET " (name col-key) " = ? WHERE " (name id-column) " = ?")]
+      (execute! [sql value row-id]))
+    {:success true}))
+

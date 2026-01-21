@@ -2,11 +2,12 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [clojure.string :as str]
             [next.jdbc :as jdbc]
+            [next.jdbc.result-set :as rs]
             [pomp.rad.datatable.query.sql :as sql]
             [pomp.rad.datatable.query.in-memory :as imq]))
 
 ;; =============================================================================
-;; Cycle 1: Column Name Resolution
+;; Column Name Resolution
 ;; =============================================================================
 
 (deftest col-name-test
@@ -22,7 +23,7 @@
     (is (= "age" (sql/col-name {:column-map {:name "user_name"}} :age)))))
 
 ;; =============================================================================
-;; Cycle 2: String Filter - Contains
+;; String Filter - Contains
 ;; =============================================================================
 
 (deftest generate-filter-clause-string-contains-test
@@ -59,7 +60,7 @@
                                        :name {:type "string" :op "contains" :value "Alice"})))))
 
 ;; =============================================================================
-;; Cycle 3: String Filter - Other Ops
+;; String Filter - Other Ops
 ;; =============================================================================
 
 (deftest generate-filter-clause-string-not-contains-test
@@ -123,7 +124,7 @@
     (is (nil? (sql/generate-filter-clause {} :name {:type "string" :op "is-any-of" :value []})))))
 
 ;; =============================================================================
-;; Cycle 4: Number Filters
+;; Number Filters
 ;; =============================================================================
 
 (deftest generate-filter-clause-number-equals-test
@@ -180,7 +181,7 @@
     (is (nil? (sql/generate-filter-clause {} :age {:type "number" :op "equals" :value nil})))))
 
 ;; =============================================================================
-;; Cycle 5: Boolean Filters
+;; Boolean Filters
 ;; =============================================================================
 
 (deftest generate-filter-clause-boolean-is-test
@@ -212,7 +213,7 @@
            (sql/generate-filter-clause {} :active {:type "boolean" :op "is-not-empty" :value ""})))))
 
 ;; =============================================================================
-;; Cycle 6: Date Filters
+;; Date Filters
 ;; =============================================================================
 
 (deftest generate-filter-clause-date-is-test
@@ -261,7 +262,7 @@
     (is (nil? (sql/generate-filter-clause {} :created {:type "date" :op "after" :value nil})))))
 
 ;; =============================================================================
-;; Cycle 7: Enum Filters
+;; Enum Filters
 ;; =============================================================================
 
 (deftest generate-filter-clause-enum-is-test
@@ -297,7 +298,7 @@
            (sql/generate-filter-clause {} :status {:type "enum" :op "is-not-empty" :value ""})))))
 
 ;; =============================================================================
-;; Cycle 8: Combining Filters
+;; Combining Filters
 ;; =============================================================================
 
 (deftest generate-where-clause-single-filter-test
@@ -334,7 +335,7 @@
     (is (nil? (sql/generate-where-clause {} {:name [{:type "string" :op "contains" :value ""}]})))))
 
 ;; =============================================================================
-;; Cycle 9: Sort Clause
+;; Sort Clause
 ;; =============================================================================
 
 (deftest generate-order-clause-ascending-test
@@ -360,7 +361,7 @@
            (sql/generate-order-clause {:column-map {:name "user_name"}} [{:column "name" :direction "asc"}])))))
 
 ;; =============================================================================
-;; Cycle 10: Pagination
+;; Pagination
 ;; =============================================================================
 
 (deftest generate-limit-clause-first-page-test
@@ -386,7 +387,7 @@
     (is (nil? (sql/generate-limit-clause {:current 0})))))
 
 ;; =============================================================================
-;; Cycle 11: Full Query Generation
+;; Full Query Generation
 ;; =============================================================================
 
 (deftest generate-query-sql-basic-test
@@ -432,7 +433,7 @@
       (is (= ["%test%" 0 25 25] params)))))
 
 ;; =============================================================================
-;; Cycle 12: Count Query
+;; Count Query
 ;; =============================================================================
 
 (deftest generate-count-sql-basic-test
@@ -453,7 +454,7 @@
                                               :century [{:type "number" :op "greater-than" :value "0"}]}})))))
 
 ;; =============================================================================
-;; Cycle 13: Query Function Builder
+;; Query Function Builder
 ;; =============================================================================
 
 (def mock-philosophers
@@ -517,7 +518,7 @@
       (is (str/starts-with? (first (second @execute-calls)) "SELECT *")))))
 
 ;; =============================================================================
-;; Cycle 14: Integration with H2
+;; Integration with H2
 ;; =============================================================================
 
 (def h2-db {:dbtype "h2:mem" :dbname "test"})
@@ -545,7 +546,7 @@
   (testing "basic query against H2"
     (let [ds (jdbc/get-datasource h2-db)]
       (setup-h2-db ds)
-      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn next.jdbc.result-set/as-unqualified-lower-maps}))
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
             qfn (sql/query-fn {:table-name "philosophers"} execute!)
             result (qfn {:filters {} :sort [] :page {:size 10 :current 0}} nil)]
         (is (= 5 (:total-rows result)))
@@ -555,7 +556,7 @@
   (testing "filtering against H2"
     (let [ds (jdbc/get-datasource h2-db)]
       (setup-h2-db ds)
-      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn next.jdbc.result-set/as-unqualified-lower-maps}))
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
             qfn (sql/query-fn {:table-name "philosophers"} execute!)
             result (qfn {:filters {:region [{:type "string" :op "equals" :value "Greece"}]}
                          :sort []
@@ -568,7 +569,7 @@
   (testing "sorting against H2"
     (let [ds (jdbc/get-datasource h2-db)]
       (setup-h2-db ds)
-      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn next.jdbc.result-set/as-unqualified-lower-maps}))
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
             qfn (sql/query-fn {:table-name "philosophers"} execute!)
             result (qfn {:filters {} :sort [{:column "century" :direction "asc"}] :page {:size 10 :current 0}} nil)
             centuries (map :century (:rows result))]
@@ -578,7 +579,7 @@
   (testing "pagination against H2"
     (let [ds (jdbc/get-datasource h2-db)]
       (setup-h2-db ds)
-      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn next.jdbc.result-set/as-unqualified-lower-maps}))
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
             qfn (sql/query-fn {:table-name "philosophers"} execute!)
             result (qfn {:filters {} :sort [{:column "id" :direction "asc"}] :page {:size 2 :current 0}} nil)]
         (is (= 5 (:total-rows result)))
@@ -589,7 +590,7 @@
   (testing "SQL query-fn produces same results as in-memory"
     (let [ds (jdbc/get-datasource h2-db)]
       (setup-h2-db ds)
-      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn next.jdbc.result-set/as-unqualified-lower-maps}))
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
             sql-qfn (sql/query-fn {:table-name "philosophers"} execute!)
             mem-qfn (imq/query-fn h2-philosophers)
             ;; Use id sort to get deterministic ordering
@@ -602,3 +603,111 @@
         (is (= (:page sql-result) (:page mem-result)))
         ;; Compare row contents (ids should match when sorted by id)
         (is (= (map :id (:rows sql-result)) (map :id (:rows mem-result))))))))
+
+;; =============================================================================
+;; Save Function
+;; =============================================================================
+
+(deftest save-fn-generates-correct-update-test
+  (testing "generates correct UPDATE statement with default id-column"
+    (let [ds (jdbc/get-datasource h2-db)
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec))]
+      (setup-h2-db ds)
+      ;; Verify initial value
+      (is (= "Socrates" (-> (jdbc/execute! ds ["SELECT name FROM philosophers WHERE id = ?" 1]
+                                           {:builder-fn rs/as-unqualified-lower-maps})
+                            first :name)))
+      ;; Execute save
+      (let [save! (sql/save-fn {:table "philosophers"} execute!)]
+        (save! {:row-id 1 :col-key :name :value "Socrates the Wise"}))
+      ;; Verify updated value
+      (is (= "Socrates the Wise" (-> (jdbc/execute! ds ["SELECT name FROM philosophers WHERE id = ?" 1]
+                                                    {:builder-fn rs/as-unqualified-lower-maps})
+                                     first :name)))))
+
+  (testing "updates numeric columns"
+    (let [ds (jdbc/get-datasource h2-db)
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec))]
+      (setup-h2-db ds)
+      (let [save! (sql/save-fn {:table "philosophers"} execute!)]
+        (save! {:row-id 2 :col-key :century :value -3}))
+      (is (= -3 (-> (jdbc/execute! ds ["SELECT century FROM philosophers WHERE id = ?" 2]
+                                   {:builder-fn rs/as-unqualified-lower-maps})
+                    first :century))))))
+
+(deftest save-fn-custom-id-column-test
+  (testing "uses custom id-column for WHERE clause"
+    (let [ds (jdbc/get-datasource h2-db)
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec))]
+      ;; Create a table with a different id column name
+      (jdbc/execute! ds ["CREATE TABLE IF NOT EXISTS custom_table (
+                           philosopher_id INT PRIMARY KEY,
+                           name VARCHAR(100))"])
+      (jdbc/execute! ds ["DELETE FROM custom_table"])
+      (jdbc/execute! ds ["INSERT INTO custom_table (philosopher_id, name) VALUES (?, ?)" 1 "Test"])
+      ;; Execute save with custom id column
+      (let [save! (sql/save-fn {:table "custom_table"
+                                :id-column :philosopher_id}
+                               execute!)]
+        (save! {:row-id 1 :col-key :name :value "Updated Test"}))
+      ;; Verify update
+      (is (= "Updated Test" (-> (jdbc/execute! ds ["SELECT name FROM custom_table WHERE philosopher_id = ?" 1]
+                                               {:builder-fn rs/as-unqualified-lower-maps})
+                                first :name)))
+      ;; Cleanup
+      (jdbc/execute! ds ["DROP TABLE custom_table"]))))
+
+(deftest save-fn-returns-success-test
+  (testing "returns success map on successful save"
+    (let [ds (jdbc/get-datasource h2-db)
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec))]
+      (setup-h2-db ds)
+      (let [save! (sql/save-fn {:table "philosophers"} execute!)
+            result (save! {:row-id 1 :col-key :name :value "New Name"})]
+        (is (= {:success true} result))))))
+
+(deftest save-fn-string-row-id-test
+  (testing "handles string row-id"
+    (let [ds (jdbc/get-datasource h2-db)
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec))]
+      (setup-h2-db ds)
+      ;; Row ID comes as string from signals
+      (let [save! (sql/save-fn {:table "philosophers"} execute!)]
+        (save! {:row-id "3" :col-key :school :value "Updated School"}))
+      (is (= "Updated School" (-> (jdbc/execute! ds ["SELECT school FROM philosophers WHERE id = ?" 3]
+                                                 {:builder-fn rs/as-unqualified-lower-maps})
+                                  first :school))))))
+
+(deftest save-fn-boolean-value-test
+  (testing "handles boolean true value"
+    (let [ds (jdbc/get-datasource h2-db)
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec))]
+      ;; Create a table with a boolean column
+      (jdbc/execute! ds ["CREATE TABLE IF NOT EXISTS bool_test (
+                           id INT PRIMARY KEY,
+                           verified BOOLEAN)"])
+      (jdbc/execute! ds ["DELETE FROM bool_test"])
+      (jdbc/execute! ds ["INSERT INTO bool_test (id, verified) VALUES (?, ?)" 1 false])
+      ;; Save with boolean true
+      (let [save! (sql/save-fn {:table "bool_test"} execute!)]
+        (save! {:row-id 1 :col-key :verified :value true}))
+      (is (= true (-> (jdbc/execute! ds ["SELECT verified FROM bool_test WHERE id = ?" 1]
+                                     {:builder-fn rs/as-unqualified-lower-maps})
+                      first :verified)))
+      (jdbc/execute! ds ["DROP TABLE bool_test"])))
+
+  (testing "handles boolean false value"
+    (let [ds (jdbc/get-datasource h2-db)
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec))]
+      (jdbc/execute! ds ["CREATE TABLE IF NOT EXISTS bool_test (
+                           id INT PRIMARY KEY,
+                           verified BOOLEAN)"])
+      (jdbc/execute! ds ["DELETE FROM bool_test"])
+      (jdbc/execute! ds ["INSERT INTO bool_test (id, verified) VALUES (?, ?)" 1 true])
+      ;; Save with boolean false
+      (let [save! (sql/save-fn {:table "bool_test"} execute!)]
+        (save! {:row-id 1 :col-key :verified :value false}))
+      (is (= false (-> (jdbc/execute! ds ["SELECT verified FROM bool_test WHERE id = ?" 1]
+                                      {:builder-fn rs/as-unqualified-lower-maps})
+                       first :verified)))
+      (jdbc/execute! ds ["DROP TABLE bool_test"]))))
