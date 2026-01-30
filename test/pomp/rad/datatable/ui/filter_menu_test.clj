@@ -1,5 +1,6 @@
 (ns pomp.rad.datatable.ui.filter-menu-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [pomp.rad.datatable.ui.filter-menu :as filter-menu]))
 
 ;; =============================================================================
@@ -55,17 +56,17 @@
                                       :data-url "/data"})
           onclick (find-apply-button-onclick result)]
       ;; Should update the signal for this column's filter at index 0
-      (is (clojure.string/includes? onclick "$datatable.philosophers.filters.century")
+      (is (str/includes? onclick "$datatable.philosophers.filters.century")
           "Should reference the column's filter signal")
       ;; Should NOT include filterCol, filterOp, filterVal in URL params
-      (is (not (clojure.string/includes? onclick "filterCol="))
+      (is (not (str/includes? onclick "filterCol="))
           "Should NOT send filterCol as URL param")
-      (is (not (clojure.string/includes? onclick "filterOp="))
+      (is (not (str/includes? onclick "filterOp="))
           "Should NOT send filterOp as URL param")
-      (is (not (clojure.string/includes? onclick "filterVal="))
+      (is (not (str/includes? onclick "filterVal="))
           "Should NOT send filterVal as URL param")
       ;; Should call @get to fetch data after updating signal
-      (is (clojure.string/includes? onclick "@get")
+      (is (str/includes? onclick "@get")
           "Should call @get to fetch data"))))
 
 (deftest clear-button-removes-signal-test
@@ -79,13 +80,13 @@
                                       :data-url "/data"})
           onclick (find-clear-button-onclick result)]
       ;; Should clear/remove the filter signal
-      (is (clojure.string/includes? onclick "$datatable.philosophers.filters.century")
+      (is (str/includes? onclick "$datatable.philosophers.filters.century")
           "Should reference the column's filter signal")
       ;; Should NOT include clearColFilters hack
-      (is (not (clojure.string/includes? onclick "clearColFilters"))
+      (is (not (str/includes? onclick "clearColFilters"))
           "Should NOT use clearColFilters hack")
       ;; Should call @get to fetch data
-      (is (clojure.string/includes? onclick "@get")
+      (is (str/includes? onclick "@get")
           "Should call @get to fetch data"))))
 
 ;; =============================================================================
@@ -395,7 +396,7 @@
                                       :table-id "test"
                                       :data-url "/data"})
           onclick (find-apply-button-onclick result)]
-      (is (clojure.string/includes? onclick "type: 'string'")
+      (is (str/includes? onclick "type: 'string'")
           "Apply signal should include type: 'string'")))
 
   (testing "includes type: 'boolean' in signal for :boolean column"
@@ -405,7 +406,7 @@
                                       :table-id "test"
                                       :data-url "/data"})
           onclick (find-apply-button-onclick result)]
-      (is (clojure.string/includes? onclick "type: 'boolean'")
+      (is (str/includes? onclick "type: 'boolean'")
           "Apply signal should include type: 'boolean'")))
 
   (testing "includes type: 'date' in signal for :date column"
@@ -415,7 +416,7 @@
                                       :table-id "test"
                                       :data-url "/data"})
           onclick (find-apply-button-onclick result)]
-      (is (clojure.string/includes? onclick "type: 'date'")
+      (is (str/includes? onclick "type: 'date'")
           "Apply signal should include type: 'date'")))
 
   (testing "includes type: 'enum' in signal for :enum column"
@@ -425,7 +426,7 @@
                                       :table-id "test"
                                       :data-url "/data"})
           onclick (find-apply-button-onclick result)]
-      (is (clojure.string/includes? onclick "type: 'enum'")
+      (is (str/includes? onclick "type: 'enum'")
           "Apply signal should include type: 'enum'")))
 
   (testing "defaults to type: 'string' when no col-type"
@@ -434,5 +435,5 @@
                                       :table-id "test"
                                       :data-url "/data"})
           onclick (find-apply-button-onclick result)]
-      (is (clojure.string/includes? onclick "type: 'string'")
+      (is (str/includes? onclick "type: 'string'")
           "Apply signal should default to type: 'string'"))))

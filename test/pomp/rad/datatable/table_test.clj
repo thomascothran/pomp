@@ -1,6 +1,8 @@
 (ns pomp.rad.datatable.table-test
   (:require
-   [clojure.test :refer [deftest is testing]] [pomp.rad.datatable.ui.table :as table]))
+   [clojure.string :as string]
+   [clojure.test :refer [deftest is testing]]
+   [pomp.rad.datatable.ui.table :as table]))
 
 (defn- strip-script-content
   "Strips the content from [:script ...] forms, keeping only [:script :present].
@@ -19,6 +21,22 @@
     (map strip-script-content hiccup)
 
     :else hiccup))
+
+(defn- find-table-attrs
+  "Finds the :table.table.table-sm attrs map in rendered hiccup."
+  [hiccup]
+  (cond
+    (and (vector? hiccup)
+         (= :table.table.table-sm (first hiccup)))
+    (second hiccup)
+
+    (vector? hiccup)
+    (some find-table-attrs hiccup)
+
+    (seq? hiccup)
+    (some find-table-attrs hiccup)
+
+    :else nil))
 
 (def test-table-data
   {:group-by [],
@@ -163,3 +181,49 @@
           "Boolean column should have 'is' operation")
       (is (not (contains? active-ops "contains"))
           "Boolean column should NOT have 'contains' operation"))))
+
+(deftest table-cell-selection-handlers-test
+  (let [result (table/render {:id "test-table"
+                              :cols [{:key :name :label "Name" :type :string}]
+                              :rows []
+                              :sort-state []
+                              :filters {}
+                              :total-rows 0
+                              :page-size 10
+                              :page-current 0
+                              :page-sizes [10 25]
+                              :data-url "/data"})
+        table-attrs (find-table-attrs result)]
+    (testing "pompcellselection filters truthy selections and only sets when non-empty"
+      (let [handler (:data-on:pompcellselection table-attrs)]
+        (is (some? handler))
+        (is (string/includes? handler "evt.detail.selection"))
+        (is (re-find #"filter" handler)
+            "Selection handler should filter to truthy cells")
+        (is (re-find #"\.length" handler)
+            "Selection handler should check filtered length")
+        (is (re-find #"Array\.isArray" handler)
+            "Selection handler should guard with Array.isArray")
+        (is (re-find #"Object\.keys" handler)
+            "Selection handler should fall back to Object.keys when selection is object")
+        (is (not (re-find #"Object.entries" handler))
+            "Selection handler should not use Object.entries")
+        (is (string/includes? handler "$datatable.test-table.cellSelection = []")
+            "Selection handler should clear cellSelection with an empty array")
+        (is (string/includes? handler "$datatable.test-table.cellSelection = null")
+            "Selection handler should clear signal when empty")
+        (is (re-find #"\$datatable\.test-table\.cellSelection = \[\].*\$datatable\.test-table\.cellSelection = null" handler)
+            "Selection handler should clear cellSelection with [] before null")))
+
+    (testing "escape clears selection by nulling signal"
+      (let [handler (:data-on:keydown__window table-attrs)]
+        (is (some? handler))
+        (is (string/includes? handler "Escape"))
+        (is (string/includes? handler "$datatable.test-table.cellSelection = []")
+            "Escape should clear cellSelection with an empty array")
+        (is (string/includes? handler "$datatable.test-table.cellSelection = null")
+            "Escape should null the cellSelection signal")
+        (is (re-find #"\$datatable\.test-table\.cellSelection = \[\].*\$datatable\.test-table\.cellSelection = null" handler)
+            "Escape should clear cellSelection with [] before null")
+        (is (not (string/includes? handler "cellSelection = {}"))
+            "Escape should not set an empty selection")))))

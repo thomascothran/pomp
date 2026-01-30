@@ -57,7 +57,7 @@
     [:td {:data-row row-idx
           :data-col col-idx
           :data-value (str value)
-          :data-class (str "{'bg-info/20': $" signal-base ".cellSelection['" cell-key "']}")
+          :data-class (str "{'bg-info/20': $" signal-base ".cellSelection && $" signal-base ".cellSelection.includes('" cell-key "')}")
           :data-on:mousedown (str "if (evt.target.closest('input, button, select, textarea')) return; "
                                   "if ($" editing-signal "?.rowId) return; "
                                   "$" signal-base ".cellSelectDragging = true; "
@@ -117,7 +117,7 @@
                              (str "document.getElementById('" span-id "').dataset.value"))
         ;; Click pencil: clear cell selection, enter edit mode, set initial value from data-value, and focus input
         edit-handler (str "evt.stopPropagation(); "
-                          "$" signal-base ".cellSelection = {}; "
+                          "$" signal-base ".cellSelection = []; " "$" signal-base ".cellSelection = null; "
                           "$" editing-signal " = {rowId: '" row-id "', colKey: '" col-key "'}; "
                           init-cells
                           "const currentValue = " read-current-value "; "
@@ -218,7 +218,7 @@
     [:td {:data-row row-idx
           :data-col col-idx
           :data-value (str value)
-          :data-class (str "{'bg-info/20': $" signal-base ".cellSelection['" cell-key "']}")
+          :data-class (str "{'bg-info/20': $" signal-base ".cellSelection && $" signal-base ".cellSelection.includes('" cell-key "')}")
           :data-on:mousedown (str "if (evt.target.closest('input, button, select, textarea')) return; "
                                   "if ($" editing-signal "?.rowId) { "
                                   "if (!(" editing-check ")) { "
@@ -310,7 +310,7 @@
         [:td {:data-row row-idx
               :data-col col-idx
               :data-value (str data-val)
-              :data-class (str "{'bg-info/20': $datatable." table-id ".cellSelection['" cell-key "']}")
+              :data-class (str "{'bg-info/20': $" signal-base ".cellSelection && $" signal-base ".cellSelection.includes('" cell-key "')}")
               :data-on:mousedown (str "if (evt.target.closest('input, button, select, textarea')) return; "
                                       "if ($" editing-signal "?.rowId) { "
                                       "if (!(" editing-check ")) { "

@@ -11,7 +11,7 @@ window.pompCellSelectMove = function(evt, tableId, isDragging, start) {
   if (row === start.row && col === start.col) return;
   
   // Build rectangular selection
-  const selection = {};
+  const selection = [];
   const minRow = Math.min(start.row, row);
   const maxRow = Math.max(start.row, row);
   const minCol = Math.min(start.col, col);
@@ -19,7 +19,7 @@ window.pompCellSelectMove = function(evt, tableId, isDragging, start) {
   
   for (let r = minRow; r <= maxRow; r++) {
     for (let c = minCol; c <= maxCol; c++) {
-      selection[`${r}-${c}`] = true;
+      selection.push(`${r}-${c}`);
     }
   }
   
@@ -32,13 +32,12 @@ window.pompCellSelectMove = function(evt, tableId, isDragging, start) {
 window.pompCellSelectCopy = function(evt, tableId, cellSelection) {
   // Only handle Ctrl+C / Cmd+C
   if (!(evt.ctrlKey || evt.metaKey) || evt.key !== 'c') return;
-  if (!cellSelection || Object.keys(cellSelection).length === 0) return;
+  if (!cellSelection || cellSelection.length === 0) return;
   
   evt.preventDefault();
   
   // Find selection bounds
-  const keys = Object.keys(cellSelection);
-  const coords = keys.map(k => k.split('-').map(Number));
+  const coords = cellSelection.map(k => k.split('-').map(Number));
   const minRow = Math.min(...coords.map(c => c[0]));
   const maxRow = Math.max(...coords.map(c => c[0]));
   const minCol = Math.min(...coords.map(c => c[1]));

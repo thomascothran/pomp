@@ -65,9 +65,12 @@
         :data-on:mousemove (str "pompCellSelectMove(evt, '" id "', "
                                 "$datatable." id ".cellSelectDragging, "
                                 "$datatable." id ".cellSelectStart)")
-        :data-on:pompcellselection (str "$datatable." id ".cellSelection = evt.detail.selection")
+        :data-on:pompcellselection (str "const raw = evt.detail.selection; "
+                                        "const selections = (Array.isArray(raw) ? raw : Object.keys(raw || {})).filter(Boolean); "
+                                        "if (selections.length) { $datatable." id ".cellSelection = selections; } "
+                                        "else { $datatable." id ".cellSelection = []; $datatable." id ".cellSelection = null; }")
         :data-on:mouseup__window (str "$datatable." id ".cellSelectDragging = false")
-        :data-on:keydown__window (str "if (evt.key === 'Escape') { $datatable." id ".cellSelection = {} } "
+        :data-on:keydown__window (str "if (evt.key === 'Escape') { $datatable." id ".cellSelection = []; $datatable." id ".cellSelection = null } "
                                       "else { pompCellSelectCopy(evt, '" id "', $datatable." id ".cellSelection) }")}
        (render-header-fn header-ctx)
        (body/render {:cols cols

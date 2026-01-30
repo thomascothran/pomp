@@ -194,6 +194,33 @@
                        (clojure.string/starts-with? (name (first %)) "button"))
                  hiccup))
 
+(defn- cell-selection-guarded?
+  "Returns true when data-class guards missing cellSelection."
+  [table-id data-class]
+  (let [value (or data-class "")
+        normalized (clojure.string/replace value #"\s+" "")
+        prefix (str "$datatable." table-id ".cellSelection")
+        guarded-fragment (str prefix "&&" prefix ".includes(")]
+    (clojure.string/includes? normalized guarded-fragment)))
+
+(defn- cell-selection-unqualified?
+  "Returns true when data-class references cellSelection with bracket access."
+  [data-class]
+  (boolean (re-find #"cellSelection\['" (or data-class ""))))
+
+(defn- cell-selection-optional-chaining?
+  "Returns true when data-class uses optional chaining for cellSelection."
+  [data-class]
+  (let [value (or data-class "")]
+    (or (clojure.string/includes? value "cellSelection?.")
+        (clojure.string/includes? value "cellSelection\\?."))))
+
+(defn- cell-selection-stray-class-key?
+  "Returns true when data-class includes a stray cellSelection class key."
+  [data-class]
+  (boolean (re-find #"cellSelection\\s*:"
+                    (or data-class ""))))
+
 (deftest render-editable-cell-structure-test
   (testing "editable cell renders input element with correct signal binding"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -209,18 +236,18 @@
       ;; Contains input
       (is (some? input))
       ;; Input should not create the cell signal on render
-       (let [attrs (second input)
-             handler (or (:data-on:input attrs)
-                         (:data-on:change attrs))]
-         (is (nil? (:data-bind attrs))
-             "Editable input should not bind on render")
-         (is (nil? (:data-ref attrs))
-             "Editable input should not create a data-ref signal")
-         (is (some? handler)
-             "Editable input should update cell signal on input/change")
-         (when handler
-           (is (clojure.string/includes? (or handler "") "$datatable.philosophers.cells['123']['name']")
-               "Input handler should target cell signal path")))))
+      (let [attrs (second input)
+            handler (or (:data-on:input attrs)
+                        (:data-on:change attrs))]
+        (is (nil? (:data-bind attrs))
+            "Editable input should not bind on render")
+        (is (nil? (:data-ref attrs))
+            "Editable input should not create a data-ref signal")
+        (is (some? handler)
+            "Editable input should update cell signal on input/change")
+        (when handler
+          (is (clojure.string/includes? (or handler "") "$datatable.philosophers.cells['123']['name']")
+              "Input handler should target cell signal path")))))
 
   (testing "editable cell renders span with display value"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -286,7 +313,12 @@
                                      buttons))
           click-handler (-> edit-button second :data-on:click)]
       ;; Clears cell selection to avoid interference
-      (is (clojure.string/includes? click-handler "cellSelection = {}"))
+      (is (clojure.string/includes? click-handler "$datatable.philosophers.cellSelection = []")
+          "Edit click should clear cellSelection with an empty array")
+      (is (clojure.string/includes? click-handler "$datatable.philosophers.cellSelection = null")
+          "Edit click should clear cellSelection signal when entering edit mode")
+      (is (re-find #"\$datatable\.philosophers\.cellSelection = \[\].*\$datatable\.philosophers\.cellSelection = null" click-handler)
+          "Edit click should clear cellSelection with [] before null")
       ;; Sets editing signal
       (is (clojure.string/includes? click-handler "editing"))
       (is (clojure.string/includes? click-handler "rowId"))
@@ -317,7 +349,7 @@
                                         (and (:data-on:click attrs)
                                              (clojure.string/includes? (:data-on:click attrs) "editing")
                                              (not (clojure.string/includes? (:data-on:click attrs) "@post"))))
-                                      buttons))
+                                     buttons))
           edit-handler (-> edit-button second :data-on:click)]
       (is (some? input-handler))
       (is (clojure.string/includes? input-handler "cells ||= {}"))
@@ -415,8 +447,73 @@
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
       (is (not (clojure.string/includes? mousedown-handler "cellSelection ="))
-          "mousedown should not assign cellSelection directly")))
-)
+          "mousedown should not assign cellSelection directly"))))
+
+(deftest render-cell-selection-highlight-guards-test
+  (testing "non-editable cells guard highlight against missing cellSelection"
+    (let [result (row/render-cell {:value "Athens"
+                                   :row {:id 123 :name "Plato" :city "Athens"}
+                                   :col {:key :city}
+                                   :table-id "philosophers"
+                                   :row-idx 0
+                                   :col-idx 1})
+          td-attrs (second result)
+          data-class (:data-class td-attrs)]
+      (is (some? data-class))
+      (is (cell-selection-guarded? "philosophers" data-class)
+          "Highlight should guard when cellSelection is missing")
+      (is (clojure.string/includes? data-class "includes('0-1')")
+          "Highlight should use row/col key for selection")
+      (is (not (cell-selection-unqualified? data-class))
+          "Highlight should not use bracket access for cellSelection")
+      (is (not (cell-selection-optional-chaining? data-class))
+          "Highlight should not use optional chaining for cellSelection")
+      (is (not (cell-selection-stray-class-key? data-class))
+          "Highlight should not include stray cellSelection class keys")))
+
+  (testing "editable cells guard highlight against missing cellSelection"
+    (let [result (row/render-editable-cell {:value "Plato"
+                                            :row-id "123"
+                                            :col {:key :name :editable true}
+                                            :table-id "philosophers"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          td-attrs (second result)
+          data-class (:data-class td-attrs)]
+      (is (some? data-class))
+      (is (cell-selection-guarded? "philosophers" data-class)
+          "Editable highlight should guard when cellSelection is missing")
+      (is (clojure.string/includes? data-class "includes('0-0')")
+          "Editable highlight should use row/col key for selection")
+      (is (not (cell-selection-unqualified? data-class))
+          "Editable highlight should not use bracket access for cellSelection")
+      (is (not (cell-selection-optional-chaining? data-class))
+          "Editable highlight should not use optional chaining for cellSelection")
+      (is (not (cell-selection-stray-class-key? data-class))
+          "Editable highlight should not include stray cellSelection class keys")))
+
+  (testing "boolean cells guard highlight against missing cellSelection"
+    (let [result (row/render-boolean-cell {:value true
+                                           :row-id "123"
+                                           :col {:key :verified :type :boolean :editable true}
+                                           :table-id "philosophers"
+                                           :data-url "/data"
+                                           :row-idx 0
+                                           :col-idx 0})
+          td-attrs (second result)
+          data-class (:data-class td-attrs)]
+      (is (some? data-class))
+      (is (cell-selection-guarded? "philosophers" data-class)
+          "Boolean highlight should guard when cellSelection is missing")
+      (is (clojure.string/includes? data-class "includes('0-0')")
+          "Boolean highlight should use row/col key for selection")
+      (is (not (cell-selection-unqualified? data-class))
+          "Boolean highlight should not use bracket access for cellSelection")
+      (is (not (cell-selection-optional-chaining? data-class))
+          "Boolean highlight should not use optional chaining for cellSelection")
+      (is (not (cell-selection-stray-class-key? data-class))
+          "Boolean highlight should not include stray cellSelection class keys"))))
 
 (deftest render-editable-cell-escape-test
   (testing "escape clears editing signal and removes cell value"
@@ -673,7 +770,7 @@
           save-button (some #(when-let [handler (:data-on:mousedown (second %))]
                                (when (clojure.string/includes? handler "@post")
                                  %))
-                             buttons)]
+                            buttons)]
       (is (nil? save-button)
           "Enum editing should not render a checkmark submit button"))))
 
