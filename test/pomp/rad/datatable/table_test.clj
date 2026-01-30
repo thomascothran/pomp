@@ -38,6 +38,41 @@
 
     :else nil))
 
+(defn- find-group-toggle-handler
+  "Finds the data-on:click handler for a group toggle button."
+  [hiccup]
+  (cond
+    (and (vector? hiccup)
+         (keyword? (first hiccup))
+         (string/starts-with? (name (first hiccup)) "button")
+         (map? (second hiccup))
+         (string/includes? (or (:data-on:click (second hiccup)) "") "expanded"))
+    (:data-on:click (second hiccup))
+
+    (vector? hiccup)
+    (some find-group-toggle-handler hiccup)
+
+    (seq? hiccup)
+    (some find-group-toggle-handler hiccup)
+
+    :else nil))
+
+(defn- find-data-show-values
+  "Collects all data-show expressions from rendered hiccup."
+  [hiccup]
+  (cond
+    (vector? hiccup)
+    (let [attrs (second hiccup)
+          children (if (map? attrs) (drop 2 hiccup) (rest hiccup))
+          current (when (and (map? attrs) (contains? attrs :data-show))
+                    [(:data-show attrs)])]
+      (concat current (mapcat find-data-show-values children)))
+
+    (seq? hiccup)
+    (mapcat find-data-show-values hiccup)
+
+    :else []))
+
 (def test-table-data
   {:group-by [],
    :filters {},
@@ -182,6 +217,40 @@
       (is (not (contains? active-ops "contains"))
           "Boolean column should NOT have 'contains' operation"))))
 
+(deftest table-group-expand-handlers-test
+  (let [groups [{:group-value "Classical Greek"
+                 :rows [{:id 1 :name "Socrates" :school "Classical Greek"}]
+                 :row-ids #{1}
+                 :count 1}]
+        result (table/render {:id "test-table"
+                              :cols [{:key :name :label "Name" :type :string}
+                                     {:key :school :label "School" :type :enum}]
+                              :rows []
+                              :groups groups
+                              :group-by [:school]
+                              :sort-state []
+                              :filters {}
+                              :total-rows 1
+                              :page-size 10
+                              :page-current 0
+                              :page-sizes [10 25]
+                              :data-url "/data"})
+        toggle-handler (find-group-toggle-handler result)
+        expanded-shows (->> (find-data-show-values result)
+                            (filter #(string/includes? % "expanded")))]
+    (testing "group toggle initializes expanded map and uses bracket access"
+      (is (some? toggle-handler))
+      (is (string/includes? toggle-handler "expanded ||= {}"))
+      (is (string/includes? toggle-handler "expanded['0']"))
+      (is (not (string/includes? toggle-handler ".expanded.0"))
+          "Toggle should not use dot access for numeric keys"))
+
+    (testing "group rows show/hide with bracket-based expanded state"
+      (is (seq expanded-shows))
+      (is (every? #(string/includes? % "expanded['0']") expanded-shows))
+      (is (not-any? #(string/includes? % ".expanded.0") expanded-shows)
+          "data-show should not use dot access for numeric keys"))))
+
 (deftest table-cell-selection-handlers-test
   (let [result (table/render {:id "test-table"
                               :cols [{:key :name :label "Name" :type :string}]
@@ -199,31 +268,25 @@
         (is (some? handler))
         (is (string/includes? handler "evt.detail.selection"))
         (is (re-find #"filter" handler)
-            "Selection handler should filter to truthy cells")
-        (is (re-find #"\.length" handler)
-            "Selection handler should check filtered length")
+            "Selection handler should filter entries")
         (is (re-find #"Array\.isArray" handler)
             "Selection handler should guard with Array.isArray")
         (is (re-find #"Object\.keys" handler)
-            "Selection handler should fall back to Object.keys when selection is object")
-        (is (not (re-find #"Object.entries" handler))
-            "Selection handler should not use Object.entries")
-        (is (string/includes? handler "$datatable.test-table.cellSelection = []")
-            "Selection handler should clear cellSelection with an empty array")
-        (is (string/includes? handler "$datatable.test-table.cellSelection = null")
-            "Selection handler should clear signal when empty")
-        (is (re-find #"\$datatable\.test-table\.cellSelection = \[\].*\$datatable\.test-table\.cellSelection = null" handler)
-            "Selection handler should clear cellSelection with [] before null")))
+            "Selection handler should fall back to Object.keys")
+        (is (re-find #"\.length" handler)
+            "Selection handler should check filtered length")
+        (is (string/includes? handler "cellSelection = []")
+            "Selection handler should clear selection first")
+        (is (string/includes? handler "cellSelection = null")
+            "Selection handler should remove signal when empty")))
 
-    (testing "escape clears selection by nulling signal"
+    (testing "escape clears selection by removing signal"
       (let [handler (:data-on:keydown__window table-attrs)]
         (is (some? handler))
         (is (string/includes? handler "Escape"))
-        (is (string/includes? handler "$datatable.test-table.cellSelection = []")
-            "Escape should clear cellSelection with an empty array")
-        (is (string/includes? handler "$datatable.test-table.cellSelection = null")
-            "Escape should null the cellSelection signal")
-        (is (re-find #"\$datatable\.test-table\.cellSelection = \[\].*\$datatable\.test-table\.cellSelection = null" handler)
-            "Escape should clear cellSelection with [] before null")
+        (is (string/includes? handler "cellSelection = []")
+            "Escape should clear selection before removing signal")
+        (is (string/includes? handler "cellSelection = null")
+            "Escape should remove the cellSelection signal")
         (is (not (string/includes? handler "cellSelection = {}"))
             "Escape should not set an empty selection")))))

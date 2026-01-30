@@ -10,10 +10,19 @@
   [ctx]
   (row/render-row ctx))
 
+(defn- expanded-signal
+  [table-id group-idx]
+  (let [base (str "datatable." table-id ".expanded")
+        access (str base "['" group-idx "']")
+        check (str "$" base " && $" access)
+        toggle (str "$" base " ||= {}; $" access " = !$" access)]
+    {:check check
+     :toggle toggle}))
+
 (defn render-group-row
   [{:keys [group-value row-ids cols selectable? table-id group-idx count]}]
-  (let [expanded-signal (str "datatable." table-id ".expanded." group-idx)
-        row-id-strs (map #(str "datatable\\\\." table-id "\\\\.selections\\\\." %) row-ids)
+  (let [{:keys [check toggle]} (expanded-signal table-id group-idx)
+        row-id-strs (map #(str "datatable\\." table-id "\\.selections\\." %) row-ids)
         select-pattern (str/join "|" row-id-strs)]
     [:tr.bg-base-200
      (when selectable?
@@ -23,9 +32,9 @@
           :data-on:click (str "evt.target.checked ? @setAll(true, { include: '" select-pattern "' }) : @setAll(false, { include: '" select-pattern "' })")}]])
      [:td
       [:button.btn.btn-ghost.btn-xs.flex.items-center.gap-1
-       {:data-on:click (str "$" expanded-signal " = !$" expanded-signal)}
-       [:span {:data-show (str "$" expanded-signal)} primitives/chevron-down]
-       [:span {:data-show (str "!$" expanded-signal)} primitives/chevron-right]
+       {:data-on:click toggle}
+       [:span {:data-show check} primitives/chevron-down]
+       [:span {:data-show (str "!(" check ")")} primitives/chevron-right]
        [:span.font-medium (str group-value)]
        [:span.text-base-content.opacity-50 (str "(" count ")")]]]
      (for [_ cols]
@@ -34,7 +43,7 @@
 (defn render-group
   [{:keys [group cols selectable? row-id-fn table-id group-idx row-idx-offset data-url]}]
   (let [{:keys [group-value rows row-ids count]} group
-        expanded-signal (str "datatable." table-id ".expanded." group-idx)
+        {:keys [check]} (expanded-signal table-id group-idx)
         row-idx-offset (or row-idx-offset 0)]
     (list
      (render-group-row {:group-value group-value
@@ -48,7 +57,7 @@
        (let [signal-path (str "datatable." table-id ".selections." (row-id-fn r))
              row-idx (+ row-idx-offset idx)
              row-id (row-id-fn r)]
-         [:tr {:data-show (str "$" expanded-signal)}
+         [:tr {:data-show check}
           (when selectable?
             (row/render-selection-cell {:signal-path signal-path}))
           [:td]
