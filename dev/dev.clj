@@ -1,6 +1,7 @@
 (ns dev
   (:require [dev.nrepl]
-            [dev.http]))
+            [dev.http]
+            [dev.logger]))
 
 (defn start-development!
   "Call from the cli to start the system"
@@ -9,5 +10,6 @@
   (println "Starting development environment...")
   (dev.nrepl/start-nrepl! {:port nrepl-port})
   (dev.http/start)
+  (dev.logger/start!)
   (println "Development environment ready!")
   @(promise))
