@@ -10,7 +10,9 @@
             [reitit.ring.middleware.muuntaja :as muuntaja]
             [reitit.ring.middleware.exception :as exception]
             [reitit.ring.middleware.multipart :as multipart]
-            [reitit.ring.middleware.parameters :as parameters]))
+            [reitit.ring.middleware.parameters :as parameters]
+            [dev.logger :as log]
+            [starfederation.datastar.clojure.api :as d*]))
 
 (defn make-routes
   [config]
@@ -33,7 +35,8 @@
    muuntaja/format-request-middleware
    coercion/coerce-response-middleware
    coercion/coerce-request-middleware
-   multipart/multipart-middleware])
+   multipart/multipart-middleware
+   log/params-middleware])
 
 (defn app
   [config]
