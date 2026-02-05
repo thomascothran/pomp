@@ -1,13 +1,19 @@
 { pkgs, lib, config, inputs, ... }:
 
+let clml = inputs.clojure-mcp-light;
+
+in
+
 {
   cachix.enable = false;
 
   # https://devenv.sh/basics/
   env.GREET = "devenv";
+  env.CHROME_BIN = "${pkgs.chromium}/bin/chromium";
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.git pkgs.clojure pkgs.nodejs ];
+  packages = [ pkgs.git pkgs.clojure pkgs.nodejs pkgs.chromedriver pkgs.chromium pkgs.babashka pkgs.bbin pkgs.parinfer-rust];
+
 
   # https://devenv.sh/processes/
   processes.dev.exec = "clj -X:test:dev";
@@ -18,14 +24,17 @@
   # services.postgres.enable = true;
 
   # https://devenv.sh/scripts/
-  scripts.hello.exec = ''
-    echo hello from $GREET
+  scripts.clj-paren-repair.exec = ''
+    exec bb --config ${clml}/bb.edn -m clojure-mcp-light.paren-repair "$@"
+  '';
+
+  scripts.clj-nrepl-eval.exec = ''
+    exec bb --config ${clml}/bb.edn -m clojure-mcp-light.nrepl-eval "$@"
   '';
 
   # https://devenv.sh/basics/
   enterShell = ''
-    hello         # Run scripts directly
-    git --version # Use packages
+    echo "hello" &> /dev/null
   '';
 
   # https://devenv.sh/tasks/

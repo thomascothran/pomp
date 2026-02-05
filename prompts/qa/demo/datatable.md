@@ -90,7 +90,7 @@ I should be able to hide and unhide columns
 
 Given that the Name column is editable
 
-When I double-click on a cell in the Name column
+When I click the pencil icon in a Name cell
 
 Then the cell should enter edit mode with an input field
 
@@ -118,20 +118,10 @@ Then the edit should be cancelled
 
 And the original value should be displayed
 
-### Scenario 10: Save on blur
+### Scenario 11: Editable cells
 
-Given that I am editing a cell
+Given that the Century column is editable
 
-When I change the value and click outside the input
+When I click the pencil icon in the Century column
 
-Then the value should be saved
-
-And the cell should exit edit mode
-
-### Scenario 11: Non-editable cells
-
-Given that the Century column is not editable
-
-When I double-click on a cell in the Century column
-
-Then the cell should NOT enter edit mode
+Then the cell should enter edit mode
