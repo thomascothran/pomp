@@ -12,30 +12,35 @@
 (def base-url "http://localhost:9393/demo/datatable")
 (def in-memory-base-url "http://localhost:9394/demo/datatable-in-memory")
 
+(def default-server-port 9393)
+(def default-in-memory-server-port 9394)
+
 (def ^:dynamic *driver* nil)
 (def ^:dynamic *state* nil)
 
 (defonce !server (atom nil))
 (defonce !in-memory-server (atom nil))
 
+(def default-app-handler
+  (dev.http/app {}))
+
 (defn start-server
-  [test-plan]
+  [{:keys [app-handler port] :or {port default-server-port}}]
   (when-not @!server
     (reset! !server
-            (run-jetty (fn [req]
-                         ((dev.http/app {}) req))
-                       {:port 9393
-                        :join? false})))
+            (run-jetty app-handler
+                       {:port port
+                         :join? false})))
   (demo.datatable/init-db!)
   (demo.datatable/seed-data!)
-  test-plan)
+  nil)
 
 (defn stop-server
-  [test-plan]
+  []
   (when-let [server @!server]
     (.stop server)
     (reset! !server nil))
-  test-plan)
+  nil)
 
 (def in-memory-data-url "/demo/datatable-in-memory/data")
 
@@ -70,25 +75,28 @@
      ["/demo/datatable-in-memory/data" (make-in-memory-data-handler)]]
     {:data {:middleware (dev.http/make-middleware)
             :muuntaja m/instance}})
-   (ring/routes
-    (ring/create-resource-handler {:path "/"})
-    (ring/create-default-handler))))
+    (ring/routes
+     (ring/create-resource-handler {:path "/"})
+     (ring/create-default-handler))))
+
+(def default-in-memory-app-handler
+  (in-memory-app))
 
 (defn start-in-memory-server
-  [test-plan]
+  [{:keys [app-handler port] :or {port default-in-memory-server-port}}]
   (when-not @!in-memory-server
     (reset! !in-memory-server
-            (run-jetty (in-memory-app)
-                       {:port 9394
-                        :join? false})))
-  test-plan)
+            (run-jetty app-handler
+                       {:port port
+                         :join? false})))
+  nil)
 
 (defn stop-in-memory-server
-  [test-plan]
+  []
   (when-let [server @!in-memory-server]
     (.stop server)
     (reset! !in-memory-server nil))
-  test-plan)
+  nil)
 
 (defn driver-fixture
   [f]
@@ -101,20 +109,28 @@
           (e/quit driver))))))
 
 (defn server-fixture
-  [f]
-  (start-server nil)
-  (try
-    (f)
-    (finally
-      (stop-server nil))))
+  [{:keys [app-handler port] :or {port default-server-port} :as config}]
+  (when-not app-handler
+    (throw (ex-info "server-fixture requires :app-handler" {:config config})))
+  (fn [f]
+    (start-server {:app-handler app-handler
+                   :port port})
+    (try
+      (f)
+      (finally
+        (stop-server)))))
 
 (defn in-memory-server-fixture
-  [f]
-  (start-in-memory-server nil)
-  (try
-    (f)
-    (finally
-      (stop-in-memory-server nil))))
+  [{:keys [app-handler port] :or {port default-in-memory-server-port} :as config}]
+  (when-not app-handler
+    (throw (ex-info "in-memory-server-fixture requires :app-handler" {:config config})))
+  (fn [f]
+    (start-in-memory-server {:app-handler app-handler
+                             :port port})
+    (try
+      (f)
+      (finally
+        (stop-in-memory-server)))))
 
 (defn datatable-state-fixture
   [f]

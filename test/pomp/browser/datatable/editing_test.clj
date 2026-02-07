@@ -4,7 +4,7 @@
             [etaoin.keys :as keys]
             [pomp.test.fixtures.browser :as browser]))
 
-(use-fixtures :once browser/server-fixture browser/driver-fixture browser/datatable-state-fixture)
+(use-fixtures :once (browser/server-fixture {:app-handler browser/default-app-handler}) browser/driver-fixture browser/datatable-state-fixture)
 
 (def first-name-cell
   {:css "#datatable td[data-row='0'][data-col='0']"})
