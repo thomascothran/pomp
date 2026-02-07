@@ -8,6 +8,26 @@
    - `pomp.rad.datatable.ui.*` for rendering functions
    - `pomp.rad.datatable.ui.row` for default row/cell render functions
    - `pomp.rad.datatable.query.*` for query implementations
+
+   Signal schema (Datastar signals under `datatable.<id>`):
+   - `editing` (object) {:rowId string :colKey string} active cell edit target.
+   - `cells` (object) {<row-id> {<col-key> value}} edited cell values by row/column.
+   - `submitInProgress` (boolean) true while save requests are running.
+   - `enumBlurLock` (number) timestamp used to suppress enum blur events.
+   - `cellSelectDragging` (boolean) true while drag-selecting cells.
+   - `cellSelectStart` (object) {:row number :col number} drag start coordinates.
+   - `cellSelection` (vector) [row-col ...] selected cell keys.
+   - `selections.<row-id>` (boolean) per-row checkbox selection state.
+
+   Full signal names and shapes:
+   - `datatable.<id>.editing` (object) {:rowId string :colKey string} active cell edit target.
+   - `datatable.<id>.cells` (object) {<row-id> {<col-key> value}} edited cell values by row/column.
+   - `datatable.<id>.submitInProgress` (boolean) true while save requests are running.
+   - `datatable.<id>.enumBlurLock` (number) timestamp used to suppress enum blur events.
+   - `datatable.<id>.cellSelectDragging` (boolean) true while drag-selecting cells.
+   - `datatable.<id>.cellSelectStart` (object) {:row number :col number} drag start coordinates.
+   - `datatable.<id>.cellSelection` (vector) [row-col ...] selected cell keys.
+   - `datatable.<id>.selections.<row-id>` (boolean) per-row checkbox selection state.
   "
   (:require [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.ring :refer [->sse-response on-open]]
