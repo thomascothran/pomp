@@ -19,7 +19,10 @@
 
 ## Testing
 - Never run tests via CLI runners.
-- Only run tests from a Clojure REPL using `kaocha.repl/run`.
+- Only run tests from a Clojure REPL using `kaocha.repl` functions.
+  + for unit tests `(kaocha.repl/run :unit)`
+  + scope as necessary. Remember `(kaocha.repl/run)` only runs tests in the current namespace
+
 
 ## REPL workflow
 - After any Clojure code change, reload namespaces with `require` and the `:reload` flag.
