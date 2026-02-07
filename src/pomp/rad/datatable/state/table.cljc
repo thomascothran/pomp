@@ -11,7 +11,7 @@
         new-filters (if grouping-changed?
                       {}
                       (or (filter-state/next-state (:filters signals) query-params) {}))
-        new-sort (or (sort-state/next-state (:sort signals) query-params) [])
+        new-sort (or (sort-state/next-state (:sort signals) query-params new-group-by) [])
         new-page (page-state/next-state (:page signals) query-params)]
     {:filters new-filters
      :sort new-sort

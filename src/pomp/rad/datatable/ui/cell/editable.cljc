@@ -2,7 +2,7 @@
 
 (defn cell-selection-class
   [signal-base cell-key]
-  (str "{'bg-info/20': $" signal-base ".cellSelection && $" signal-base ".cellSelection.includes('" cell-key "')}") )
+  (str "{'bg-info/20': $" signal-base ".cellSelection && $" signal-base ".cellSelection.includes('" cell-key "')}"))
 
 (defn editable-mousedown-handler
   [{:keys [signal-base editing-signal editing-check cell-base row-idx col-idx]}]

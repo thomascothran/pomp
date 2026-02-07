@@ -1,6 +1,7 @@
 (ns pomp.rad.datatable.query.in-memory-test
   (:require [clojure.test :refer [deftest is testing]]
-            [pomp.rad.datatable.query.in-memory :as query]))
+            [pomp.rad.datatable.query.in-memory :as query]
+            [pomp.rad.datatable.state.group :as group-state]))
 
 ;; =============================================================================
 ;; New filter structure: {:filters {:col-key [{:type "text" :op "contains" :value "x"} ...]}}
@@ -507,3 +508,81 @@
               {:id 4 :name "Kant" :century 18}]
              (query/apply-filters rows {:century [{:type "number" :op "greater-than" :value "0"}]}))
           "filters AD centuries (positive values)"))))
+
+;; =============================================================================
+;; Grouped Query Tests
+;; =============================================================================
+
+(def sample-rows
+  [{:id 1 :name "A1" :school "Academy" :century 2}
+   {:id 2 :name "A2" :school "Academy" :century 4}
+   {:id 3 :name "B1" :school "Lyceum" :century 1}
+   {:id 4 :name "C1" :school "Stoa" :century 3}
+   {:id 5 :name "C2" :school "Stoa" :century 5}])
+
+(defn- expected-group-order
+  [rows group-key]
+  (->> rows (map group-key) distinct sort vec))
+
+(defn- group-order
+  [rows group-key]
+  (->> rows (map group-key) distinct vec))
+
+(deftest grouped-pagination-uses-group-count-test
+  (testing "grouped pagination counts groups and keeps groups intact"
+    (let [qfn (query/query-fn sample-rows)
+          page-size 2
+          result (qfn {:filters {}
+                       :sort [{:column "school" :direction "asc"}]
+                       :group-by [:school]
+                       :page {:size page-size :current 0}}
+                      nil)
+          groups (group-state/group-rows (:rows result) [:school])
+          expected-order (expected-group-order sample-rows :school)
+          expected-groups (take page-size expected-order)
+          original-counts (frequencies (map :school sample-rows))]
+      (is (= (count expected-order) (:total-rows result))
+          "Expected total-rows to reflect group count when grouped")
+      (is (= page-size (count groups))
+          "Expected page size to limit group count")
+      (is (= (set expected-groups) (set (map :group-value groups)))
+          "Expected page to include only the first group values")
+      (doseq [{:keys [group-value count]} groups]
+        (is (= (get original-counts group-value) count)
+            "Expected full group row counts on the page")))))
+
+(deftest grouped-sort-and-filter-test
+  (testing "non-grouped sorting does not reorder groups"
+    (let [qfn (query/query-fn sample-rows)
+          result (qfn {:filters {}
+                       :sort [{:column "century" :direction "asc"}]
+                       :group-by [:school]
+                       :page {:size 10 :current 0}}
+                      nil)
+          expected-order (expected-group-order sample-rows :school)]
+      (is (= expected-order (group-order (:rows result) :school))
+          "Expected group order to stay aligned with grouped column")))
+
+  (testing "non-grouped sorting does not reorder rows within groups"
+    (let [qfn (query/query-fn sample-rows)
+          result (qfn {:filters {}
+                       :sort [{:column "century" :direction "desc"}]
+                       :group-by [:school]
+                       :page {:size 10 :current 0}}
+                      nil)
+          academy-rows (->> (:rows result)
+                            (filter #(= "Academy" (:school %)))
+                            (map :name)
+                            vec)]
+      (is (= ["A1" "A2"] academy-rows)
+          "Expected non-grouped sort to leave row order intact within groups")))
+
+  (testing "filtering by grouped column counts groups, not rows"
+    (let [qfn (query/query-fn sample-rows)
+          result (qfn {:filters {:school [{:type "enum" :op "is" :value "Academy"}]}
+                       :sort []
+                       :group-by [:school]
+                       :page {:size 10 :current 0}}
+                      nil)]
+      (is (= 1 (:total-rows result))
+          "Expected total-rows to equal group count after filtering"))))

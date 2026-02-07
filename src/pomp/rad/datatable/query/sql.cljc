@@ -195,6 +195,12 @@
           dir (str/upper-case (or direction "asc"))]
       (str "ORDER BY " col " " dir))))
 
+(defn- group-sort-direction
+  [group-key sort-spec]
+  (let [{:keys [column direction]} (first sort-spec)]
+    (when (= (keyword column) group-key)
+      (or direction "asc"))))
+
 (defn generate-limit-clause
   "Generates a LIMIT/OFFSET clause from page spec.
    Returns [sql-string limit offset] or nil if no pagination."
@@ -203,6 +209,76 @@
     (when size
       (let [offset (* (or current 0) size)]
         ["LIMIT ? OFFSET ?" size offset]))))
+
+(defn generate-group-count-sql
+  "Generates a COUNT DISTINCT query for grouped total rows.
+   Returns [sql-string & params] suitable for next.jdbc."
+  [config {:keys [filters group-by]}]
+  (let [group-key (first group-by)
+        table-name (:table-name config)
+        col (col-name config group-key)
+        base-sql (str "SELECT COUNT(DISTINCT " col ") AS total FROM " table-name)
+        where-clause (generate-where-clause config filters)
+        sql (if where-clause
+              (str base-sql " " (first where-clause))
+              base-sql)
+        params (when where-clause (rest where-clause))]
+    (into [sql] params)))
+
+(defn generate-group-values-sql
+  "Generates a DISTINCT group value query for grouped pagination.
+   Returns [sql-string & params] suitable for next.jdbc."
+  [config {:keys [filters group-by sort page]}]
+  (let [group-key (first group-by)
+        table-name (:table-name config)
+        col (col-name config group-key)
+        dir (str/upper-case (or (group-sort-direction group-key sort) "asc"))
+        base-sql (str "SELECT DISTINCT " col " FROM " table-name)
+        where-clause (generate-where-clause config filters)
+        order-clause (str "ORDER BY " col " " dir)
+        limit-clause (generate-limit-clause page)
+        sql-parts (cond-> [base-sql]
+                    where-clause (conj (first where-clause))
+                    order-clause (conj order-clause)
+                    limit-clause (conj (first limit-clause)))
+        sql (str/join " " sql-parts)
+        params (concat (when where-clause (rest where-clause))
+                       (when limit-clause (rest limit-clause)))]
+    (into [sql] params)))
+
+(defn- generate-grouped-where
+  [config filters group-key group-values]
+  (let [filter-clause (generate-where-clause config filters)
+        filter-sql (when filter-clause
+                     (subs (first filter-clause) (count "WHERE ")))
+        filter-params (when filter-clause (rest filter-clause))
+        group-sql (when (seq group-values)
+                    (str (col-name config group-key)
+                         " IN ("
+                         (str/join ", " (repeat (count group-values) "?"))
+                         ")"))
+        sql-parts (remove nil? [filter-sql group-sql])
+        sql (when (seq sql-parts)
+              (str "WHERE " (str/join " AND " sql-parts)))
+        params (concat filter-params group-values)]
+    [sql params]))
+
+(defn generate-grouped-query-sql
+  "Generates a SELECT query for grouped rows based on group values.
+   Returns [sql-string & params] suitable for next.jdbc."
+  [config {:keys [filters group-by sort group-values]}]
+  (let [group-key (first group-by)
+        table-name (:table-name config)
+        col (col-name config group-key)
+        dir (str/upper-case (or (group-sort-direction group-key sort) "asc"))
+        base-sql (str "SELECT * FROM " table-name)
+        [where-sql where-params] (generate-grouped-where config filters group-key group-values)
+        order-clause (str "ORDER BY " col " " dir)
+        sql-parts (cond-> [base-sql]
+                    where-sql (conj where-sql)
+                    order-clause (conj order-clause))
+        sql (str/join " " sql-parts)]
+    (into [sql] where-params)))
 
 (defn generate-query-sql
   "Generates a complete SELECT query with filtering, sorting, and pagination.
@@ -246,26 +322,57 @@
    Returns a function with signature:
    (fn [{:keys [filters sort page]} request] {:rows [...] :total-rows n :page {...}})"
   [config execute!]
-  (fn [{:keys [filters sort page]} _request]
-    (let [;; Get total count first
-          count-sql (generate-count-sql config {:filters filters})
-          total-rows (-> (execute! count-sql) first :total)
-          ;; Calculate page clamping (same logic as in-memory)
-          size (:size page 10)
-          total-pages (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
-          current (:current page)
-          clamped-current (cond
-                            (nil? current) (max 0 (dec total-pages))
-                            (>= current total-pages) (max 0 (dec total-pages))
-                            :else current)
-          ;; Generate query with clamped page
-          query-sql (generate-query-sql config {:filters filters
-                                                :sort sort
-                                                :page {:size size :current clamped-current}})
-          rows (execute! query-sql)]
-      {:rows rows
-       :total-rows total-rows
-       :page {:size size :current clamped-current}})))
+  (fn [{:keys [filters page group-by] :as params} _request]
+    (if (seq group-by)
+      (let [sort-spec (:sort params)
+            count-sql (generate-group-count-sql config {:filters filters :group-by group-by})
+            total-groups (-> (execute! count-sql) first :total)
+            size (:size page 10)
+            total-pages (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
+            current (:current page)
+            clamped-current (cond
+                              (nil? current) (max 0 (dec total-pages))
+                              (>= current total-pages) (max 0 (dec total-pages))
+                              :else current)
+            group-values-sql (generate-group-values-sql config {:filters filters
+                                                               :group-by group-by
+                                                               :sort sort-spec
+                                                               :page {:size size :current clamped-current}})
+            group-key (first group-by)
+            group-col-key (keyword (col-name config group-key))
+            group-values (->> (execute! group-values-sql)
+                              (map group-col-key)
+                              vec)
+            rows (if (seq group-values)
+                   (let [grouped-query-sql (generate-grouped-query-sql config {:filters filters
+                                                                               :group-by group-by
+                                                                               :sort sort-spec
+                                                                               :group-values group-values})]
+                     (execute! grouped-query-sql))
+                   [])]
+        {:rows rows
+         :total-rows total-groups
+         :page {:size size :current clamped-current}})
+      (let [sort-spec (:sort params)
+            ;; Get total count first
+            count-sql (generate-count-sql config {:filters filters})
+            total-rows (-> (execute! count-sql) first :total)
+            ;; Calculate page clamping (same logic as in-memory)
+            size (:size page 10)
+            total-pages (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
+            current (:current page)
+            clamped-current (cond
+                              (nil? current) (max 0 (dec total-pages))
+                              (>= current total-pages) (max 0 (dec total-pages))
+                              :else current)
+            ;; Generate query with clamped page
+            query-sql (generate-query-sql config {:filters filters
+                                                  :sort sort-spec
+                                                  :page {:size size :current clamped-current}})
+            rows (execute! query-sql)]
+        {:rows rows
+         :total-rows total-rows
+         :page {:size size :current clamped-current}}))))
 
 (defn save-fn
   "Creates a save function for cell edits.
@@ -287,4 +394,3 @@
     (let [sql (str "UPDATE " table " SET " (name col-key) " = ? WHERE " (name id-column) " = ?")]
       (execute! [sql value row-id]))
     {:success true}))
-

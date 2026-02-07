@@ -8,7 +8,12 @@
 - Prefer daisyUI components over custom CSS or raw Tailwind utilities where possible.
 
 ## Repo layout
-- Interactive examples live in `dev/demo` and are accessible in the browser.
+- Interactive examples live in `dev/` and are accessible in the browser.
+  + `dev/demo`: full, polished examples of a feature
+  + `dev/scratch` includes one-off experiments, it can be used to:
+    * see what things look like
+    * debug
+    * experiment with datastar
 - Architecture decisions live in `docs/adr`.
 - Logs are written to `logs/events.log` in EDN format.
 
@@ -17,12 +22,16 @@
 - The user will run `devenv up` to start services and build processes.
 - Agents MUST NOT run `devenv up`.
 
+### Http Ports
+
+- The development server runs on port 3000
+- The tests run on a port defined in the test fixtures
+
 ## Testing
 - Never run tests via CLI runners.
 - Only run tests from a Clojure REPL using `kaocha.repl` functions.
   + for unit tests `(kaocha.repl/run :unit)`
   + scope as necessary. Remember `(kaocha.repl/run)` only runs tests in the current namespace
-
 
 ## REPL workflow
 - After any Clojure code change, reload namespaces with `require` and the `:reload` flag.

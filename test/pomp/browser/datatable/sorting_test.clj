@@ -3,7 +3,7 @@
             [etaoin.api :as e]
             [pomp.test.fixtures.browser :as browser]))
 
-(use-fixtures :once browser/driver-fixture browser/datatable-state-fixture)
+(use-fixtures :once browser/server-fixture browser/driver-fixture browser/datatable-state-fixture)
 
 (def name-header-button
   {:xpath "//th//button[.//span[contains(@class,'font-semibold') and normalize-space(text())='Name']]"})

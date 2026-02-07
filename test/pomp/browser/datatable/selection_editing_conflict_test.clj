@@ -3,7 +3,7 @@
             [etaoin.api :as e]
             [pomp.test.fixtures.browser :as browser]))
 
-(use-fixtures :once browser/driver-fixture browser/datatable-state-fixture)
+(use-fixtures :once browser/server-fixture browser/driver-fixture browser/datatable-state-fixture)
 
 (def first-name-cell
   {:css "#datatable td[data-row='0'][data-col='0']"})

@@ -83,6 +83,16 @@
   {:class "navbar-start"})
 
 (defmethod pe/html-element
+  ::pe/navbar-center
+  [_]
+  :div)
+
+(defmethod pe/default-attrs
+  ::pe/navbar-center
+  [_]
+  {:class "navbar-center"})
+
+(defmethod pe/html-element
   ::pe/navbar-end
   [_]
   :div)

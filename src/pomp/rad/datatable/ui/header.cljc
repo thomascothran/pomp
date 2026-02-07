@@ -20,7 +20,10 @@
         table-filter-ops filter-operations
         grouped? (seq group-by)
         group-col-key (first group-by)
-        group-col (when grouped? (some #(when (= (:key %) group-col-key) %) cols))]
+        current-sort (first sort-state)
+        group-col-name (when group-col-key (name group-col-key))
+        group-sorted? (= (:column current-sort) group-col-name)
+        group-sort-dir (:direction current-sort)]
     [:thead
      [:tr
       (when selectable?
@@ -31,38 +34,51 @@
       (when grouped?
         [:th
          [:div.flex.items-center.justify-between.gap-2
-          [:span.font-semibold "Group"]
-          (column-menu/render-group-column {:data-url data-url})]])
-      (for [[idx {:keys [key label type groupable filter-operations] :as col}] (map-indexed vector cols)]
-        (let [col-name (name key)
-              ;; filters is now {:col-key [{:type "text" :op "..." :value "..."}]}
-              ;; Get the first filter for display in the menu
-              col-filters (get filters key)
-              first-filter (first col-filters)
-              current-filter-op (:op first-filter)
-              current-filter-val (:value first-filter)
-              current-sort (first sort-state)
-              is-sorted? (= (:column current-sort) col-name)
-              sort-dir (:direction current-sort)]
-          [:th
-           {:style {:resize "horizontal" :overflow "hidden" :min-width "80px"}
-            ;; Drop target handlers stay on th
-            :data-on:dragover__prevent (str "$datatable." table-id ".dragOver = '" col-name "'")
+           [:button.flex.items-center.gap-1.hover:text-primary.transition-colors
+            (cond-> {}
+              group-col-name
+              (assoc :data-on:click (str "@get('" data-url "?clicked=" group-col-name "')")))
+            [:span {:class (if group-sorted? "opacity-100" "opacity-30")}
+             (cond
+               (and group-sorted? (= group-sort-dir "asc")) primitives/sort-icon-asc
+               (and group-sorted? (= group-sort-dir "desc")) primitives/sort-icon-desc
+               :else primitives/sort-icon-both)]
+            [:span.font-semibold "Group"]]
+           (column-menu/render-group-column {:data-url data-url
+                                             :group-col-key group-col-key})]])
+        (for [[idx {:keys [key label type groupable filter-operations] :as col}] (map-indexed vector cols)]
+          (let [col-name (name key)
+               ;; filters is now {:col-key [{:type "text" :op "..." :value "..."}]}
+               ;; Get the first filter for display in the menu
+               col-filters (get filters key)
+               first-filter (first col-filters)
+               current-filter-op (:op first-filter)
+               current-filter-val (:value first-filter)
+                is-sorted? (= (:column current-sort) col-name)
+                sort-dir (:direction current-sort)
+                sort-disabled? (and grouped? (not= key group-col-key))]
+           [:th
+            {:style {:resize "horizontal" :overflow "hidden" :min-width "80px"}
+             ;; Drop target handlers stay on th
+             :data-on:dragover__prevent (str "$datatable." table-id ".dragOver = '" col-name "'")
             :data-on:dragleave (str "if ($datatable." table-id ".dragOver === '" col-name "') $datatable." table-id ".dragOver = null")
             :data-on:drop (str "@get('" data-url "?moveCol=' + $datatable." table-id ".dragging + '&beforeCol=" col-name "')")
             :data-class (str "{'border-l-4 border-primary': $datatable." table-id ".dragOver === '" col-name "' && $datatable." table-id ".dragging !== '" col-name "'}")}
-           [:div.flex.items-center.justify-between.gap-2
-            ;; Label is the drag handle
-            [:button.flex.items-center.gap-1.hover:text-primary.transition-colors.cursor-grab
-             {:draggable "true"
-              :data-on:dragstart (str "$datatable." table-id ".dragging = '" col-name "'")
-              :data-on:dragend (str "$datatable." table-id ".dragging = null; $datatable." table-id ".dragOver = null")
-              :data-on:click (str "@get('" data-url "?clicked=" col-name "')")}
-             [:span {:class (if is-sorted? "opacity-100" "opacity-30")}
-              (cond
-                (and is-sorted? (= sort-dir "asc")) primitives/sort-icon-asc
-                (and is-sorted? (= sort-dir "desc")) primitives/sort-icon-desc
-                :else primitives/sort-icon-both)]
+            [:div.flex.items-center.justify-between.gap-2
+             ;; Label is the drag handle
+             [:button.flex.items-center.gap-1.hover:text-primary.transition-colors.cursor-grab
+              (cond-> {:draggable "true"
+                       :data-on:dragstart (str "$datatable." table-id ".dragging = '" col-name "'")
+                       :data-on:dragend (str "$datatable." table-id ".dragging = null; $datatable." table-id ".dragOver = null")}
+                (not sort-disabled?)
+                (assoc :data-on:click (str "@get('" data-url "?clicked=" col-name "')"))
+                sort-disabled?
+                (assoc :aria-disabled "true"))
+              [:span {:class (if is-sorted? "opacity-100" "opacity-30")}
+               (cond
+                 (and is-sorted? (= sort-dir "asc")) primitives/sort-icon-asc
+                 (and is-sorted? (= sort-dir "desc")) primitives/sort-icon-desc
+                 :else primitives/sort-icon-both)]
              [:span.font-semibold label]]
             [:div.flex.items-center
              (filter-menu/render
@@ -82,6 +98,5 @@
                :col-label label
                :data-url data-url
                :table-id table-id
-               :groupable? groupable})]]]))]]))
-
-
+               :groupable? groupable
+               :group-by group-by})]]]))]]))

@@ -142,12 +142,55 @@
                 (take size))
      :current clamped-current}))
 
+(defn- group-sort-direction
+  [group-key sort-spec]
+  (let [{:keys [column direction]} (first sort-spec)]
+    (when (= (keyword column) group-key)
+      (or direction "asc"))))
+
+(defn- grouped-page
+  [rows {:keys [group-by page] :as params}]
+  (let [group-key (first group-by)
+        sort-spec (:sort params)
+        group-dir (or (group-sort-direction group-key sort-spec) "asc")
+        comparator (if (= group-dir "desc")
+                     #(compare %2 %1)
+                     compare)
+        group-values (->> rows
+                          (map group-key)
+                          distinct
+                          (clojure.core/sort comparator)
+                          vec)
+        total-groups (count group-values)
+        size (:size page)
+        total-pgs (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
+        current (:current page)
+        clamped-current (cond
+                          (nil? current) (max 0 (dec total-pgs))
+                          (>= current total-pgs) (max 0 (dec total-pgs))
+                          :else current)
+        page-groups (->> group-values
+                         (drop (* clamped-current size))
+                         (take size)
+                         vec)
+        groups->rows (reduce (fn [m row]
+                               (let [group-value (get row group-key)]
+                                 (update m group-value (fnil conj []) row)))
+                             {}
+                             rows)
+        page-rows (mapcat #(get groups->rows %) page-groups)]
+    {:rows (vec page-rows)
+     :total-rows total-groups
+     :page {:size size :current clamped-current}}))
+
 (defn query-fn
   [rows]
-  (fn [{:keys [filters sort page]} _request]
-    (let [filtered (apply-filters rows filters)
-          sorted (sort-data filtered sort)
-          {:keys [rows current]} (paginate-data sorted page)]
-      {:rows rows
-       :total-rows (count filtered)
-       :page {:size (:size page) :current current}})))
+  (fn [{:keys [filters page group-by] :as params} _request]
+    (let [filtered (apply-filters rows filters)]
+      (if (seq group-by)
+        (grouped-page filtered params)
+        (let [sorted (sort-data filtered (:sort params))
+              {:keys [rows current]} (paginate-data sorted page)]
+          {:rows rows
+           :total-rows (count filtered)
+           :page {:size (:size page) :current current}})))))

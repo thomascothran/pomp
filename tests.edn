@@ -3,8 +3,6 @@
             :kaocha.plugin/filter
             :kaocha.plugin/capture-output
             :kaocha.plugin/hooks]
-  :kaocha.hooks/pre-run [pomp.test.fixtures.browser/start-server]
-  :kaocha.hooks/post-run [pomp.test.fixtures.browser/stop-server]
   :tests [{:id :unit
            :test-paths ["test"]
            :source-paths ["src"]}]}

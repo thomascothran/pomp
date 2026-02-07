@@ -530,6 +530,13 @@
    {:id 4 :name "Confucius" :century -5 :school "Confucianism" :region "China"}
    {:id 5 :name "Epicurus" :century -3 :school "Epicureanism" :region "Greece"}])
 
+(def h2-grouped-philosophers
+  [{:id 1 :name "A1" :century 2 :school "Academy" :region "Greece"}
+   {:id 2 :name "A2" :century 4 :school "Academy" :region "Greece"}
+   {:id 3 :name "B1" :century 1 :school "Lyceum" :region "Greece"}
+   {:id 4 :name "C1" :century 3 :school "Stoa" :region "Greece"}
+   {:id 5 :name "C2" :century 5 :school "Stoa" :region "Greece"}])
+
 (defn setup-h2-db [ds]
   (jdbc/execute! ds ["CREATE TABLE IF NOT EXISTS philosophers (
                        id INT PRIMARY KEY,
@@ -539,6 +546,13 @@
                        region VARCHAR(100))"])
   (jdbc/execute! ds ["DELETE FROM philosophers"])
   (doseq [p h2-philosophers]
+    (jdbc/execute! ds ["INSERT INTO philosophers (id, name, century, school, region) VALUES (?, ?, ?, ?, ?)"
+                       (:id p) (:name p) (:century p) (:school p) (:region p)])))
+
+(defn seed-h2-data!
+  [ds rows]
+  (jdbc/execute! ds ["DELETE FROM philosophers"])
+  (doseq [p rows]
     (jdbc/execute! ds ["INSERT INTO philosophers (id, name, century, school, region) VALUES (?, ?, ?, ?, ?)"
                        (:id p) (:name p) (:century p) (:school p) (:region p)])))
 
@@ -603,6 +617,76 @@
         (is (= (:page sql-result) (:page mem-result)))
         ;; Compare row contents (ids should match when sorted by id)
         (is (= (map :id (:rows sql-result)) (map :id (:rows mem-result))))))))
+
+(deftest query-fn-grouped-pagination-test
+  (testing "grouped pagination counts groups and keeps groups intact"
+    (let [ds (jdbc/get-datasource h2-db)]
+      (setup-h2-db ds)
+      (seed-h2-data! ds h2-grouped-philosophers)
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
+            qfn (sql/query-fn {:table-name "philosophers"} execute!)
+            result (qfn {:filters {}
+                         :sort [{:column "school" :direction "asc"}]
+                         :group-by [:school]
+                         :page {:size 2 :current 0}}
+                        nil)
+            expected-groups (->> h2-grouped-philosophers (map :school) distinct sort (take 2) vec)
+            actual-groups (->> (:rows result) (map :school) distinct vec)]
+        (is (= 3 (:total-rows result))
+            "Expected total-rows to reflect group count when grouped")
+        (is (= expected-groups actual-groups)
+            "Expected page to include the first two groups")
+        (is (= 3 (count (:rows result)))
+            "Expected rows for all groups on the page")
+        (is (= 2 (count (filter #(= "Academy" (:school %)) (:rows result))))
+            "Expected full group rows for Academy")))))
+
+(deftest query-fn-grouped-sort-and-filter-test
+  (testing "non-grouped sorting does not reorder groups"
+    (let [ds (jdbc/get-datasource h2-db)]
+      (setup-h2-db ds)
+      (seed-h2-data! ds h2-grouped-philosophers)
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
+            qfn (sql/query-fn {:table-name "philosophers"} execute!)
+            result (qfn {:filters {}
+                         :sort [{:column "century" :direction "asc"}]
+                         :group-by [:school]
+                         :page {:size 10 :current 0}}
+                        nil)
+            expected-order (->> h2-grouped-philosophers (map :school) distinct sort vec)
+            actual-order (->> (:rows result) (map :school) distinct vec)]
+        (is (= expected-order actual-order)
+            "Expected group order to stay aligned with grouped column"))))
+
+  (testing "non-grouped sort direction is ignored when grouped"
+    (let [ds (jdbc/get-datasource h2-db)]
+      (setup-h2-db ds)
+      (seed-h2-data! ds h2-grouped-philosophers)
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
+            qfn (sql/query-fn {:table-name "philosophers"} execute!)
+            result (qfn {:filters {}
+                         :sort [{:column "century" :direction "desc"}]
+                         :group-by [:school]
+                         :page {:size 10 :current 0}}
+                        nil)
+            expected-order (->> h2-grouped-philosophers (map :school) distinct sort vec)
+            actual-order (->> (:rows result) (map :school) distinct vec)]
+        (is (= expected-order actual-order)
+            "Expected grouped order to ignore non-grouped sort direction"))))
+
+  (testing "filtering by grouped column counts groups, not rows"
+    (let [ds (jdbc/get-datasource h2-db)]
+      (setup-h2-db ds)
+      (seed-h2-data! ds h2-grouped-philosophers)
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
+            qfn (sql/query-fn {:table-name "philosophers"} execute!)
+            result (qfn {:filters {:school [{:type "enum" :op "is" :value "Academy"}]}
+                         :sort []
+                         :group-by [:school]
+                         :page {:size 10 :current 0}}
+                        nil)]
+        (is (= 1 (:total-rows result))
+            "Expected total-rows to equal group count after filtering")))))
 
 ;; =============================================================================
 ;; Save Function

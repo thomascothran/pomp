@@ -12,6 +12,7 @@
             [reitit.ring.middleware.multipart :as multipart]
             [reitit.ring.middleware.parameters :as parameters]
             [dev.logger :as log]
+            [scratch.navbar :as scratch.navbar]
             [starfederation.datastar.clojure.api :as d*]))
 
 (defn make-routes
@@ -24,6 +25,7 @@
    ["/demo"
     (dac/make-routes config)
     (ddt/make-routes config)]
+   ["/scratch/navbar" scratch.navbar/handler]
    ["/assets/*" (ring/create-resource-handler)]])
 
 (defn make-middleware

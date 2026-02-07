@@ -4,7 +4,7 @@
             [etaoin.api :as e]
             [pomp.test.fixtures.browser :as browser]))
 
-(use-fixtures :once browser/driver-fixture browser/datatable-state-fixture)
+(use-fixtures :once browser/server-fixture browser/driver-fixture browser/datatable-state-fixture)
 
 (def first-name-cell
   {:css "#datatable td[data-row='0'][data-col='0']"})
@@ -28,6 +28,12 @@
   (let [rows (e/query-all browser/*driver* group-row-selector)]
     (mapv #(e/get-element-text-el browser/*driver* %) rows)))
 
+(defn- parse-group-row
+  [text]
+  (when-let [[_ group-value count-text] (re-find #"^(.*?)\s*\((\d+)\)$" (str/trim text))]
+    {:group-value group-value
+     :count (Long/parseLong count-text)}))
+
 (defn- expected-group-count
   [group-value]
   (->> (:rows browser/*state*)
@@ -41,9 +47,9 @@
     (e/wait-visible browser/*driver* group-by-school-item)
     (e/click browser/*driver* group-by-school-item)
     (e/wait-visible browser/*driver* group-row-selector)
-    (let [expected-count (expected-group-count "Stoicism")
-          texts (group-row-texts)
-          stoic-row (some #(when (str/includes? % "Stoicism") %) texts)]
-      (is stoic-row "Expected Stoicism group row")
-      (is (str/includes? stoic-row (str "(" expected-count ")"))
-          "Expected group count in row"))))
+    (let [group (some-> (group-row-texts) first parse-group-row)
+          expected-count (some-> group :group-value expected-group-count)]
+      (is group "Expected at least one visible group row")
+      (is (some? expected-count) "Expected visible group row to include group name")
+      (is (= expected-count (:count group))
+          "Expected visible group count to match backing rows"))))

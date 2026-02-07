@@ -14,12 +14,20 @@
   (if (empty? group-by-cols)
     nil
     (let [group-key (first group-by-cols)]
-      (->> rows
-           (group-by #(get % group-key))
-           (map (fn [[group-value group-rows]]
-                  {:group-key group-key
-                   :group-value group-value
-                   :rows group-rows
-                   :row-ids (set (map :id group-rows))
-                   :count (count group-rows)}))
-           (sort-by :group-value)))))
+      (let [{:keys [order grouped]} (reduce (fn [{:keys [order grouped]} row]
+                                              (let [group-value (get row group-key)]
+                                                (if (contains? grouped group-value)
+                                                  {:order order
+                                                   :grouped (update grouped group-value conj row)}
+                                                  {:order (conj order group-value)
+                                                   :grouped (assoc grouped group-value [row])})))
+                                            {:order [] :grouped {}}
+                                            rows)]
+        (map (fn [group-value]
+               (let [group-rows (get grouped group-value)]
+                 {:group-key group-key
+                  :group-value group-value
+                  :rows group-rows
+                  :row-ids (set (map :id group-rows))
+                  :count (count group-rows)}))
+             order)))))
