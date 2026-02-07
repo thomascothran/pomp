@@ -17,65 +17,11 @@ Daisy UI is a Tailwind extension that uses class names for common UI components.
 - Themes: `references/themes.md`
 
 ## Components
-- Accordion: `components/accordion.md`
-- Alert: `components/alert.md`
-- Avatar: `components/avatar.md`
-- Badge: `components/badge.md`
-- Breadcrumbs: `components/breadcrumbs.md`
-- Button: `components/button.md`
-- Calendar: `components/calendar.md`
-- Card: `components/card.md`
-- Carousel: `components/carousel.md`
-- Chat: `components/chat.md`
-- Checkbox: `components/checkbox.md`
-- Collapse: `components/collapse.md`
-- Countdown: `components/countdown.md`
-- Diff: `components/diff.md`
-- Divider: `components/divider.md`
-- Dock: `components/dock.md`
-- Drawer: `components/drawer.md`
-- Dropdown: `components/dropdown.md`
-- FAB: `components/fab.md`
-- Fieldset: `components/fieldset.md`
-- File Input: `components/file-input.md`
-- Filter: `components/filter.md`
-- Footer: `components/footer.md`
-- Hero: `components/hero.md`
-- Hover Gallery: `components/hover-gallery.md`
-- Indicator: `components/indicator.md`
-- Input: `components/input.md`
-- Join: `components/join.md`
-- Kbd: `components/kbd.md`
-- Label: `components/label.md`
-- Link: `components/link.md`
-- List: `components/list.md`
-- Loading: `components/loading.md`
-- Mask: `components/mask.md`
-- Menu: `components/menu.md`
-- Mockup Browser: `components/mockup-browser.md`
-- Mockup Code: `components/mockup-code.md`
-- Mockup Phone: `components/mockup-phone.md`
-- Mockup Window: `components/mockup-window.md`
-- Modal: `components/modal.md`
-- Navbar: `components/navbar.md`
-- Pagination: `components/pagination.md`
-- Progress: `components/progress.md`
-- Radial Progress: `components/radial-progress.md`
-- Radio: `components/radio.md`
-- Range: `components/range.md`
-- Rating: `components/rating.md`
-- Select: `components/select.md`
-- Skeleton: `components/skeleton.md`
-- Stack: `components/stack.md`
-- Stat: `components/stat.md`
-- Status: `components/status.md`
-- Steps: `components/steps.md`
-- Swap: `components/swap.md`
-- Table: `components/table.md`
-- Tab: `components/tab.md`
-- Textarea: `components/textarea.md`
-- Theme Controller: `components/theme-controller.md`
-- Timeline: `components/timeline.md`
-- Toast: `components/toast.md`
-- Toggle: `components/toggle.md`
-- Validator: `components/validator.md`
+Component docs path pattern: `references/components/<component>.md`
+
+Available components:
+`accordion`, `alert`, `avatar`, `badge`, `breadcrumbs`, `button`, `calendar`, `card`, `carousel`, `chat`, `checkbox`, `collapse`
+`countdown`, `diff`, `divider`, `dock`, `drawer`, `dropdown`, `fab`, `fieldset`, `file-input`, `filter`, `footer`, `hero`
+`hover-gallery`, `indicator`, `input`, `join`, `kbd`, `label`, `link`, `list`, `loading`, `mask`, `menu`, `mockup-browser`
+`mockup-code`, `mockup-phone`, `mockup-window`, `modal`, `navbar`, `pagination`, `progress`, `radial-progress`, `radio`, `range`, `rating`
+`select`, `skeleton`, `stack`, `stat`, `status`, `steps`, `swap`, `table`, `tab`, `textarea`, `theme-controller`, `timeline`, `toast`, `toggle`, `validator`
