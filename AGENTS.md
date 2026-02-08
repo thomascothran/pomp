@@ -30,7 +30,8 @@
 ## Testing
 - Never run tests via CLI runners.
 - Only run tests from a Clojure REPL using `kaocha.repl` functions.
-  + for unit tests `(kaocha.repl/run :unit)`
+  + Example: for unit tests `(kaocha.repl/run :unit)`
+  + See tests.edn for full test suite list
   + scope as necessary. Remember `(kaocha.repl/run)` only runs tests in the current namespace
 
 ## Skills
