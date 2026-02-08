@@ -1,15 +1,16 @@
 (ns pomp.browser.datatable.fixtures-test
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [etaoin.api :as e]
-            [pomp.test.fixtures.browser :as browser]))
+            [pomp.test.fixtures.browser :as browser]
+            [pomp.test.fixtures.browser.datatable :as datatable]))
 
-(use-fixtures :once browser/driver-fixture browser/datatable-state-fixture)
+(use-fixtures :once browser/driver-fixture datatable/datatable-state-fixture)
 
 (deftest fixtures-bind-driver-and-state-test
-  (testing "browser fixtures bind driver and state"
-    (is (= :chrome (e/driver-type browser/*driver*))
-        "Expected a headless Chrome driver")
-    (is (map? browser/*state*) "Expected datatable fixture state")
-    (is (seq (:columns browser/*state*)) "Expected fixture columns")
-    (is (seq (:rows browser/*state*)) "Expected fixture rows")
-    (is (fn? (:query-fn browser/*state*)) "Expected query-fn in fixture state")))
+    (testing "browser fixtures bind driver and state"
+      (is (= :chrome (e/driver-type browser/*driver*))
+          "Expected a headless Chrome driver")
+    (is (map? datatable/*state*) "Expected datatable fixture state")
+    (is (seq (:columns datatable/*state*)) "Expected fixture columns")
+    (is (seq (:rows datatable/*state*)) "Expected fixture rows")
+    (is (fn? (:query-fn datatable/*state*)) "Expected query-fn in fixture state")))

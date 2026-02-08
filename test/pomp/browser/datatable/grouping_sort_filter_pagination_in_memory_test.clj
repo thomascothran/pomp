@@ -2,9 +2,15 @@
   (:require [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [etaoin.api :as e]
-            [pomp.test.fixtures.browser :as browser]))
+            [pomp.test.fixtures.browser :as browser]
+            [pomp.test.fixtures.browser.datatable :as datatable]))
 
-(use-fixtures :once (browser/in-memory-server-fixture {:app-handler browser/default-in-memory-app-handler}) browser/driver-fixture browser/datatable-state-fixture)
+(use-fixtures :once
+  (browser/in-memory-server-fixture {:routes datatable/in-memory-routes
+                                     :middlewares datatable/middlewares
+                                     :router-data datatable/router-data})
+  browser/driver-fixture
+  datatable/datatable-state-fixture)
 
 (def first-name-cell
   {:css "#datatable td[data-row='0'][data-col='0']"})
@@ -59,7 +65,7 @@
 
 (defn- open-datatable!
   []
-  (e/go browser/*driver* browser/in-memory-base-url)
+  (e/go browser/*driver* datatable/in-memory-base-url)
   (e/wait-visible browser/*driver* first-name-cell))
 
 (defn- group-by-school!
@@ -80,7 +86,7 @@
 
 (defn- expected-school-order
   []
-  (->> (:rows browser/*state*)
+  (->> (:rows datatable/*state*)
        (map :school)
        distinct
        sort
@@ -88,7 +94,7 @@
 
 (defn- expected-school-count
   [school]
-  (->> (:rows browser/*state*)
+  (->> (:rows datatable/*state*)
        (filter #(= school (:school %)))
        count))
 

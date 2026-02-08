@@ -2,17 +2,22 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [etaoin.api :as e]
             [etaoin.keys :as keys]
-            [pomp.test.fixtures.browser :as browser]))
+            [pomp.test.fixtures.browser :as browser]
+            [pomp.test.fixtures.browser.datatable :as datatable]))
 
 (use-fixtures :once
   (browser/server-fixture
-   {:app-handler (fn [req]
-                   (when (not= "/favicon.ico"
-                               (:uri req))
-                     (def req req))
-                   (browser/default-app-handler req))})
+   {:routes datatable/routes
+    :middlewares (conj datatable/middlewares
+                       (fn [handler]
+                         (fn [req]
+                           (when (not= "/favicon.ico" (:uri req))
+                             (def req req))
+                           (handler req))))
+    :router-data datatable/router-data})
   browser/driver-fixture
-  browser/datatable-state-fixture)
+  datatable/datatable-db-fixture
+  datatable/datatable-state-fixture)
 
 (def start-cell
   {:css "#datatable td[data-row='0'][data-col='0']"})
@@ -25,7 +30,7 @@
 
 (defn- open-datatable!
   []
-  (e/go browser/*driver* browser/base-url)
+  (e/go browser/*driver* datatable/base-url)
   (e/wait browser/*driver* 3)
   (e/screenshot browser/*driver* "wtaf2.png")
   (e/wait-visible browser/*driver* start-cell))

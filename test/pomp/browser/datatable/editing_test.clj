@@ -2,9 +2,16 @@
   (:require [clojure.test :refer [deftest is testing use-fixtures]]
             [etaoin.api :as e]
             [etaoin.keys :as keys]
-            [pomp.test.fixtures.browser :as browser]))
+            [pomp.test.fixtures.browser :as browser]
+            [pomp.test.fixtures.browser.datatable :as datatable]))
 
-(use-fixtures :once (browser/server-fixture {:app-handler browser/default-app-handler}) browser/driver-fixture browser/datatable-state-fixture)
+(use-fixtures :once
+  (browser/server-fixture {:routes datatable/routes
+                           :middlewares datatable/middlewares
+                           :router-data datatable/router-data})
+  browser/driver-fixture
+  datatable/datatable-db-fixture
+  datatable/datatable-state-fixture)
 
 (def first-name-cell
   {:css "#datatable td[data-row='0'][data-col='0']"})
@@ -41,7 +48,7 @@
 
 (defn- open-datatable!
   []
-  (e/go browser/*driver* browser/base-url)
+  (e/go browser/*driver* datatable/base-url)
   (e/wait-visible browser/*driver* first-name-cell)
   (e/wait-visible browser/*driver* first-name-display-text)
   (e/wait browser/*driver* 1))
