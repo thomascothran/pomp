@@ -33,13 +33,13 @@
   + for unit tests `(kaocha.repl/run :unit)`
   + scope as necessary. Remember `(kaocha.repl/run)` only runs tests in the current namespace
 
-## REPL workflow
-- After any Clojure code change, reload namespaces with `require` and the `:reload` flag.
-
 ## Skills
 
 Always use the relevant skills. `clojure-eval` will almost always be relevant.
 
-## Rules
+## IMPORTANT RULES
 
-- ALWAYS reload a clojure file at the REPL when it is update with `require` and the `:reload` argument
+- If a clojure source file has been changed, ALWAYS call load-file to refresh it.
+  + Otherwise you will have stale state.
+- NEVER install anything unless explicitly instructed to by the user
+- NEVER commit or stage anything unless instructed by the user. Only use git for read only operations unless specifically instructed by the user

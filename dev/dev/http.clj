@@ -12,6 +12,8 @@
             [reitit.ring.middleware.multipart :as multipart]
             [reitit.ring.middleware.parameters :as parameters]
             [dev.logger :as log]
+            [scratch.autocomplete :as scratch.autocomplete]
+            [scratch.app-skeleton :as scratch.app-skeleton]
             [scratch.navbar :as scratch.navbar]
             [starfederation.datastar.clojure.api :as d*]))
 
@@ -25,7 +27,10 @@
    ["/demo"
     (dac/make-routes config)
     (ddt/make-routes config)]
+   ["/scratch/autocomplete" scratch.autocomplete/handler]
+   ["/scratch/autocomplete/options" scratch.autocomplete/options-handler]
    ["/scratch/navbar" scratch.navbar/handler]
+   ["/scratch/app-skeleton" scratch.app-skeleton/handler]
    ["/assets/*" (ring/create-resource-handler)]])
 
 (defn make-middleware

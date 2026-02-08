@@ -14,8 +14,8 @@
 (def second-school-cell
   {:css "#datatable td[data-row='1'][data-col='2']"})
 
-(def first-name-edit-button
-  {:css "#datatable td[data-row='0'][data-col='0'] button[title='Edit']"})
+(def first-name-display-text
+  {:css "#datatable td[data-row='0'][data-col='0'] span[id^='cell-']"})
 
 (def first-name-input
   {:css "#datatable td[data-row='0'][data-col='0'] input"})
@@ -26,7 +26,8 @@
 (defn- open-datatable!
   []
   (e/go browser/*driver* browser/base-url)
-  (e/wait-visible browser/*driver* first-name-cell))
+  (e/wait-visible browser/*driver* first-name-cell)
+  (e/wait browser/*driver* 1))
 
 (defn- selected-count
   []
@@ -41,9 +42,21 @@
   []
   (e/get-element-text browser/*driver* first-name-cell))
 
+(defn- double-click-display-text!
+  [display-selector]
+  (e/wait-visible browser/*driver* display-selector)
+  (e/js-execute
+   browser/*driver*
+   (str "var selector = arguments[0];"
+        "var target = document.querySelector(selector);"
+        "if (!target) { return false; }"
+        "target.dispatchEvent(new MouseEvent('dblclick', {bubbles: true, cancelable: true, view: window}));"
+        "return true;")
+   (:css display-selector)))
+
 (defn- start-edit!
   []
-  (e/click browser/*driver* first-name-edit-button)
+  (double-click-display-text! first-name-display-text)
   (e/wait-visible browser/*driver* first-name-input))
 
 (defn- edit-first-name!

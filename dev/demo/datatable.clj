@@ -1,5 +1,6 @@
 (ns demo.datatable
-  (:require [demo.util :refer [->html page]]
+  (:require [app :as app]
+            [demo.util :refer [->html]]
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as rs]
             [pomp.datatable :as datatable]
@@ -46,7 +47,34 @@
    {:id 12 :name "René Descartes" :century 17 :school "Rationalism" :region "France" :verified true}
    {:id 13 :name "John Locke" :century 17 :school "Empiricism" :region "England" :verified false}
    {:id 14 :name "Immanuel Kant" :century 18 :school "German Idealism" :region "Germany" :verified true}
-   {:id 15 :name "Friedrich Nietzsche" :century 19 :school "Existentialism" :region "Germany" :verified false}])
+   {:id 15 :name "Friedrich Nietzsche" :century 19 :school "Existentialism" :region "Germany" :verified false}
+   {:id 16 :name "Plotinus" :century 3 :school "Platonism" :region "Egypt" :verified true}
+   {:id 17 :name "Proclus" :century 5 :school "Platonism" :region "Greece" :verified true}
+   {:id 18 :name "Al-Farabi" :century 10 :school "Peripatetic" :region "Central Asia" :verified true}
+   {:id 19 :name "Avicenna" :century 11 :school "Peripatetic" :region "Persia" :verified true}
+   {:id 20 :name "Mencius" :century -4 :school "Confucianism" :region "China" :verified true}
+   {:id 21 :name "Xunzi" :century -3 :school "Confucianism" :region "China" :verified true}
+   {:id 22 :name "Zhuangzi" :century -4 :school "Taoism" :region "China" :verified true}
+   {:id 23 :name "Wang Bi" :century 3 :school "Taoism" :region "China" :verified false}
+   {:id 24 :name "Lucretius" :century -1 :school "Epicureanism" :region "Rome" :verified true}
+   {:id 25 :name "Epictetus" :century 1 :school "Stoicism" :region "Greece" :verified true}
+   {:id 26 :name "Musonius Rufus" :century 1 :school "Stoicism" :region "Rome" :verified false}
+   {:id 27 :name "Boethius" :century 6 :school "Christian Platonism" :region "Italy" :verified true}
+   {:id 28 :name "Pseudo-Dionysius" :century 6 :school "Christian Platonism" :region "Syria" :verified false}
+   {:id 29 :name "Anselm of Canterbury" :century 11 :school "Scholasticism" :region "England" :verified true}
+   {:id 30 :name "Duns Scotus" :century 13 :school "Scholasticism" :region "Scotland" :verified true}
+   {:id 31 :name "Baruch Spinoza" :century 17 :school "Rationalism" :region "Netherlands" :verified true}
+   {:id 32 :name "Gottfried Wilhelm Leibniz" :century 17 :school "Rationalism" :region "Germany" :verified true}
+   {:id 33 :name "George Berkeley" :century 18 :school "Empiricism" :region "Ireland" :verified true}
+   {:id 34 :name "David Hume" :century 18 :school "Empiricism" :region "Scotland" :verified true}
+   {:id 35 :name "Johann Gottlieb Fichte" :century 18 :school "German Idealism" :region "Germany" :verified false}
+   {:id 36 :name "G.W.F. Hegel" :century 19 :school "German Idealism" :region "Germany" :verified true}
+   {:id 37 :name "Soren Kierkegaard" :century 19 :school "Existentialism" :region "Denmark" :verified true}
+   {:id 38 :name "Jean-Paul Sartre" :century 20 :school "Existentialism" :region "France" :verified true}
+   {:id 39 :name "Simone de Beauvoir" :century 20 :school "Existentialism" :region "France" :verified true}
+   {:id 40 :name "Albert Camus" :century 20 :school "Existentialism" :region "Algeria" :verified true}
+   {:id 41 :name "Antisthenes" :century -4 :school "Classical Greek" :region "Greece" :verified true}
+   {:id 42 :name "Isocrates" :century -4 :school "Classical Greek" :region "Greece" :verified true}])
 
 ;; =============================================================================
 ;; H2 Database Setup
@@ -103,7 +131,7 @@
   {:status 200
    :headers {"Content-Type" "text/html"}
    :body (->html
-          (page
+          (app/with-app-layout
            [:div.p-8
             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
             [:div#datatable-container

@@ -181,9 +181,17 @@
    Matches keywords like :span or :span.flex-1"
   [hiccup]
   (find-elements #(and (vector? %)
-                       (keyword? (first %))
-                       (clojure.string/starts-with? (name (first %)) "span"))
+                        (keyword? (first %))
+                        (clojure.string/starts-with? (name (first %)) "span"))
                  hiccup))
+
+(defn- find-display-span
+  "Finds the display span for a cell by id containing 'cell-'."
+  [hiccup]
+  (first (filter #(let [attrs (second %)]
+                    (and (map? attrs)
+                         (clojure.string/includes? (or (:id attrs) "") "cell-")))
+                 (find-span hiccup))))
 
 (defn- find-button
   "Finds button elements in hiccup.
@@ -264,7 +272,7 @@
                       (clojure.string/includes? (:id (second %)) "cell-"))
                 spans))))
 
-  (testing "editable cell has pencil button to enter edit mode"
+  (testing "editable cell display text wires double-click entry"
     (let [result (row/render-editable-cell {:value "Plato"
                                             :row-id "123"
                                             :col {:key :name :editable true}
@@ -272,14 +280,11 @@
                                             :data-url "/data"
                                             :row-idx 0
                                             :col-idx 0})
-          buttons (find-button result)]
-      ;; Has at least one button (pencil for edit)
-      (is (>= (count buttons) 1))
-      ;; One button has edit handler
-      (is (some #(let [attrs (second %)]
-                   (and (:data-on:click attrs)
-                        (clojure.string/includes? (:data-on:click attrs) "editing")))
-                buttons))))
+          display-span (find-display-span result)
+          dblclick-handler (-> display-span second :data-on:dblclick)]
+      (is (some? display-span))
+      (is (some? dblclick-handler)
+          "Display span should enter edit mode on double click")))
 
   (testing "editable cell has checkmark button to save"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -296,8 +301,8 @@
                         (clojure.string/includes? (:data-on:mousedown attrs) "@post")))
                 buttons)))))
 
-(deftest render-editable-cell-pencil-click-test
-  (testing "pencil button click sets editing signal and initializes cell value"
+(deftest render-editable-cell-double-click-handler-test
+  (testing "double-click handler sets editing and initializes current cell value"
     (let [result (row/render-editable-cell {:value "Plato"
                                             :row-id "123"
                                             :col {:key :name :editable true}
@@ -305,34 +310,107 @@
                                             :data-url "/data"
                                             :row-idx 0
                                             :col-idx 0})
-          buttons (find-button result)
-          edit-button (first (filter #(let [attrs (second %)]
-                                        (and (:data-on:click attrs)
-                                             (clojure.string/includes? (:data-on:click attrs) "editing")
-                                             (not (clojure.string/includes? (:data-on:click attrs) "@post"))))
-                                     buttons))
-          click-handler (-> edit-button second :data-on:click)]
+          display-span (find-display-span result)
+          dblclick-handler (-> display-span second :data-on:dblclick)
+          click-handler (-> display-span second :data-on:click)]
+      (is (some? display-span))
+      (is (some? dblclick-handler))
       ;; Clears cell selection to avoid interference
-      (is (clojure.string/includes? click-handler "$datatable.philosophers.cellSelection = []")
-          "Edit click should clear cellSelection with an empty array")
-      (is (clojure.string/includes? click-handler "$datatable.philosophers.cellSelection = null")
-          "Edit click should clear cellSelection signal when entering edit mode")
-      (is (re-find #"\$datatable\.philosophers\.cellSelection = \[\].*\$datatable\.philosophers\.cellSelection = null" click-handler)
-          "Edit click should clear cellSelection with [] before null")
+      (is (clojure.string/includes? dblclick-handler "$datatable.philosophers.cellSelection = []")
+          "Edit entry should clear cellSelection with an empty array")
+      (is (clojure.string/includes? dblclick-handler "$datatable.philosophers.cellSelection = null")
+          "Edit entry should clear cellSelection signal")
+      (is (re-find #"\$datatable\.philosophers\.cellSelection = \[\].*\$datatable\.philosophers\.cellSelection = null" dblclick-handler)
+          "Edit entry should clear cellSelection with [] before null")
       ;; Sets editing signal
-      (is (clojure.string/includes? click-handler "editing"))
-      (is (clojure.string/includes? click-handler "rowId"))
-      (is (clojure.string/includes? click-handler "'123'"))
+      (is (clojure.string/includes? dblclick-handler "editing"))
+      (is (clojure.string/includes? dblclick-handler "rowId"))
+      (is (clojure.string/includes? dblclick-handler "'123'"))
       ;; Sets cell value signal
-      (is (clojure.string/includes? click-handler "cells"))
-      ;; Stops propagation to avoid cell selection
-      (is (clojure.string/includes? click-handler "stopPropagation"))
-      (is (clojure.string/includes? click-handler "editInput-123-name"))
-      (is (clojure.string/includes? click-handler "input.value"))
-      (is (clojure.string/includes? click-handler "currentValue")))))
+      (is (clojure.string/includes? dblclick-handler "cells"))
+      (is (clojure.string/includes? dblclick-handler "editInput-123-name"))
+      (is (clojure.string/includes? dblclick-handler "input.value"))
+      (is (clojure.string/includes? dblclick-handler "currentValue"))
+      (is (not (clojure.string/includes? (or click-handler "") "editing"))
+          "Single click should not enter edit mode"))))
+
+(deftest render-editable-cell-double-click-entry-test
+  (testing "editable non-boolean cell text enters edit mode on double click only"
+    (let [result (row/render-editable-cell {:value "Plato"
+                                            :row-id "123"
+                                            :col {:key :name :editable true :type :string}
+                                            :table-id "philosophers"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          display-span (find-display-span result)
+          span-attrs (second display-span)
+          dblclick-handler (:data-on:dblclick span-attrs)
+          click-handler (:data-on:click span-attrs)]
+      (is (some? display-span))
+      (is (some? dblclick-handler)
+          "Display text should wire data-on:dblclick for edit entry")
+      (when dblclick-handler
+        (is (clojure.string/includes? dblclick-handler "editing")
+            "Double-click handler should set editing signal"))
+      (is (not (clojure.string/includes? (or click-handler "") "editing"))
+          "Single click on display text should not enter edit mode"))))
+
+(deftest render-editable-cell-display-mode-hides-pencil-trigger-test
+  (testing "editable non-boolean display mode does not render Edit pencil button"
+    (let [result (row/render-editable-cell {:value "Plato"
+                                            :row-id "123"
+                                            :col {:key :name :editable true :type :string}
+                                            :table-id "philosophers"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          edit-buttons (filter #(= "Edit" (:title (second %)))
+                               (find-button result))]
+      (is (empty? edit-buttons)
+          "Display mode should use double-click text entry instead of an Edit pencil trigger"))))
+
+(deftest render-editable-cell-hover-affordance-test
+  (testing "editable non-boolean display mode shows hover-only non-clickable pencil affordance"
+    (let [result (row/render-editable-cell {:value "Plato"
+                                            :row-id "123"
+                                            :col {:key :name :editable true :type :string}
+                                            :table-id "philosophers"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          display-span (find-display-span result)
+          hover-indicators (find-elements
+                            (fn [el]
+                              (when (vector? el)
+                                (let [attrs (second el)
+                                      classes (str (name (first el)) " " (or (:class attrs) "") " " (or (:data-class attrs) ""))]
+                                  (and (or (clojure.string/starts-with? (name (first el)) "span")
+                                           (clojure.string/starts-with? (name (first el)) "svg")
+                                           (clojure.string/starts-with? (name (first el)) "div"))
+                                       (or (clojure.string/includes? classes "hidden")
+                                           (clojure.string/includes? classes "invisible")
+                                           (clojure.string/includes? classes "opacity-0"))
+                                       (or (clojure.string/includes? classes "hover:")
+                                           (clojure.string/includes? classes "group-hover:"))
+                                       (nil? (:data-on:click attrs))
+                                       (nil? (:data-on:mousedown attrs))
+                                       (not= "button" (:role attrs))
+                                       (nil? (:tabindex attrs))))))
+                            result)
+          edit-buttons (filter #(= "Edit" (:title (second %)))
+                               (find-button result))]
+      (is (some? display-span)
+          "Double-click text entry remains on the display span")
+      (is (some? (:data-on:dblclick (second display-span)))
+          "Display span should remain wired for double-click edit entry")
+      (is (seq hover-indicators)
+          "Display mode should include a visual pencil affordance that is hidden by default and shown on hover")
+      (is (empty? edit-buttons)
+          "Pencil affordance should be visual-only and not a clickable Edit button"))))
 
 (deftest render-editable-cell-initializes-cells-test
-  (testing "edit and input handlers initialize cells with safe row keys"
+  (testing "double-click entry and input handlers initialize cells with safe row keys"
     (let [result (row/render-editable-cell {:value "Plato"
                                             :row-id "row-1"
                                             :col {:key :name :editable true}
@@ -344,13 +422,8 @@
           input-handler (let [attrs (second input)]
                           (or (:data-on:input attrs)
                               (:data-on:change attrs)))
-          buttons (find-button result)
-          edit-button (first (filter #(let [attrs (second %)]
-                                        (and (:data-on:click attrs)
-                                             (clojure.string/includes? (:data-on:click attrs) "editing")
-                                             (not (clojure.string/includes? (:data-on:click attrs) "@post"))))
-                                     buttons))
-          edit-handler (-> edit-button second :data-on:click)]
+          display-span (find-display-span result)
+          edit-handler (-> display-span second :data-on:dblclick)]
       (is (some? input-handler))
       (is (clojure.string/includes? input-handler "cells ||= {}"))
       (is (clojure.string/includes? input-handler "cells['row-1'] ||= {}"))
@@ -690,13 +763,8 @@
                                             :data-url "/data"
                                             :row-idx 0
                                             :col-idx 0})
-          buttons (find-button result)
-          edit-button (first (filter #(let [attrs (second %)]
-                                        (and (:data-on:click attrs)
-                                             (clojure.string/includes? (:data-on:click attrs) "editing")
-                                             (not (clojure.string/includes? (:data-on:click attrs) "@post"))))
-                                     buttons))
-          click-handler (-> edit-button second :data-on:click)]
+          display-span (find-display-span result)
+          click-handler (-> display-span second :data-on:dblclick)]
       ;; Reads initial value dynamically from dataset.value (not hardcoded SSR value)
       (is (clojure.string/includes? click-handler "dataset.value"))
       (is (clojure.string/includes? click-handler "editInput-123-school"))
@@ -1056,13 +1124,8 @@
                                             :data-url "/data"
                                             :row-idx 0
                                             :col-idx 0})
-          buttons (find-button result)
-          edit-button (first (filter #(let [attrs (second %)]
-                                        (and (:data-on:click attrs)
-                                             (clojure.string/includes? (:data-on:click attrs) "editing")
-                                             (not (clojure.string/includes? (:data-on:click attrs) "@post"))))
-                                     buttons))
-          click-handler (-> edit-button second :data-on:click)]
+          display-span (find-display-span result)
+          click-handler (-> display-span second :data-on:dblclick)]
       ;; Handler should reference the span's data-value attribute
       ;; e.g., document.getElementById('cell-philosophers-123-name').dataset.value
       ;; or    $cell_philosophers_123_name.dataset.value
