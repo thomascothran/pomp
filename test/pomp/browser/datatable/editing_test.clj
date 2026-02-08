@@ -50,8 +50,7 @@
   []
   (e/go browser/*driver* datatable/base-url)
   (e/wait-visible browser/*driver* first-name-cell)
-  (e/wait-visible browser/*driver* first-name-display-text)
-  (e/wait browser/*driver* 1))
+  (e/wait-visible browser/*driver* first-name-display-text))
 
 (defn- first-cell-text
   []
@@ -60,6 +59,14 @@
 (defn- double-click-display-text!
   [display-selector editor-selector]
   (e/wait-visible browser/*driver* display-selector)
+  (e/wait-predicate
+   #(true?
+     (e/js-execute
+      browser/*driver*
+      (str "var selector = arguments[0];"
+           "var target = document.querySelector(selector);"
+           "return !!(target && target.dataset && target.dataset.pompEditableReady === 'true');")
+      (:css display-selector))))
   (dotimes [_ 5]
     (when-not (e/visible? browser/*driver* editor-selector)
       (e/click browser/*driver* display-selector)
@@ -71,7 +78,7 @@
             "target.dispatchEvent(new MouseEvent('dblclick', {bubbles: true, cancelable: true, view: window}));"
             "return true;")
        (:css display-selector))
-      (e/wait browser/*driver* 0.2))))
+      (e/wait-predicate #(e/visible? browser/*driver* editor-selector) 1))))
 
 (defn- edit-first-name!
   [value]
@@ -80,7 +87,8 @@
   (e/fill browser/*driver* first-name-input (keys/with-ctrl "a") value)
   (e/click browser/*driver* first-name-save-button)
   (e/wait-invisible browser/*driver* first-name-input)
-  (e/wait-visible browser/*driver* first-name-display-text))
+  (e/wait-visible browser/*driver* first-name-display-text)
+  (e/wait-has-text browser/*driver* first-name-cell value))
 
 (defn- open-century-edit!
   []
@@ -142,7 +150,7 @@
       (e/wait-visible browser/*driver* first-name-input)
       (e/fill browser/*driver* first-name-input (keys/with-ctrl "a") updated-name)
       (e/click browser/*driver* century-cell)
-      (e/wait browser/*driver* 1)
+      (e/wait-invisible browser/*driver* first-name-input)
       (is (= original-name (first-cell-text))
           "Expected name unchanged after click away"))))
 
@@ -170,7 +178,7 @@
     (open-datatable!)
     (let [before (checkbox-selected? verified-checkbox)]
       (e/click browser/*driver* verified-checkbox)
-      (e/wait browser/*driver* 1)
+      (e/wait-predicate #(not= before (checkbox-selected? verified-checkbox)))
       (is (not= before (checkbox-selected? verified-checkbox))
           "Expected checkbox state to toggle on single click"))))
 

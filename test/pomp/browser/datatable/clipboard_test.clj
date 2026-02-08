@@ -58,15 +58,20 @@
   []
   (e/js-execute browser/*driver* "return window.__copiedText;"))
 
+(defn- copy-attempt-count
+  []
+  (or (e/js-execute browser/*driver* "return window.__pompDatatableCopyAttemptCount;") 0))
+
 (deftest copy-selection-to-clipboard-test
   (testing "copying a selection writes TSV to clipboard"
     (open-datatable!)
     (drag-select-2x2!)
     (stub-clipboard!)
-    (press-copy!)
-    (e/wait browser/*driver* 1)
-    (is (= "Socrates\t5th BC\nPlato\t4th BC" (clipboard-text))
-        "Expected TSV copy from selected 2x2 range")))
+    (let [expected-text "Socrates\t5th BC\nPlato\t4th BC"]
+      (press-copy!)
+      (e/wait-predicate #(= expected-text (clipboard-text)))
+      (is (= expected-text (clipboard-text))
+          "Expected TSV copy from selected 2x2 range"))))
 
 (deftest escape-clear-prevents-copy-test
   (testing "copy shortcut does nothing after Escape clears selection"
@@ -74,8 +79,9 @@
     (drag-select-2x2!)
     (stub-clipboard!)
     (press-escape!)
-    (e/wait browser/*driver* 1)
-    (press-copy!)
-    (e/wait browser/*driver* 1)
+    (e/wait-predicate #(zero? (count (e/query-all browser/*driver* selected-cells))))
+    (let [attempt-count-before (copy-attempt-count)]
+      (press-copy!)
+      (e/wait-predicate #(< attempt-count-before (copy-attempt-count))))
     (is (nil? (clipboard-text))
         "Expected no clipboard write when selection has been cleared")))

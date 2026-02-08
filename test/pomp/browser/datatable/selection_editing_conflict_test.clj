@@ -33,8 +33,7 @@
 (defn- open-datatable!
   []
   (e/go browser/*driver* datatable/base-url)
-  (e/wait-visible browser/*driver* first-name-cell)
-  (e/wait browser/*driver* 1))
+  (e/wait-visible browser/*driver* first-name-cell))
 
 (defn- selected-count
   []

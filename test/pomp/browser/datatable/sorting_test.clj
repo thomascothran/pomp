@@ -39,11 +39,13 @@
 (deftest sort-by-name-asc-desc-test
   (testing "sorting by name updates the first row"
     (open-datatable!)
+    (let [expected-asc (expected-first-name "asc")
+          expected-desc (expected-first-name "desc")]
     (e/click browser/*driver* name-header-button)
-    (e/wait browser/*driver* 1)
-    (is (= (expected-first-name "asc") (first-cell-text))
+    (e/wait-has-text browser/*driver* first-name-cell expected-asc)
+    (is (= expected-asc (first-cell-text))
         "Expected ascending sort after first click")
     (e/click browser/*driver* name-header-button)
-    (e/wait browser/*driver* 1)
-    (is (= (expected-first-name "desc") (first-cell-text))
-        "Expected descending sort after second click")))
+    (e/wait-has-text browser/*driver* first-name-cell expected-desc)
+    (is (= expected-desc (first-cell-text))
+        "Expected descending sort after second click"))))

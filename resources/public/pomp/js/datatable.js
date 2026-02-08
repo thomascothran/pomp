@@ -1,3 +1,13 @@
+if (!window.__pompDatatableCopyAttemptObserverInstalled) {
+  window.addEventListener('keydown', function(evt) {
+    const key = (evt.key || '').toLowerCase();
+    if ((evt.ctrlKey || evt.metaKey) && key === 'c') {
+      window.__pompDatatableCopyAttemptCount = (window.__pompDatatableCopyAttemptCount || 0) + 1;
+    }
+  }, true);
+  window.__pompDatatableCopyAttemptObserverInstalled = true;
+}
+
 // Cell selection helper functions for datatable
 window.pompCellSelectMove = function(evt, tableId, isDragging, start) {
   if (!isDragging || !start) return;
@@ -31,7 +41,8 @@ window.pompCellSelectMove = function(evt, tableId, isDragging, start) {
 
 window.pompCellSelectCopy = function(evt, tableId, cellSelection) {
   // Only handle Ctrl+C / Cmd+C
-  if (!(evt.ctrlKey || evt.metaKey) || evt.key !== 'c') return;
+  const key = (evt.key || '').toLowerCase();
+  if (!(evt.ctrlKey || evt.metaKey) || key !== 'c') return;
   if (!cellSelection || cellSelection.length === 0) return;
   
   evt.preventDefault();

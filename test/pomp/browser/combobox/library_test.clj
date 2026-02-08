@@ -96,26 +96,28 @@
         (is (= "true" (e/get-element-attr browser/*driver* input-a "aria-expanded"))))
       (testing "clicking an option commits selection and closes menu"
         (e/click browser/*driver* option-apple-a)
-        (e/wait browser/*driver* 0.3)
+        (e/wait-predicate #(and (= "Apple" (e/get-element-value browser/*driver* input-a))
+                                (= "false" (e/get-element-attr browser/*driver* input-a "aria-expanded"))))
         (is (= "Apple" (e/get-element-value browser/*driver* input-a)))
         (is (= "false" (e/get-element-attr browser/*driver* input-a "aria-expanded"))))
       (testing "enter commits free text selection"
         (e/fill browser/*driver* input-a "Dragonfruit Jam")
         (press-key! input-a keys/enter)
-        (e/wait browser/*driver* 0.3)
+        (e/wait-predicate #(and (= "Dragonfruit Jam" (e/get-element-value browser/*driver* input-a))
+                                (= "false" (e/get-element-attr browser/*driver* input-a "aria-expanded"))))
         (is (= "Dragonfruit Jam" (e/get-element-value browser/*driver* input-a)))
         (is (= "false" (e/get-element-attr browser/*driver* input-a "aria-expanded"))))
       (testing "escape closes menu"
         (e/fill browser/*driver* input-a "ap")
         (e/wait-visible browser/*driver* option-apple-a)
         (press-key! input-a keys/escape)
-        (e/wait browser/*driver* 0.2)
+        (e/wait-predicate #(= "false" (e/get-element-attr browser/*driver* input-a "aria-expanded")))
         (is (= "false" (e/get-element-attr browser/*driver* input-a "aria-expanded"))))
       (testing "blur closes menu"
         (e/fill browser/*driver* input-a "ap")
         (e/wait-visible browser/*driver* option-apple-a)
         (e/click browser/*driver* page-title)
-        (e/wait browser/*driver* 0.3)
+        (e/wait-predicate #(= "false" (e/get-element-attr browser/*driver* input-a "aria-expanded")))
         (is (= "false" (e/get-element-attr browser/*driver* input-a "aria-expanded")))))))
 
 (deftest combobox-library-scopes-state-per-component-id-test

@@ -36,14 +36,16 @@
 
 (defn- drag-region-before-name!
   []
-  (e/drag-and-drop browser/*driver* region-drag-handle name-header-target)
-  (e/wait browser/*driver* 1))
+  (e/drag-and-drop browser/*driver* region-drag-handle name-header-target))
 
 (deftest drag-region-before-name-reorders-columns-test
   (testing "dragging Region before Name reorders the columns"
     (open-datatable!)
-    (is (= ["Name" "Century" "School" "Region" "Verified"] (header-texts))
+    (let [default-order ["Name" "Century" "School" "Region" "Verified"]
+          reordered ["Region" "Name" "Century" "School" "Verified"]]
+    (is (= default-order (header-texts))
         "Expected default column order")
     (drag-region-before-name!)
-    (is (= ["Region" "Name" "Century" "School" "Verified"] (header-texts))
-        "Expected Region to move before Name")))
+    (e/wait-predicate #(= reordered (header-texts)))
+    (is (= reordered (header-texts))
+        "Expected Region to move before Name"))))

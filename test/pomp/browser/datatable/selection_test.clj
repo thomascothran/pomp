@@ -31,7 +31,6 @@
 (defn- open-datatable!
   []
   (e/go browser/*driver* datatable/base-url)
-  (e/wait browser/*driver* 3)
   (e/screenshot browser/*driver* "wtaf2.png")
   (e/wait-visible browser/*driver* start-cell))
 
@@ -62,7 +61,7 @@
     (open-datatable!)
     (drag-select-2x2!)
     (press-escape!)
-    (e/wait browser/*driver* 1)
+    (e/wait-predicate #(zero? (selected-count)))
     (is (zero? (selected-count))
         "Expected Escape to clear the selection")))
 
