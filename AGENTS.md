@@ -40,7 +40,7 @@ Always use the relevant skills. `clojure-eval` will almost always be relevant.
 
 ## IMPORTANT RULES
 
-- If a clojure source file has been changed, ALWAYS call load-file to refresh it.
+- If a clojure source file has been changed, ALWAYS evaluate `load-file` in the clojure repl to refresh it.
   + Otherwise you will have stale state.
 - NEVER install anything unless explicitly instructed to by the user
 - NEVER commit or stage anything unless instructed by the user. Only use git for read only operations unless specifically instructed by the user
