@@ -173,13 +173,13 @@
                 :else
                 nil))]
       ;; First find the right filter menu by id, then find the button
-      (letfn [(find-menu [h]
-                (cond
-                  (and (vector? h)
-                       (= :div.bg-base-100.shadow-lg.rounded-box.p-4.w-64 (first h))
-                       (map? (second h))
-                       (= popover-id (:id (second h))))
-                  (find-button h)
+       (letfn [(find-menu [h]
+                 (cond
+                   (and (vector? h)
+                        (= :div.bg-base-100.shadow-lg.rounded-box.p-4.w-64 (first h))
+                        (map? (second h))
+                        (= popover-id (:id (second h))))
+                   (find-button h)
 
                   (vector? h)
                   (some find-menu h)
@@ -187,9 +187,64 @@
                   (seq? h)
                   (some find-menu h)
 
-                  :else
-                  nil))]
-        (find-menu hiccup)))))
+                   :else
+                   nil))]
+         (find-menu hiccup)))))
+
+(defn- find-grouped-header-label
+  "Finds the synthetic grouped header label text in rendered header hiccup."
+  [hiccup]
+  (letfn [(find-label [h]
+            (cond
+              (and (vector? h)
+                   (= :button.flex.items-center.gap-1.hover:text-primary.transition-colors (first h)))
+              (some (fn [child]
+                      (when (and (vector? child)
+                                 (= :span.font-semibold (first child)))
+                        (last child)))
+                    h)
+
+              (vector? h)
+              (some find-label h)
+
+              (seq? h)
+              (some find-label h)
+
+               :else
+               nil))]
+    (find-label hiccup)))
+
+(defn- popovertargets-in-node
+  "Returns every popovertarget value found in a hiccup node."
+  [node]
+  (cond
+    (vector? node)
+    (let [attrs (when (map? (second node)) (second node))
+          current (when-let [target (:popovertarget attrs)] [target])]
+      (into (vec (or current []))
+            (mapcat popovertargets-in-node node)))
+
+    (seq? node)
+    (mapcat popovertargets-in-node node)
+
+    :else
+    []))
+
+(defn- find-first-node
+  "Returns the first hiccup node that satisfies predicate."
+  [pred node]
+  (cond
+    (and (vector? node) (pred node))
+    node
+
+    (vector? node)
+    (some #(find-first-node pred %) node)
+
+    (seq? node)
+    (some #(find-first-node pred %) node)
+
+    :else
+    nil))
 
 (deftest render-sortable-passes-table-id-to-filter-menu-test
   (testing "passes table-id to filter-menu for signal updates"
@@ -199,7 +254,58 @@
                                           :filters {}
                                           :data-url "/data"
                                           :table-id "philosophers"})
-          onclick (find-filter-apply-button-onclick result :name)]
-      ;; The Apply button should update the signal with the table-id in the path
-      (is (clojure.string/includes? onclick "$datatable.philosophers.filters.name")
-          "Apply button should reference the correct signal path with table-id"))))
+           onclick (find-filter-apply-button-onclick result :name)]
+       ;; The Apply button should update the signal with the table-id in the path
+       (is (clojure.string/includes? onclick "$datatable.philosophers.filters.name")
+           "Apply button should reference the correct signal path with table-id"))))
+
+(deftest render-sortable-grouped-header-shows-grouped-column-label-test
+  (testing "grouped synthetic header shows grouped column label"
+    (let [cols [{:key :school :label "School" :type :string}
+                 {:key :name :label "Name" :type :string}]
+          result (header/render-sortable {:cols cols
+                                          :sort-state []
+                                          :filters {}
+                                          :data-url "/data"
+                                          :table-id "test"
+                                          :group-by [:school]})
+           grouped-label (find-grouped-header-label result)]
+      (is (= "School" grouped-label)
+          "Grouped header should show grouped column label, not a generic label"))))
+
+(deftest render-sortable-grouped-header-includes-grouped-column-filter-test
+  (testing "grouped synthetic header includes filter control for grouped column"
+    (let [cols [{:key :school :label "School" :type :string}
+                {:key :name :label "Name" :type :string}]
+          result (header/render-sortable {:cols cols
+                                          :sort-state []
+                                          :filters {}
+                                          :data-url "/data"
+                                          :table-id "test"
+                                          :group-by [:school]})
+          grouped-header-th (find-first-node
+                             (fn [node]
+                               (and (= :th (first node))
+                                    (contains? (set (popovertargets-in-node node)) "col-menu-group")))
+                             result)
+          grouped-popovertargets (set (popovertargets-in-node grouped-header-th))]
+      (is (some? grouped-header-th)
+          "Expected grouped synthetic header cell to be present")
+      (is (contains? grouped-popovertargets "filter-school")
+          "Grouped synthetic header should expose filter popover for grouped column"))))
+
+(deftest render-sortable-grouped-header-dedups-grouped-column-test
+  (testing "grouped mode keeps synthetic grouped menu and removes regular grouped column menu"
+    (let [cols [{:key :school :label "School" :type :string}
+                {:key :name :label "Name" :type :string}]
+          result (header/render-sortable {:cols cols
+                                          :sort-state []
+                                          :filters {}
+                                          :data-url "/data"
+                                          :table-id "test"
+                                          :group-by [:school]})
+          popovertargets (set (popovertargets-in-node result))]
+      (is (contains? popovertargets "col-menu-group")
+          "Expected grouped mode to render synthetic grouped column menu")
+      (is (not (contains? popovertargets "col-menu-school"))
+          "Expected grouped mode to hide regular grouped column menu to avoid duplicate grouped dimension"))))

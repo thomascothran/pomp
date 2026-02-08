@@ -5,7 +5,7 @@
 
 (defn render-row
   "Renders a data row. Delegates to row/render-row.
-   
+
    Deprecated: Use pomp.rad.datatable.ui.row/render-row directly."
   [ctx]
   (row/render-row ctx))
@@ -76,13 +76,17 @@
                                 :row-id row-id
                                 :data-url data-url})))])))))
 
-(defn render [{:keys [cols rows groups selectable? row-id-fn table-id data-url render-row render-cell]}]
+(defn render [{:keys [cols rows groups group-by selectable? row-id-fn table-id data-url render-row render-cell]}]
   (let [row-id-fn (or row-id-fn :id)
         render-row-fn (or render-row row/render-row)
-        grouped? (seq groups)]
+        grouped? (seq groups)
+        group-col-key (first group-by)
+        visible-cols (if (and grouped? group-col-key)
+                       (remove #(= (:key %) group-col-key) cols)
+                       cols)]
     [:tbody
      (if grouped?
-       ;; For grouped rows, calculate cumulative row-idx-offset
+        ;; For grouped rows, calculate cumulative row-idx-offset
        (let [groups-with-offsets (reduce (fn [acc group]
                                            (let [offset (if (empty? acc)
                                                           0
@@ -93,7 +97,7 @@
                                          groups)]
          (for [[idx {:keys [group row-idx-offset]}] (map-indexed vector groups-with-offsets)]
            (render-group {:group group
-                          :cols cols
+                          :cols visible-cols
                           :selectable? selectable?
                           :row-id-fn row-id-fn
                           :table-id table-id

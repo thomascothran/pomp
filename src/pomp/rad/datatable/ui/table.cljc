@@ -60,12 +60,12 @@
         {:style {:justify-content "flex-end"}}
         toolbar])
      [:div.overflow-x-auto
-       [:table.table.table-sm
-        {:data-class (str "{'select-none': $datatable." id "._cellSelectDragging}")
-         :data-on:mousemove (str "pompCellSelectMove(evt, '" id "', "
+      [:table.table.table-sm
+       {:data-class (str "{'select-none': $datatable." id "._cellSelectDragging}")
+        :data-on:mousemove (str "pompCellSelectMove(evt, '" id "', "
                                 "$datatable." id "._cellSelectDragging, "
                                 "$datatable." id "._cellSelectStart)")
-         :data-on:pompcellselection (str "const raw = evt.detail.selection; "
+        :data-on:pompcellselection (str "const raw = evt.detail.selection; "
                                         "const selections = (raw || []).filter(Boolean); "
                                         "if (selections.length) { $datatable." id ".cellSelection = selections; } "
                                         "else { $datatable." id ".cellSelection = []; $datatable." id ".cellSelection = null; }")
@@ -76,6 +76,7 @@
        (body/render {:cols cols
                      :rows rows
                      :groups groups
+                     :group-by group-by
                      :selectable? selectable?
                      :row-id-fn row-id-fn
                      :table-id id

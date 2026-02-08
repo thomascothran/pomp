@@ -51,6 +51,9 @@
 (def group-menu-button
   {:css "button[popovertarget='col-menu-group']"})
 
+(def grouped-school-header-filter-button
+  {:xpath "//th[.//button[@popovertarget='col-menu-group'] and .//span[contains(@class,'font-semibold') and normalize-space(text())='School']]//button[@popovertarget='filter-school']"})
+
 (def group-sort-asc-item
   {:xpath "//div[@id='col-menu-group']//a[contains(normalize-space(.), 'Sort ascending')]"})
 
@@ -209,8 +212,26 @@
           (e/wait-predicate #(str/includes? (first-group-text) first-school))
           (is (str/includes? (first-group-text) first-school)
               "Expected group column sort ascending to order groups")
-        (e/click browser/*driver* group-menu-button)
-        (e/click browser/*driver* group-sort-desc-item)
+          (e/click browser/*driver* group-menu-button)
+          (e/click browser/*driver* group-sort-desc-item)
           (e/wait-predicate #(str/includes? (first-group-text) last-school))
           (is (str/includes? (first-group-text) last-school)
               "Expected group column sort descending to order groups"))))))
+
+(deftest grouped-school-filter-available-from-synthetic-header-in-memory-test
+  (testing "grouped synthetic school header exposes school filter control"
+    (open-datatable!)
+    (group-by-school!)
+    (is (not (e/exists? browser/*driver* school-menu-button))
+        "Expected grouped mode to remove regular School column menu button")
+    (let [filter-in-grouped-header? (e/exists? browser/*driver* grouped-school-header-filter-button)]
+      (is filter-in-grouped-header?
+          "Expected grouped synthetic School header to expose School filter control")
+      (when filter-in-grouped-header?
+        (e/click browser/*driver* grouped-school-header-filter-button)
+        (e/wait-visible browser/*driver* school-filter-input)
+        (e/fill browser/*driver* school-filter-input "Stoicism")
+        (e/click browser/*driver* school-filter-apply)
+        (e/wait-predicate #(= 1 (group-row-count)))
+        (is (= 1 (group-row-count))
+            "Expected grouped-header School filter path to reduce groups")))))
