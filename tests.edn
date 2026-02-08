@@ -5,4 +5,17 @@
             :kaocha.plugin/hooks]
   :tests [{:id :unit
            :test-paths ["test"]
-           :source-paths ["src"]}]}
+           :source-paths ["src"]
+           :ns-patterns ["^(?!pomp\\.browser\\.).*$"]}
+          {:id :integration
+           :test-paths ["test"]
+           :source-paths ["src"]
+           :ns-patterns ["^pomp\\.browser\\..*$"]}
+          {:id :integration-datatable
+           :test-paths ["test"]
+           :source-paths ["src"]
+           :ns-patterns ["^pomp\\.browser\\.datatable\\..*$"]}
+          {:id :integration-combobox
+           :test-paths ["test"]
+           :source-paths ["src"]
+           :ns-patterns ["^pomp\\.browser\\.combobox\\..*$"]}]}
