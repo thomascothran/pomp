@@ -41,6 +41,12 @@
                      (e/add-key-up keys/control-left))]
     (e/perform-actions browser/*driver* keyboard)))
 
+(defn- press-escape!
+  []
+  (let [keyboard (-> (e/make-key-input)
+                     (e/add-key-press keys/escape))]
+    (e/perform-actions browser/*driver* keyboard)))
+
 (defn- clipboard-text
   []
   (e/js-execute browser/*driver* "return window.__copiedText;"))
@@ -54,3 +60,15 @@
     (e/wait browser/*driver* 1)
     (is (= "Socrates\t5th BC\nPlato\t4th BC" (clipboard-text))
         "Expected TSV copy from selected 2x2 range")))
+
+(deftest escape-clear-prevents-copy-test
+  (testing "copy shortcut does nothing after Escape clears selection"
+    (open-datatable!)
+    (drag-select-2x2!)
+    (stub-clipboard!)
+    (press-escape!)
+    (e/wait browser/*driver* 1)
+    (press-copy!)
+    (e/wait browser/*driver* 1)
+    (is (nil? (clipboard-text))
+        "Expected no clipboard write when selection has been cleared")))

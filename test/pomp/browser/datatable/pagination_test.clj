@@ -23,6 +23,8 @@
 (def last-page-button
   {:xpath "//button[normalize-space(text())='»']"})
 
+(def default-page-size 10)
+
 (defn- open-datatable!
   []
   (e/go browser/*driver* browser/base-url)
@@ -36,12 +38,25 @@
   []
   (count (e/query-all browser/*driver* {:css "#datatable tbody tr"})))
 
+(defn- total-row-count
+  []
+  (let [query-fn (:query-fn browser/*state*)
+        {:keys [rows]} (query-fn {:filters {}
+                                  :sort []
+                                  :page {:size Integer/MAX_VALUE :current 0}}
+                                 nil)]
+    (count rows)))
+
+(defn- last-page-index
+  [page-size]
+  (max 0 (quot (dec (total-row-count)) page-size)))
+
 (defn- expected-page-first-name
   [page-number]
   (let [query-fn (:query-fn browser/*state*)
         {:keys [rows]} (query-fn {:filters {}
                                   :sort []
-                                  :page {:size 10 :current page-number}}
+                                  :page {:size default-page-size :current page-number}}
                                  nil)]
     (-> rows first :name)))
 
@@ -56,23 +71,26 @@
 (deftest pagination-page-size-change-test
   (testing "changing page size updates row count and disables paging"
     (open-datatable!)
+    (let [selected-page-size 25
+          total-rows (total-row-count)
+          has-additional-pages? (> total-rows selected-page-size)]
     (is (= 10 (visible-row-count))
         "Expected default page size row count")
-    (e/select browser/*driver* page-size-select "25")
+    (e/select browser/*driver* page-size-select (str selected-page-size))
     (e/wait browser/*driver* 1)
-    (is (= 15 (visible-row-count))
-        "Expected all rows visible at page size 25")
-    (is (e/disabled? browser/*driver* next-page-button)
-        "Expected next disabled when all rows fit")
-    (is (e/disabled? browser/*driver* last-page-button)
-        "Expected last disabled when all rows fit")))
+    (is (= (min selected-page-size total-rows) (visible-row-count))
+        "Expected page-size-limited row count")
+    (is (= has-additional-pages? (not (e/disabled? browser/*driver* next-page-button)))
+        "Expected next enabled only when more rows remain")
+    (is (= has-additional-pages? (not (e/disabled? browser/*driver* last-page-button)))
+        "Expected last enabled only when more rows remain"))))
 
 (deftest pagination-first-last-buttons-test
   (testing "first and last buttons navigate between pages"
     (open-datatable!)
     (e/click browser/*driver* last-page-button)
     (e/wait browser/*driver* 1)
-    (is (= (expected-page-first-name 1) (first-cell-text))
+    (is (= (expected-page-first-name (last-page-index default-page-size)) (first-cell-text))
         "Expected first row on last page")
     (is (e/disabled? browser/*driver* next-page-button)
         "Expected next disabled on last page")

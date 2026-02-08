@@ -16,15 +16,15 @@
        "if ($" cell-base "[editingRow]) { $" cell-base "[editingRow][editingCol] = null; } "
        "} else { return; } "
        "} "
-       "$" signal-base ".cellSelectDragging = true; "
-       "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "))
+       "$" signal-base "._cellSelectDragging = true; "
+       "$" signal-base "._cellSelectStart = {row: " row-idx ", col: " col-idx "}; "))
 
 (defn boolean-mousedown-handler
   [{:keys [signal-base editing-signal row-idx col-idx]}]
   (str "if (evt.target.closest('input, button, select, textarea')) return; "
        "if ($" editing-signal "?.rowId) return; "
-       "$" signal-base ".cellSelectDragging = true; "
-       "$" signal-base ".cellSelectStart = {row: " row-idx ", col: " col-idx "}; "))
+       "$" signal-base "._cellSelectDragging = true; "
+       "$" signal-base "._cellSelectStart = {row: " row-idx ", col: " col-idx "}; "))
 
 (defn td-attrs
   [{:keys [row-idx col-idx value signal-base cell-key mousedown-handler]}]

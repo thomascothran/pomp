@@ -24,22 +24,23 @@
 (def default-app-handler
   (dev.http/app {}))
 
-(defn start-server
-  [{:keys [app-handler port] :or {port default-server-port}}]
-  (when-not @!server
-    (reset! !server
-            (run-jetty app-handler
-                       {:port port
-                         :join? false})))
-  (demo.datatable/init-db!)
-  (demo.datatable/seed-data!)
-  nil)
-
 (defn stop-server
   []
   (when-let [server @!server]
     (.stop server)
     (reset! !server nil))
+  nil)
+
+(defn start-server
+  [{:keys [app-handler port] :or {port default-server-port}}]
+  (if @!server
+    (stop-server)
+    (reset! !server
+            (run-jetty app-handler
+                       {:port port
+                        :join? false})))
+  (demo.datatable/init-db!)
+  (demo.datatable/seed-data!)
   nil)
 
 (def in-memory-data-url "/demo/datatable-in-memory/data")
@@ -75,9 +76,9 @@
      ["/demo/datatable-in-memory/data" (make-in-memory-data-handler)]]
     {:data {:middleware (dev.http/make-middleware)
             :muuntaja m/instance}})
-    (ring/routes
-     (ring/create-resource-handler {:path "/"})
-     (ring/create-default-handler))))
+   (ring/routes
+    (ring/create-resource-handler {:path "/"})
+    (ring/create-default-handler))))
 
 (def default-in-memory-app-handler
   (in-memory-app))
@@ -88,7 +89,7 @@
     (reset! !in-memory-server
             (run-jetty app-handler
                        {:port port
-                         :join? false})))
+                        :join? false})))
   nil)
 
 (defn stop-in-memory-server

@@ -39,6 +39,7 @@
    muuntaja/format-negotiate-middleware
    muuntaja/format-response-middleware
    exception/exception-middleware
+   log/exception-trace-middleware
    muuntaja/format-request-middleware
    coercion/coerce-response-middleware
    coercion/coerce-request-middleware

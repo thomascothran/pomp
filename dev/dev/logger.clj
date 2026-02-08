@@ -44,3 +44,19 @@
              :parsed-signals signals)
 
       (handler req))))
+
+(defn exception-trace-middleware
+  [handler]
+  (fn [req]
+    (try
+      (handler req)
+      (catch Throwable t
+        (binding [*out* *err*]
+          (println "[request-exception]"
+                   {:uri (:uri req)
+                    :request-method (:request-method req)
+                    :query-string (:query-string req)
+                    :headers (select-keys (:headers req)
+                                          ["datastar-request" "accept" "content-type" "host" "referer"])})
+          (.printStackTrace t))
+        (throw t)))))

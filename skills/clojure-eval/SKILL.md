@@ -36,7 +36,7 @@ This will show all nREPL servers (Clojure, Babashka, shadow-cljs, etc.) running 
 **Then use the AskUserQuestion tool:**
 
 - **If ports are discovered:**
-  - AND that port is in .nrepl file of the current directory, use it
+  - AND that port is in .nrepl-port file of the current directory, use it
   - Else ask the user
 
 - **If no ports are discovered:**: stop and ask the user to start one, and tell you the port

@@ -448,7 +448,15 @@
       (is (clojure.string/includes? mousedown-handler "editing?.colKey"))
       (is (clojure.string/includes? mousedown-handler "editing = {rowId: null, colKey: null}"))
       (is (clojure.string/includes? mousedown-handler "cells[editingRow][editingCol] = null"))
-      (is (clojure.string/includes? mousedown-handler "else { return; }"))))
+      (is (clojure.string/includes? mousedown-handler "else { return; }"))
+      (is (clojure.string/includes? mousedown-handler "_cellSelectDragging = true")
+          "Editable mousedown should set private _cellSelectDragging")
+      (is (clojure.string/includes? mousedown-handler "_cellSelectStart = {row: 0, col: 0}")
+          "Editable mousedown should set private _cellSelectStart")
+      (is (not (clojure.string/includes? mousedown-handler ".cellSelectDragging"))
+          "Editable mousedown should not set public cellSelectDragging")
+      (is (not (clojure.string/includes? mousedown-handler ".cellSelectStart"))
+          "Editable mousedown should not set public cellSelectStart")))
 
   (testing "mousedown on editable cell does not assign cellSelection"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -939,6 +947,14 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
+      (is (clojure.string/includes? mousedown-handler "_cellSelectDragging = true")
+          "Boolean mousedown should set private _cellSelectDragging")
+      (is (clojure.string/includes? mousedown-handler "_cellSelectStart = {row: 0, col: 0}")
+          "Boolean mousedown should set private _cellSelectStart")
+      (is (not (clojure.string/includes? mousedown-handler ".cellSelectDragging"))
+          "Boolean mousedown should not set public cellSelectDragging")
+      (is (not (clojure.string/includes? mousedown-handler ".cellSelectStart"))
+          "Boolean mousedown should not set public cellSelectStart")
       (is (not (clojure.string/includes? mousedown-handler "cellSelection ="))
           "mousedown should not assign cellSelection directly")))
 

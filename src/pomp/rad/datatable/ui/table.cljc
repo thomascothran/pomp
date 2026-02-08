@@ -60,16 +60,16 @@
         {:style {:justify-content "flex-end"}}
         toolbar])
      [:div.overflow-x-auto
-      [:table.table.table-sm
-       {:data-class (str "{'select-none': $datatable." id ".cellSelectDragging}")
-        :data-on:mousemove (str "pompCellSelectMove(evt, '" id "', "
-                                "$datatable." id ".cellSelectDragging, "
-                                "$datatable." id ".cellSelectStart)")
-        :data-on:pompcellselection (str "const raw = evt.detail.selection; "
-                                        "const selections = (Array.isArray(raw) ? raw : Object.keys(raw || {})).filter(Boolean); "
+       [:table.table.table-sm
+        {:data-class (str "{'select-none': $datatable." id "._cellSelectDragging}")
+         :data-on:mousemove (str "pompCellSelectMove(evt, '" id "', "
+                                "$datatable." id "._cellSelectDragging, "
+                                "$datatable." id "._cellSelectStart)")
+         :data-on:pompcellselection (str "const raw = evt.detail.selection; "
+                                        "const selections = (raw || []).filter(Boolean); "
                                         "if (selections.length) { $datatable." id ".cellSelection = selections; } "
                                         "else { $datatable." id ".cellSelection = []; $datatable." id ".cellSelection = null; }")
-        :data-on:mouseup__window (str "$datatable." id ".cellSelectDragging = false")
+        :data-on:mouseup__window (str "$datatable." id "._cellSelectDragging = false")
         :data-on:keydown__window (str "if (evt.key === 'Escape') { $datatable." id ".cellSelection = []; $datatable." id ".cellSelection = null } "
                                       "else { pompCellSelectCopy(evt, '" id "', $datatable." id ".cellSelection) }")}
        (render-header-fn header-ctx)

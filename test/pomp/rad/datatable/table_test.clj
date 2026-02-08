@@ -262,17 +262,37 @@
                               :page-current 0
                               :page-sizes [10 25]
                               :data-url "/data"})
-        table-attrs (find-table-attrs result)]
+          table-attrs (find-table-attrs result)]
+    (testing "table-level drag handlers use private drag signals"
+      (let [mousemove-handler (:data-on:mousemove table-attrs)
+            mouseup-handler (:data-on:mouseup__window table-attrs)
+            data-class (:data-class table-attrs)]
+        (is (some? mousemove-handler))
+        (is (some? mouseup-handler))
+        (is (some? data-class))
+        (is (string/includes? mousemove-handler "$datatable.test-table._cellSelectDragging")
+            "mousemove should pass private _cellSelectDragging signal")
+        (is (string/includes? mousemove-handler "$datatable.test-table._cellSelectStart")
+            "mousemove should pass private _cellSelectStart signal")
+        (is (string/includes? mouseup-handler "$datatable.test-table._cellSelectDragging = false")
+            "mouseup should clear private _cellSelectDragging signal")
+        (is (string/includes? data-class "$datatable.test-table._cellSelectDragging")
+            "table class should use private _cellSelectDragging signal")
+        (is (not (string/includes? mousemove-handler ".cellSelectDragging"))
+            "mousemove should not reference public cellSelectDragging")
+        (is (not (string/includes? mousemove-handler ".cellSelectStart"))
+            "mousemove should not reference public cellSelectStart")))
+
     (testing "pompcellselection filters truthy selections and only sets when non-empty"
       (let [handler (:data-on:pompcellselection table-attrs)]
         (is (some? handler))
         (is (string/includes? handler "evt.detail.selection"))
         (is (re-find #"filter" handler)
             "Selection handler should filter entries")
-        (is (re-find #"Array\.isArray" handler)
-            "Selection handler should guard with Array.isArray")
-        (is (re-find #"Object\.keys" handler)
-            "Selection handler should fall back to Object.keys")
+        (is (not (re-find #"Object\.keys" handler))
+            "Selection handler should not normalize map-shaped selections")
+        (is (not (re-find #"Array\.isArray" handler))
+            "Selection handler should not include map fallback guards")
         (is (re-find #"\.length" handler)
             "Selection handler should check filtered length")
         (is (string/includes? handler "cellSelection = []")

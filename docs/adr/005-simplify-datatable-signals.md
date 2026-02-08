@@ -50,7 +50,7 @@ Specific pain points include the `editable-mousedown-handler`, `enumBlurLock`, a
 - `enumBlurLock` uses timing to avoid blur races, indicating fragile event ordering.
 - Three click contexts compete: drag selection, edit entry, and dropdown selection.
 
-## Options (A-D)
+## Options (A-E)
 
 - Option A: Keep signal-first flow, but normalize selection shape and clearing semantics.
   - Pros: Minimal change, preserves Datastar-first approach.
@@ -64,6 +64,16 @@ Specific pain points include the `editable-mousedown-handler`, `enumBlurLock`, a
 - Option D: Remove `enumBlurLock` by changing enum exit semantics.
   - Pros: Removes timing hacks and simplifies handlers.
   - Cons: Changes cancel behavior and may require explicit cancel UI.
+- Option E: Require `Shift` + drag for range selection.
+  - Pros: Reduces accidental drag selection and click-context conflicts.
+  - Cons: Lower discoverability and less spreadsheet-like default behavior.
+
+## Recommended Next Step
+
+- Implement a focused Option A + B slice first: make `cellSelection` canonical (`array | null`) and move drag internals to private frontend signals (`_cellSelectDragging`, `_cellSelectStart`).
+- Keep current edit-entry behavior for now (double-click for non-boolean fields, single-click toggle for boolean) so we simplify handlers without changing core UX.
+- Defer `Shift` + drag (Option E) as an explicit follow-up experiment instead of a decision in this ADR revision.
+- Reassess `enumBlurLock` only after the state-shape and signal-ownership cleanup lands, so event-ordering issues can be measured in a cleaner baseline.
 
 ## Open Questions
 

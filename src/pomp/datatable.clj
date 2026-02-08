@@ -58,9 +58,11 @@
           ;; Fall back to reading body directly via d*/get-signals
           signals-data (or (:body-params req)
                            (let [signals-raw (d*/get-signals req)
-                                 signals-str (if (string? signals-raw)
-                                               signals-raw
-                                               (slurp signals-raw))]
+                                 signals-str
+                                 (when signals-raw
+                                   (if (string? signals-raw)
+                                     signals-raw
+                                     (slurp signals-raw)))]
                              (when (seq signals-str)
                                (json/read-str signals-str {:key-fn keyword}))))]
       (some-> signals-data
