@@ -12,7 +12,7 @@ in
   env.CHROME_BIN = "${pkgs.chromium}/bin/chromium";
 
   # https://devenv.sh/packages/
-  packages = [ pkgs.git pkgs.clojure pkgs.nodejs pkgs.chromedriver pkgs.chromium pkgs.babashka pkgs.bbin pkgs.parinfer-rust];
+  packages = [ pkgs.git pkgs.clojure pkgs.nodejs pkgs.chromedriver pkgs.chromium pkgs.babashka pkgs.bbin pkgs.parinfer-rust pkgs.nodejs];
 
 
   # https://devenv.sh/processes/

@@ -1,6 +1,8 @@
 (ns build
   (:refer-clojure :exclude [test])
   (:require [clojure.tools.build.api :as b]
+            [clojure.java.io :as io]
+            [clojure.java.shell :as shell]
             [deps-deploy.deps-deploy :as dd]))
 
 (def lib 'tech.thomascothran/pomp)
@@ -34,10 +36,34 @@
          :src-dirs  ["src"]
          :pom-data  (pom-template version)))
 
+(defn- sh! [& args]
+  (let [{:keys [exit out err]} (apply shell/sh args)]
+    (when (seq out)
+      (print out))
+    (when (seq err)
+      (binding [*out* *err*]
+        (print err)))
+    (when-not (zero? exit)
+      (throw (ex-info "External command failed"
+                      {:args args
+                       :exit exit
+                       :err err})))
+    {:out out :err err}))
+
+(defn- generate-tailwind-manifest! []
+  (println "\nGenerating Tailwind class manifest...")
+  (sh! "npm" "run" "gen:tailwind-classes")
+  (let [manifest (io/file "resources/pomp-tailwind-classes.txt")]
+    (when-not (.exists manifest)
+      (throw (ex-info "Tailwind manifest was not generated"
+                       {:path manifest}))))
+  (println "Tailwind class manifest ready."))
+
 (defn ci "Run the CI pipeline of tests (and build the JAR)." [opts]
   ;(test opts)
   (b/delete {:path "target"})
   (let [opts (jar-opts opts)]
+    (generate-tailwind-manifest!)
     (println "\nWriting pom.xml...")
     (b/write-pom opts)
     (println "\nCopying source...")
