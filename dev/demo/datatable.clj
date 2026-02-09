@@ -132,6 +132,7 @@
    :headers {"Content-Type" "text/html"}
    :body (->html
           (app/with-app-layout
+           {:nav-title "Pomp Demo"}
            [:div.p-8
             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
             [:div#datatable-container
