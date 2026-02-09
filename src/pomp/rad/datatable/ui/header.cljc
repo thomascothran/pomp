@@ -1,21 +1,34 @@
 (ns pomp.rad.datatable.ui.header
-  (:require [pomp.rad.datatable.ui.primitives :as primitives]
+  (:require [clojure.string :as string]
+            [pomp.rad.datatable.ui.primitives :as primitives]
             [pomp.rad.datatable.ui.filter-menu :as filter-menu]
             [pomp.rad.datatable.ui.column-menu :as column-menu]))
 
-(defn render-simple [{:keys [cols selectable? table-id]}]
+(defn- select-all-visible-handler
+  [table-id visible-row-ids]
+  (let [assignments (->> visible-row-ids
+                         (remove nil?)
+                         (map str)
+                         (map (fn [row-id]
+                                (str "$datatable." table-id ".selections['" row-id "'] = evt.target.checked; ")))
+                         (string/join ""))]
+    (str "$datatable." table-id ".selections ||= {}; "
+         assignments
+         "$datatable." table-id ".selections = { ...$datatable." table-id ".selections };")))
+
+(defn render-simple [{:keys [cols selectable? table-id visible-row-ids]}]
   [:thead
    [:tr
-    (when selectable?
-      [:th.w-3
-       [:input.checkbox.checkbox-sm
-        {:type "checkbox"
-         :data-on:click (str "evt.target.checked ? @setAll(true, { include: 'datatable\\\\." table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: 'datatable\\\\." table-id "\\\\.selections\\\\..*' })")}]])
-    (for [{:keys [label]} cols]
-      [:th label])]])
+      (when selectable?
+        [:th.w-3
+         [:input.checkbox.checkbox-sm
+          {:type "checkbox"
+           :data-on:click (select-all-visible-handler table-id visible-row-ids)}]])
+     (for [{:keys [label]} cols]
+       [:th label])]])
 
 (defn render-sortable
-  [{:keys [cols sort-state filters data-url selectable? table-id group-by filter-operations]}]
+  [{:keys [cols sort-state filters data-url selectable? table-id group-by filter-operations visible-row-ids]}]
   (let [table-filter-ops filter-operations
         grouped? (seq group-by)
         group-col-key (first group-by)
@@ -37,11 +50,11 @@
         group-sort-dir (:direction current-sort)]
     [:thead
      [:tr
-      (when selectable?
-        [:th.w-3
-         [:input.checkbox.checkbox-sm
-          {:type "checkbox"
-           :data-on:click (str "evt.target.checked ? @setAll(true, { include: 'datatable\\\\." table-id "\\\\.selections\\\\..*' }) : @setAll(false, { include: 'datatable\\\\." table-id "\\\\.selections\\\\..*' })")}]])
+        (when selectable?
+          [:th.w-3
+           [:input.checkbox.checkbox-sm
+            {:type "checkbox"
+             :data-on:click (select-all-visible-handler table-id visible-row-ids)}]])
       (when grouped?
         [:th
          [:div.flex.items-center.justify-between.gap-2
