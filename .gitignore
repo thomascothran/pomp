@@ -18,3 +18,4 @@ node_modules/
 dev-resources/public/output.css
 
 logs/
+resources/pomp-tailwind-classes.txt
