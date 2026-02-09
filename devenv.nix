@@ -33,7 +33,7 @@ in
   '';
 
   scripts.deploy.exec = ''
-    clj -X:test
+    clj -X:dev:test
     clj -T:build ci
     env $(cat ~/.secrets/.clojars | xargs) clj -T:build deploy
   '';
