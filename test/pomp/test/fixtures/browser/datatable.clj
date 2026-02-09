@@ -32,9 +32,9 @@
              {:data-init (str "@get('" in-memory-data-url "')")}
              [:div#datatable]]]))})
 
-(defn make-in-memory-data-handler
+(defn make-in-memory-data-handlers
   []
-  (datatable/make-handler
+  (datatable/make-handlers
    {:id "datatable"
     :columns demo.datatable/columns
     :query-fn (in-memory/query-fn demo.datatable/philosophers)
@@ -44,8 +44,10 @@
     :selectable? true}))
 
 (def in-memory-routes
-  [["/demo/datatable-in-memory" in-memory-page-handler]
-   ["/demo/datatable-in-memory/data" (make-in-memory-data-handler)]])
+  (let [{:keys [get post]} (make-in-memory-data-handlers)]
+    [["/demo/datatable-in-memory" in-memory-page-handler]
+     ["/demo/datatable-in-memory/data" {:get get
+                                         :post post}]]))
 
 (def ^:dynamic *state* nil)
 

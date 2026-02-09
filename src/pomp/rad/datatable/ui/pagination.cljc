@@ -12,29 +12,29 @@
      [:div.flex.items-center.gap-4
       #_(when (util/has-active-filters? filters)
           [:button.btn.btn-sm.btn-ghost.text-error.opacity-100
-           {:data-on:click (str "@get('" data-url "?clearFilters=1')")}
+           {:data-on:click (str "@post('" data-url "?clearFilters=1')")}
            "✕ Clear filters"])
       [:div.flex.items-center.gap-1
        [:select.select.select-ghost.select-sm.font-medium
-        {:data-on:change (str "@get('" data-url "?pageSize=' + evt.target.value)")}
+         {:data-on:change (str "@post('" data-url "?pageSize=' + evt.target.value)")}
         (for [size page-sizes]
           [:option {:value size :selected (= size page-size)} size])]
        [:span.whitespace-nowrap "per page"]]]
      [:div (str start "–" end " of " total-rows)]
      [:div.flex.items-center.gap-1
       [:button.btn.btn-ghost.btn-sm.btn-square
-       {:data-on:click (str "@get('" data-url "?page=first')")
+        {:data-on:click (str "@post('" data-url "?page=first')")
         :disabled on-first?}
        "«"]
       [:button.btn.btn-ghost.btn-sm.btn-square
-       {:data-on:click (str "@get('" data-url "?page=prev')")
+        {:data-on:click (str "@post('" data-url "?page=prev')")
         :disabled on-first?}
        "‹"]
       [:button.btn.btn-ghost.btn-sm.btn-square
-       {:data-on:click (str "@get('" data-url "?page=next')")
+        {:data-on:click (str "@post('" data-url "?page=next')")
         :disabled on-last?}
        "›"]
       [:button.btn.btn-ghost.btn-sm.btn-square
-       {:data-on:click (str "@get('" data-url "?page=last')")
+        {:data-on:click (str "@post('" data-url "?page=last')")
         :disabled on-last?}
        "»"]]]))

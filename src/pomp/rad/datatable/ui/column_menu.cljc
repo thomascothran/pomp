@@ -29,7 +29,7 @@
          [:a.flex.items-center.gap-2
           (cond-> {}
             (not sort-disabled?)
-            (assoc :data-on:click (str hide-popover "@get('" data-url "?sortCol=" col-name "&sortDir=asc')"))
+             (assoc :data-on:click (str hide-popover "@post('" data-url "?sortCol=" col-name "&sortDir=asc')"))
             sort-disabled?
             (assoc :aria-disabled "true" :class "opacity-50 pointer-events-none"))
           primitives/arrow-up-icon "Sort ascending"]]
@@ -37,16 +37,16 @@
          [:a.flex.items-center.gap-2
           (cond-> {}
             (not sort-disabled?)
-            (assoc :data-on:click (str hide-popover "@get('" data-url "?sortCol=" col-name "&sortDir=desc')"))
+             (assoc :data-on:click (str hide-popover "@post('" data-url "?sortCol=" col-name "&sortDir=desc')"))
             sort-disabled?
             (assoc :aria-disabled "true" :class "opacity-50 pointer-events-none"))
           primitives/arrow-down-icon "Sort descending"]]
        (when groupable?
          [:li
-          [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@get('" data-url "?groupBy=" col-name "')")}
+           [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@post('" data-url "?groupBy=" col-name "')")}
            primitives/list-icon "Group by " col-label]])
        [:li
-        [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "$datatable." table-id ".columns." col-name ".visible = false; @get('" data-url "')")}
+         [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "$datatable." table-id ".columns." col-name ".visible = false; @post('" data-url "')")}
          primitives/eye-slash-icon "Hide column"]]]])))
 
 (defn render-group-column
@@ -75,7 +75,7 @@
          [:a.flex.items-center.gap-2
           (cond-> {}
             sort-enabled?
-            (assoc :data-on:click (str hide-popover "@get('" data-url "?sortCol=" group-col-name "&sortDir=asc')"))
+             (assoc :data-on:click (str hide-popover "@post('" data-url "?sortCol=" group-col-name "&sortDir=asc')"))
             (not sort-enabled?)
             (assoc :aria-disabled "true" :class "opacity-50 pointer-events-none"))
           primitives/arrow-up-icon "Sort ascending"]]
@@ -83,10 +83,10 @@
          [:a.flex.items-center.gap-2
           (cond-> {}
             sort-enabled?
-            (assoc :data-on:click (str hide-popover "@get('" data-url "?sortCol=" group-col-name "&sortDir=desc')"))
+             (assoc :data-on:click (str hide-popover "@post('" data-url "?sortCol=" group-col-name "&sortDir=desc')"))
             (not sort-enabled?)
             (assoc :aria-disabled "true" :class "opacity-50 pointer-events-none"))
           primitives/arrow-down-icon "Sort descending"]]
         [:li
-         [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@get('" data-url "?ungroup=true')")}
+         [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@post('" data-url "?ungroup=true')")}
           "Remove grouping"]]]])))

@@ -65,9 +65,9 @@
           "Should NOT send filterOp as URL param")
       (is (not (str/includes? onclick "filterVal="))
           "Should NOT send filterVal as URL param")
-      ;; Should call @get to fetch data after updating signal
-      (is (str/includes? onclick "@get")
-          "Should call @get to fetch data"))))
+      ;; Should call @post to fetch data after updating signal
+      (is (str/includes? onclick "@post")
+          "Should call @post to fetch data"))))
 
 (deftest clear-button-removes-signal-test
   (testing "Clear button removes the filter signal and fetches data"
@@ -85,9 +85,9 @@
       ;; Should NOT include clearColFilters hack
       (is (not (str/includes? onclick "clearColFilters"))
           "Should NOT use clearColFilters hack")
-      ;; Should call @get to fetch data
-      (is (str/includes? onclick "@get")
-          "Should call @get to fetch data"))))
+      ;; Should call @post to fetch data
+      (is (str/includes? onclick "@post")
+          "Should call @post to fetch data"))))
 
 ;; =============================================================================
 ;; normalize-operations tests

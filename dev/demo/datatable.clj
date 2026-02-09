@@ -125,40 +125,42 @@
     (seed-data!)
     (reset! db-initialized? true)))
 
-(def data-url "/demo/datatable/data")
+(def datatable-component-url "/demo/datatable/data")
 
 (defn page-handler [_req]
   {:status 200
    :headers {"Content-Type" "text/html"}
    :body (->html
           (app/with-app-layout
-           {:nav-title "Pomp Demo"}
-           [:div.p-8
-            [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
-            [:div#datatable-container
-             {:data-init (str "@get('" data-url "')")}
-             [:div#datatable]]]))})
+            {:nav-title "Pomp Demo"}
+            [:div.p-8
+             [:h1.text-2xl.font-bold.mb-4 "Philosophers"]
+             [:div#datatable-container
+              {:data-init (str "@get('" datatable-component-url "')")}
+              [:div#datatable]]]))})
 
-(defn make-data-handler
+(defn make-data-handlers
   []
   (let [ds (get-datasource)
         execute! (fn [sqlvec]
                    (jdbc/execute! ds sqlvec
                                   {:builder-fn rs/as-unqualified-lower-maps}))]
-    (datatable/make-handler
+    (datatable/make-handlers
      {:id "datatable"
       :columns columns
       :query-fn (sqlq/query-fn {:table-name "philosophers"} execute!)
       :save-fn (sqlq/save-fn {:table "philosophers"} execute!)
-      :data-url data-url
+      :data-url datatable-component-url
       :render-html-fn ->html
       :page-sizes [10 25 100 250]
       :selectable? true})))
 
 (defn make-routes [_]
   (init-db!)
-  [["/datatable" page-handler]
-   ["/datatable/data" (make-data-handler)]])
+  (let [{:keys [get post]} (make-data-handlers)]
+    [["/datatable" page-handler]
+     ["/datatable/data" {:get get
+                         :post post}]]))
 
 (comment
   (require '[demo.datatable :as dt] :reload)

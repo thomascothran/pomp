@@ -31,6 +31,6 @@
                :data-bind signal-path}]
              label]]))]
       [:div.p-2.pt-0
-       [:button.btn.btn-sm.btn-primary.w-full
-        {:data-on:click (str "document.getElementById('" popover-id "').hidePopover(); @get('" data-url "')")}
-        "Apply"]]]]))
+        [:button.btn.btn-sm.btn-primary.w-full
+         {:data-on:click (str "document.getElementById('" popover-id "').hidePopover(); @post('" data-url "')")}
+         "Apply"]]]]))

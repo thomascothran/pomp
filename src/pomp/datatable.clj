@@ -131,7 +131,7 @@
     ;; Default: return value as-is
     value))
 
-(defn make-handler
+(defn- make-handler*
   "Creates a Ring handler for a datatable.
 
    Required options:
@@ -158,18 +158,19 @@
                       See `pomp.rad.datatable.query.sql/save-fn` for SQL implementation.
 
    Returns a Ring handler function that handles datatable requests via SSE."
-  [{:keys [id columns query-fn data-url render-html-fn
-           page-sizes selectable? skeleton-rows render-row render-header render-cell
-           filter-operations save-fn]
-    :or {page-sizes [10 25 100]
-         selectable? false
-         skeleton-rows 10}}]
+   [{:keys [id columns query-fn data-url render-html-fn
+            page-sizes selectable? skeleton-rows render-row render-header render-cell
+            filter-operations save-fn]
+     :or {page-sizes [10 25 100]
+          selectable? false
+          skeleton-rows 10}}
+   save-action?]
   (fn [req]
     (let [query-params (:query-params req)
           raw-signals (get-signals req id)
           action (get query-params "action")]
       ;; Handle save action
-      (if (and (= action "save") save-fn)
+      (if (and save-fn (save-action? req action))
         (let [cell-edit (extract-cell-edit raw-signals)]
           (when cell-edit
             (save-fn (assoc cell-edit :req req)))
@@ -256,4 +257,25 @@
                                                                                                                    :columns-state columns-state
                                                                                                                    :table-id id
                                                                                                                    :data-url data-url})})))
-                             (d*/close-sse! sse))}))))))
+                              (d*/close-sse! sse))}))))))
+
+(defn make-handlers
+  "Creates method-specific datatable handlers.
+
+   Returns {:get fn :post fn}.
+   - :get always executes the query/render flow.
+   - :post executes save flow when query-param action=save, otherwise query/render flow."
+  [opts]
+  {:get (make-handler* opts (fn [_ _] false))
+   :post (make-handler* opts (fn [_ action] (= action "save")))})
+
+(defn make-handler
+  "Compatibility wrapper that returns a single handler function.
+
+   Preserves historical behavior where action=save routes through save flow."
+  [opts]
+  (let [{:keys [get post]} (make-handlers opts)]
+    (fn [req]
+      (if (= "save" (get-in req [:query-params "action"]))
+        (post req)
+        (get req)))))

@@ -132,7 +132,7 @@
        {:data-on:submit__prevent
         (str "document.getElementById('" popover-id "').hidePopover(); "
              signal-path " = [{type: '" filter-type-str "', op: evt.target.elements['filterOp'].value, value: evt.target.elements['filterVal'].value}]; "
-             "@get('" data-url "')")}
+              "@post('" data-url "')")}
        [:div.text-sm.font-semibold (str "Filter " col-label)]
        [:input {:type "hidden" :name "filterOp" :value current-op}]
        [:details.dropdown.w-full
@@ -157,14 +157,13 @@
           :disabled (not has-filter?)
           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
                               signal-path " = null; "
-                              "@get('" data-url "')")}
+                               "@post('" data-url "')")}
          "Clear"]
         [:button.btn.btn-sm.btn-primary.flex-1
          {:type "button"
           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
                               signal-path " = [{type: '" filter-type-str "', op: evt.target.closest('form').elements['filterOp'].value, value: encodeURIComponent(evt.target.closest('form').elements['filterVal'].value)}]; "
-                              "@get('" data-url "')")}
+                               "@post('" data-url "')")}
          "Apply"]]]])))
-
 
 
