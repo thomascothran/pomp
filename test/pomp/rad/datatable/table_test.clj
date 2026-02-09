@@ -73,6 +73,28 @@
 
     :else []))
 
+(defn- find-header-select-all-click-handler
+  "Finds the header select-all checkbox click handler in rendered table hiccup."
+  [hiccup]
+  (letfn [(find-node [node]
+            (cond
+              (and (vector? node)
+                   (keyword? (first node))
+                   (string/starts-with? (name (first node)) "input")
+                   (map? (second node))
+                   (= "checkbox" (-> node second :type))
+                   (contains? (second node) :data-on:click))
+              node
+
+              (vector? node)
+              (some find-node node)
+
+              (seq? node)
+              (some find-node node)
+
+              :else nil))]
+    (some-> (find-node hiccup) second :data-on:click)))
+
 (def test-table-data
   {:group-by [],
    :filters {},
@@ -216,6 +238,28 @@
           "Boolean column should have 'is' operation")
       (is (not (contains? active-ops "contains"))
           "Boolean column should NOT have 'contains' operation"))))
+
+(deftest table-render-header-select-all-handler-targets-visible-row-signals-test
+  (testing "table render passes visible row ids to header select-all signal writes"
+    (let [result (table/render {:id "datatable"
+                                :cols [{:key :name :label "Name" :type :string}]
+                                :rows [{:id "row-1" :name "Ada"}
+                                       {:id "row-2" :name "Grace"}]
+                                :sort-state []
+                                :filters {}
+                                :total-rows 2
+                                :page-size 10
+                                :page-current 0
+                                :page-sizes [10 25]
+                                :data-url "/data"
+                                :selectable? true})
+          click-handler (find-header-select-all-click-handler result)]
+      (is (some? click-handler)
+          "Expected selectable table header to include a select-all handler")
+      (is (string/includes? click-handler "$datatable.datatable.selections['row-1'] = evt.target.checked")
+          "Expected header handler to write visible row-1 selection signal directly")
+      (is (string/includes? click-handler "$datatable.datatable.selections['row-2'] = evt.target.checked")
+          "Expected header handler to write visible row-2 selection signal directly"))))
 
 (deftest table-group-expand-handlers-test
   (let [groups [{:group-value "Classical Greek"

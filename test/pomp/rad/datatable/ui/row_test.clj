@@ -107,7 +107,7 @@
 ;; =============================================================================
 
 (deftest render-row-does-not-init-selection-signals-test
-  (testing "row selection checkbox does not pre-create selection signals"
+  (testing "row selection checkbox binds to row signal without pre-init"
     (letfn [(find-selection-input [hiccup]
               (cond
                 (and (vector? hiccup)
@@ -131,10 +131,10 @@
                                     :selectable? true})
             input (find-selection-input result)
             attrs (second input)]
-        (is (nil? (:data-bind attrs))
-            "Selection checkbox should not bind on render")
+        (is (= "datatable.people.selections.row-1" (:data-bind attrs))
+            "Selection checkbox should be bound to row selection signal")
         (is (nil? (:data-signals attrs))
-            "Row rendering should not pre-create selection signals")
+            "Selection checkbox binding should not pre-create selection signals")
         (let [change-handler (:data-on:change attrs)]
           (is (some? change-handler)
               "Selection checkbox should update signal on change")

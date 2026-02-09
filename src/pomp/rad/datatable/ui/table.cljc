@@ -45,14 +45,19 @@
                        :selectable? bool :table-id str :group-by [...]}
                       See pomp.rad.datatable.ui.header/render-sortable for default."
   [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar render-row render-header render-cell filter-operations]}]
-  (let [header-ctx {:cols cols
-                    :sort-state sort-state
-                    :filters filters
-                    :data-url data-url
-                    :selectable? selectable?
-                    :table-id id
-                    :group-by group-by
-                    :filter-operations filter-operations}
+  (let [row-id-fn (or row-id-fn :id)
+        visible-row-ids (if (seq groups)
+                          (mapcat :row-ids groups)
+                          (map row-id-fn rows))
+        header-ctx {:cols cols
+                     :sort-state sort-state
+                     :filters filters
+                     :data-url data-url
+                     :selectable? selectable?
+                     :table-id id
+                     :group-by group-by
+                     :visible-row-ids visible-row-ids
+                     :filter-operations filter-operations}
         render-header-fn (or render-header header/render-sortable)]
     [:div {:id id}
      (when toolbar
@@ -73,12 +78,12 @@
         :data-on:keydown__window (str "if (evt.key === 'Escape') { $datatable." id ".cellSelection = []; $datatable." id ".cellSelection = null } "
                                       "else { pompCellSelectCopy(evt, '" id "', $datatable." id ".cellSelection) }")}
        (render-header-fn header-ctx)
-       (body/render {:cols cols
-                     :rows rows
-                     :groups groups
-                     :group-by group-by
-                     :selectable? selectable?
-                     :row-id-fn row-id-fn
+        (body/render {:cols cols
+                      :rows rows
+                      :groups groups
+                      :group-by group-by
+                      :selectable? selectable?
+                      :row-id-fn row-id-fn
                      :table-id id
                      :data-url data-url
                      :render-row render-row

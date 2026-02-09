@@ -133,12 +133,14 @@
   [{:keys [signal-path]}]
   (let [[_ selections-path row-id]
         (or (re-matches #"^(.*\.selections)\.([^.]*)$" signal-path)
-            (re-matches #"^(.*\.selections)\['(.+)'\]$" signal-path))
+             (re-matches #"^(.*\.selections)\['(.+)'\]$" signal-path))
+        bind-path (str selections-path "." row-id)
         change-handler (str "$" selections-path " ||= {}; "
                             "$" selections-path "['" row-id "'] = evt.target.checked")]
     [:td.w-3
      [:input.checkbox.checkbox-sm
       {:type "checkbox"
+       :data-bind bind-path
        :data-on:change change-handler}]]))
 
 (defn render-row

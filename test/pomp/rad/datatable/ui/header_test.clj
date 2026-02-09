@@ -246,6 +246,20 @@
     :else
     nil))
 
+(defn- find-header-select-all-click-handler
+  "Finds the header select-all checkbox click handler string."
+  [hiccup]
+  (let [node (find-first-node
+              (fn [h]
+                (and (vector? h)
+                     (keyword? (first h))
+                     (clojure.string/starts-with? (name (first h)) "input")
+                     (map? (second h))
+                     (= "checkbox" (-> h second :type))
+                     (contains? (second h) :data-on:click)))
+              hiccup)]
+    (some-> node second :data-on:click)))
+
 (deftest render-sortable-passes-table-id-to-filter-menu-test
   (testing "passes table-id to filter-menu for signal updates"
     (let [cols [{:key :name :label "Name" :type :string}]
@@ -309,3 +323,24 @@
           "Expected grouped mode to render synthetic grouped column menu")
       (is (not (contains? popovertargets "col-menu-school"))
           "Expected grouped mode to hide regular grouped column menu to avoid duplicate grouped dimension"))))
+
+(deftest render-sortable-select-all-handler-is-signal-driven-test
+  (testing "header select-all writes known row selection signals without DOM querying"
+    (let [result (header/render-sortable {:cols [{:key :name :label "Name" :type :string}]
+                                          :sort-state []
+                                          :filters {}
+                                          :data-url "/data"
+                                          :table-id "people"
+                                          :selectable? true
+                                          :visible-row-ids ["row-1" "row-2"]})
+          click-handler (find-header-select-all-click-handler result)]
+      (is (some? click-handler)
+          "Expected selectable headers to emit a click handler")
+      (is (not (clojure.string/includes? click-handler "document.querySelectorAll"))
+          "Header select-all should not query DOM checkboxes")
+      (is (not (clojure.string/includes? click-handler "dispatchEvent"))
+          "Header select-all should not dispatch synthetic checkbox events")
+      (is (clojure.string/includes? click-handler "$datatable.people.selections['row-1'] = evt.target.checked")
+          "Header select-all should set row-1 selection signal directly")
+      (is (clojure.string/includes? click-handler "$datatable.people.selections['row-2'] = evt.target.checked")
+          "Header select-all should set row-2 selection signal directly"))))
