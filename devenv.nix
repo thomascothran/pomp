@@ -32,6 +32,12 @@ in
     exec bb --config ${clml}/bb.edn -m clojure-mcp-light.nrepl-eval "$@"
   '';
 
+  scripts.deploy.exec = ''
+    clj -X:test
+    clj -T:build ci
+    env $(cat ~/.secrets/.clojars | xargs) clj -T:build deploy
+  '';
+
   # https://devenv.sh/basics/
   enterShell = ''
     echo "hello" &> /dev/null

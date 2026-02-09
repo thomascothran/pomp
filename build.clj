@@ -7,11 +7,11 @@
 
 (def lib 'tech.thomascothran/pomp)
 ; alternatively, use MAJOR.MINOR.COMMITS:
-(def version (format "3.0.%s" (b/git-count-revs nil)))
+(def version (format "0.1.%s" (b/git-count-revs nil)))
 (def class-dir "target/classes")
 
 (defn- pom-template [version]
-  [[:description "pomp: Bthreads for Clojure(Script)"]
+  [[:description "pomp: a RAD toolkit for clojure"]
    [:url "https://github.com/thomascothran/pomp"]
    [:licenses
     [:license
@@ -56,7 +56,7 @@
   (let [manifest (io/file "resources/pomp-tailwind-classes.txt")]
     (when-not (.exists manifest)
       (throw (ex-info "Tailwind manifest was not generated"
-                       {:path manifest}))))
+                      {:path manifest}))))
   (println "Tailwind class manifest ready."))
 
 (defn ci "Run the CI pipeline of tests (and build the JAR)." [opts]
