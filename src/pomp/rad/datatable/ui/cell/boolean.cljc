@@ -1,5 +1,6 @@
 (ns pomp.rad.datatable.ui.cell.boolean
-  (:require [pomp.rad.datatable.ui.cell.editable :as editable]))
+  (:require [pomp.icons :as icons]
+            [pomp.rad.datatable.ui.cell.editable :as editable]))
 
 (defn render-editable-cell
   [ctx]
@@ -7,22 +8,8 @@
         read-current-value (str "document.getElementById('" (:span-id base) "').dataset.value === 'true'")
         edit-handler (editable/edit-handler base read-current-value)
         display-content (if (:value base)
-                          [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
-                                                      :fill "none"
-                                                      :viewBox "0 0 24 24"
-                                                      :stroke-width "2"
-                                                      :stroke "currentColor"}
-                           [:path {:stroke-linecap "round"
-                                   :stroke-linejoin "round"
-                                   :d "m4.5 12.75 6 6 9-13.5"}]]
-                          [:svg.w-4.h-4.text-base-content.opacity-30 {:xmlns "http://www.w3.org/2000/svg"
-                                                                      :fill "none"
-                                                                      :viewBox "0 0 24 24"
-                                                                      :stroke-width "2"
-                                                                      :stroke "currentColor"}
-                           [:path {:stroke-linecap "round"
-                                   :stroke-linejoin "round"
-                                   :d "M6 18 18 6M6 6l12 12"}]])
+                          icons/boolean-true-icon
+                          icons/boolean-false-icon)
         edit-input [:input.toggle.toggle-xs.toggle-success
                     {:id (:input-id base)
                      :type "checkbox"

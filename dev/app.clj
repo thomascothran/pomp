@@ -1,5 +1,6 @@
 (ns app
   (:require [pomp.element.navbar :as navbar]
+            [pomp.icons :as icons]
             [pomp.element.theme-picker :as theme-picker]))
 
 (def ^:private default-sidebar
@@ -56,20 +57,12 @@
         {:attrs {:class "bg-base-100 border-b border-base-300"}
          :left-group
          [:div {:class "flex items-center gap-2"}
-           [:label {:for drawer-id
-                    :class "btn btn-ghost btn-square drawer-button"
-                    :aria-label "Open sidebar menu"}
-            [:svg {:xmlns "http://www.w3.org/2000/svg"
-                   :viewBox "0 0 24 24"
-                   :fill "none"
-                   :stroke "currentColor"
-                   :stroke-width "1.5"
-                   :class "size-6"}
-             [:path {:stroke-linecap "round"
-                     :stroke-linejoin "round"
-                     :d "M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5"}]]]
-          [:a {:href "#"
-               :class "btn btn-ghost text-xl"} nav-title]]
+            [:label {:for drawer-id
+                     :class "btn btn-ghost btn-square drawer-button"
+                     :aria-label "Open sidebar menu"}
+             icons/menu-icon]
+           [:a {:href "#"
+                :class "btn btn-ghost text-xl"} nav-title]]
          :right-group (theme-picker/theme-picker {})})
        (into [:main main-attrs] [content])]
        [:div {:class "drawer-side"}

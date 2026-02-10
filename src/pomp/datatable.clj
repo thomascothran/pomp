@@ -33,6 +33,7 @@
             [starfederation.datastar.clojure.adapter.ring :refer [->sse-response on-open]]
             [clojure.data.json :as json]
             [clojure.java.io :as io]
+            [pomp.icons :as icons]
             [pomp.rad.datatable.state.table :as state]
             [pomp.rad.datatable.ui.table :as table]
             [pomp.rad.datatable.state.column :as column-state]
@@ -112,22 +113,8 @@
                                 (= "true" value) true
                                 :else false)]
                (if bool-value
-                 [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
-                                             :fill "none"
-                                             :viewBox "0 0 24 24"
-                                             :stroke-width "2"
-                                             :stroke "currentColor"}
-                  [:path {:stroke-linecap "round"
-                          :stroke-linejoin "round"
-                          :d "m4.5 12.75 6 6 9-13.5"}]]
-                 [:svg.w-4.h-4.text-base-content.opacity-30 {:xmlns "http://www.w3.org/2000/svg"
-                                                             :fill "none"
-                                                             :viewBox "0 0 24 24"
-                                                             :stroke-width "2"
-                                                             :stroke "currentColor"}
-                  [:path {:stroke-linecap "round"
-                          :stroke-linejoin "round"
-                          :d "M6 18 18 6M6 6l12 12"}]]))
+                 icons/boolean-true-icon
+                 icons/boolean-false-icon))
     ;; Default: return value as-is
     value))
 

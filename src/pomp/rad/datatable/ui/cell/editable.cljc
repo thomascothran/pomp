@@ -1,4 +1,5 @@
-(ns pomp.rad.datatable.ui.cell.editable)
+(ns pomp.rad.datatable.ui.cell.editable
+  (:require [pomp.icons :as icons]))
 
 (defn cell-selection-class
   [signal-base cell-key]
@@ -135,15 +136,7 @@
                     :data-on:dblclick edit-handler}
       display-content]
      [:span.pointer-events-none.opacity-0.group-hover:opacity-100.transition-opacity.duration-150
-      [:svg.w-3.h-3 {:class "text-base-content/50"
-                     :xmlns "http://www.w3.org/2000/svg"
-                     :fill "none"
-                     :viewBox "0 0 24 24"
-                     :stroke-width "1.5"
-                     :stroke "currentColor"}
-       [:path {:stroke-linecap "round"
-               :stroke-linejoin "round"
-               :d "m16.862 3.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 15.07a4.5 4.5 0 0 1-1.897 1.13L6 17l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 6.125"}]]]]
+      icons/edit-pencil-icon]]
 
     [:div.absolute.inset-0.flex.items-center.gap-1.bg-base-100
      {:data-show editing-check}
@@ -152,11 +145,4 @@
        [:button.btn.btn-ghost.btn-xs.p-0
         {:data-on:mousedown save-handler
          :title "Save"}
-        [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
-                                    :fill "none"
-                                    :viewBox "0 0 24 24"
-                                    :stroke-width "1.5"
-                                    :stroke "currentColor"}
-         [:path {:stroke-linecap "round"
-                 :stroke-linejoin "round"
-                 :d "m4.5 12.75 6 6 9-13.5"}]]])]]])
+        icons/save-icon])]]])
