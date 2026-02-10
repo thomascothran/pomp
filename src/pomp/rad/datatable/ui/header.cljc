@@ -19,13 +19,13 @@
 (defn render-simple [{:keys [cols selectable? table-id visible-row-ids]}]
   [:thead
    [:tr
-      (when selectable?
-        [:th.w-3
-         [:input.checkbox.checkbox-sm
-          {:type "checkbox"
-           :data-on:click (select-all-visible-handler table-id visible-row-ids)}]])
-     (for [{:keys [label]} cols]
-       [:th label])]])
+    (when selectable?
+      [:th.w-3
+       [:input.checkbox.checkbox-sm
+        {:type "checkbox"
+         :data-on:click (select-all-visible-handler table-id visible-row-ids)}]])
+    (for [{:keys [label]} cols]
+      [:th label])]])
 
 (defn render-sortable
   [{:keys [cols sort-state filters data-url selectable? table-id group-by filter-operations visible-row-ids]}]
@@ -50,18 +50,18 @@
         group-sort-dir (:direction current-sort)]
     [:thead
      [:tr
-        (when selectable?
-          [:th.w-3
-           [:input.checkbox.checkbox-sm
-            {:type "checkbox"
-             :data-on:click (select-all-visible-handler table-id visible-row-ids)}]])
+      (when selectable?
+        [:th.w-3
+         [:input.checkbox.checkbox-sm
+          {:type "checkbox"
+           :data-on:click (select-all-visible-handler table-id visible-row-ids)}]])
       (when grouped?
         [:th
          [:div.flex.items-center.justify-between.gap-2
           [:button.flex.items-center.gap-1.hover:text-primary.transition-colors
            (cond-> {}
              group-col-name
-              (assoc :data-on:click (str "@post('" data-url "?clicked=" group-col-name "')")))
+             (assoc :data-on:click (str "@post('" data-url "?clicked=" group-col-name "')")))
            [:span {:class (if group-sorted? "opacity-100" "opacity-30")}
             (cond
               (and group-sorted? (= group-sort-dir "asc")) primitives/sort-icon-asc
@@ -98,7 +98,7 @@
              ;; Drop target handlers stay on th
             :data-on:dragover__prevent (str "$datatable." table-id ".dragOver = '" col-name "'")
             :data-on:dragleave (str "if ($datatable." table-id ".dragOver === '" col-name "') $datatable." table-id ".dragOver = null")
-             :data-on:drop (str "@post('" data-url "?moveCol=' + $datatable." table-id ".dragging + '&beforeCol=" col-name "')")
+            :data-on:drop (str "@post('" data-url "?moveCol=' + $datatable." table-id ".dragging + '&beforeCol=" col-name "')")
             :data-class (str "{'border-l-4 border-primary': $datatable." table-id ".dragOver === '" col-name "' && $datatable." table-id ".dragging !== '" col-name "'}")}
            [:div.flex.items-center.justify-between.gap-2
              ;; Label is the drag handle
@@ -107,7 +107,7 @@
                       :data-on:dragstart (str "$datatable." table-id ".dragging = '" col-name "'")
                       :data-on:dragend (str "$datatable." table-id ".dragging = null; $datatable." table-id ".dragOver = null")}
                (not sort-disabled?)
-                (assoc :data-on:click (str "@post('" data-url "?clicked=" col-name "')"))
+               (assoc :data-on:click (str "@post('" data-url "?clicked=" col-name "')"))
                sort-disabled?
                (assoc :aria-disabled "true"))
              [:span {:class (if is-sorted? "opacity-100" "opacity-30")}
