@@ -103,26 +103,6 @@
   [columns]
   (boolean (some :editable columns)))
 
-(defn- render-cell-display
-  "Renders the display content for a cell based on column type.
-
-   For boolean columns, renders a checkmark or X icon.
-   Handles both boolean values (true/false) and string representations (\"true\"/\"false\")
-   since Datastar may send checkbox values as strings.
-
-   For other types, returns the value as-is."
-  [value col-type]
-  (case col-type
-    :boolean (let [bool-value (cond
-                                (boolean? value) value
-                                (= "true" value) true
-                                :else false)]
-               (if bool-value
-                 icons/boolean-true-icon
-                 icons/boolean-false-icon))
-    ;; Default: return value as-is
-    value))
-
 (defn- make-handler*
   "Creates a Ring handler for a datatable.
 
@@ -170,14 +150,14 @@
           (->sse-response req
                           {on-open
                            (fn [sse]
-                              (when cell-edit
-                                (let [{:keys [row-id col-key]} cell-edit
-                                      editing-path {(keyword row-id) {col-key false}}]
-                                  (d*/patch-signals! sse
+                             (when cell-edit
+                               (let [{:keys [row-id col-key]} cell-edit
+                                     editing-path {(keyword row-id) {col-key false}}]
+                                 (d*/patch-signals! sse
                                                     (json/write-str
                                                      {:datatable {(keyword id) {:_editing editing-path
                                                                                 :cells nil}}}))))
-                              (d*/close-sse! sse))}))
+                             (d*/close-sse! sse))}))
 
         ;; Normal query/render flow
         (let [current-signals (-> raw-signals
