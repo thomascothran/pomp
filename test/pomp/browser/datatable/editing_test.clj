@@ -173,14 +173,23 @@
         "Expected enum editor to be visible after double click")
     (press-key! keys/escape)))
 
-(deftest boolean-cell-single-click-toggles-test
-  (testing "single click toggles editable boolean cell"
+(deftest boolean-cell-double-click-toggles-test
+  (testing "single click does not toggle editable boolean cell"
     (open-datatable!)
     (let [before (checkbox-selected? verified-checkbox)]
       (e/click browser/*driver* verified-checkbox)
-      (e/wait-predicate #(not= before (checkbox-selected? verified-checkbox)))
-      (is (not= before (checkbox-selected? verified-checkbox))
-          "Expected checkbox state to toggle on single click"))))
+      (e/wait-predicate #(= before (checkbox-selected? verified-checkbox)))
+      (is (= before (checkbox-selected? verified-checkbox))
+          "Expected single click to leave toggle unchanged")))
+
+  (testing "double click toggles editable boolean cell"
+    (open-datatable!)
+    (let [before (checkbox-selected? verified-checkbox)
+          toggled (not before)]
+      (e/double-click browser/*driver* verified-checkbox)
+      (e/wait-predicate #(= toggled (checkbox-selected? verified-checkbox)))
+      (is (= toggled (checkbox-selected? verified-checkbox))
+          "Expected double click to toggle boolean cell"))))
 
 (deftest edit-century-cell-filters-non-numeric-test
   (testing "numeric input filters non-numeric characters"

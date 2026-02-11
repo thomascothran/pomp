@@ -10,7 +10,7 @@
    - `pomp.rad.datatable.query.*` for query implementations
 
    Signal schema (Datastar signals under `datatable.<id>`):
-   - `editing` (object) {:rowId string :colKey string} active cell edit target.
+   - `_editing` (object) {<row-id> {<col-key> 'active'|'in-flight'}} private per-cell edit state.
    - `cells` (object) {<row-id> {<col-key> value}} edited cell values by row/column.
    - `submitInProgress` (boolean) true while save requests are running.
    - `enumBlurLock` (number) timestamp used to suppress enum blur events.
@@ -20,7 +20,7 @@
    - `selections.<row-id>` (boolean) per-row checkbox selection state.
 
    Full signal names and shapes:
-   - `datatable.<id>.editing` (object) {:rowId string :colKey string} active cell edit target.
+   - `datatable.<id>._editing` (object) {<row-id> {<col-key> 'active'|'in-flight'}} private per-cell edit state.
    - `datatable.<id>.cells` (object) {<row-id> {<col-key> value}} edited cell values by row/column.
    - `datatable.<id>.submitInProgress` (boolean) true while save requests are running.
    - `datatable.<id>.enumBlurLock` (number) timestamp used to suppress enum blur events.
@@ -74,24 +74,29 @@
 (defn extract-cell-edit
   "Extracts a cell edit from the signals.
 
-   Uses the :editing state to determine which cell is being edited,
-   then retrieves the value from the :cells map.
-
-   The :editing signal format: {:rowId \"...\" :colKey \"...\"}
    The :cells signal format: {row-id-keyword {col-key-keyword \"value\"}}
 
-   Returns {:row-id \"...\" :col-key :keyword :value \"...\"} or nil if no edit found."
+   Invariant for save extraction:
+   - 0 edited-cell candidates in :cells => nil
+   - 1 edited-cell candidate in :cells => {:row-id :col-key :value}
+   - >1 edited-cell candidates in :cells => throws ex-info
+
+   Returns {:row-id \"...\" :col-key :keyword :value ...} or nil if no edit found."
   [signals]
-  (when-let [editing (:editing signals)]
-    (when-let [row-id (:rowId editing)]
-      (when-let [col-key-str (:colKey editing)]
-        (let [col-key (keyword col-key-str)
-              ;; Row ID in cells is a keyword (from JSON parsing)
-              row-id-kw (keyword row-id)
-              value (get-in signals [:cells row-id-kw col-key])]
-          {:row-id row-id
-           :col-key col-key
-           :value value})))))
+  (let [candidates
+        (vec
+         (for [[row-id row-cells] (:cells signals)
+               :when (map? row-cells)
+               [col-key value] row-cells]
+           {:row-id (name row-id)
+            :col-key col-key
+            :value value}))]
+    (case (count candidates)
+      0 nil
+      1 (first candidates)
+      (throw (ex-info "Expected exactly one edited cell"
+                      {:candidate-count (count candidates)
+                       :candidates candidates})))))
 
 (defn has-editable-columns?
   "Returns true if any column in the columns vector has :editable true."
@@ -145,12 +150,12 @@
                       See `pomp.rad.datatable.query.sql/save-fn` for SQL implementation.
 
    Returns a Ring handler function that handles datatable requests via SSE."
-   [{:keys [id columns query-fn data-url render-html-fn
-            page-sizes selectable? skeleton-rows render-row render-header render-cell
-            filter-operations save-fn]
-     :or {page-sizes [10 25 100]
-          selectable? false
-          skeleton-rows 10}}
+  [{:keys [id columns query-fn data-url render-html-fn
+           page-sizes selectable? skeleton-rows render-row render-header render-cell
+           filter-operations save-fn]
+    :or {page-sizes [10 25 100]
+         selectable? false
+         skeleton-rows 10}}
    save-action?]
   (fn [req]
     (let [query-params (:query-params req)
@@ -161,37 +166,18 @@
         (let [cell-edit (extract-cell-edit raw-signals)]
           (when cell-edit
             (save-fn (assoc cell-edit :req req)))
-          ;; Respond with SSE to update the cell display and clear edit state
+          ;; Respond with SSE to clear per-cell edit state
           (->sse-response req
                           {on-open
                            (fn [sse]
-                             ;; Update the cell's display with the new value
-                             (when cell-edit
-                               (let [{:keys [row-id col-key value]} cell-edit
-                                     element-id (str "cell-" id "-" row-id "-" (name col-key))
-                                     col (some #(when (= (:key %) col-key) %) columns)
-                                     col-type (:type col)]
-                                 (if (= col-type :boolean)
-                                   ;; Boolean: patch the checkbox input with updated checked state
-                                   (let [bool-value (cond
-                                                      (boolean? value) value
-                                                      (= "true" value) true
-                                                      :else false)]
-                                     (d*/patch-elements! sse (render-html-fn
-                                                              [:input.toggle.toggle-xs.toggle-success
-                                                               {:id element-id
-                                                                :type "checkbox"
-                                                                :checked bool-value
-                                                                ;; Re-attach the change handler
-                                                                :data-on:change (str "evt.stopPropagation(); "
-                                                                                     "$datatable." id ".editing = {rowId: '" row-id "', colKey: '" (name col-key) "'}; "
-                                                                                     "$datatable." id ".cells." row-id "." (name col-key) " = evt.target.checked; "
-                                                                                     "@post('" data-url "?action=save')")}])))
-                                   ;; Other types: patch the span with new value
-                                   (let [display-content (render-cell-display value col-type)]
-                                     (d*/patch-elements! sse (render-html-fn
-                                                              [:span.flex-1 {:id element-id :data-value (str value)} display-content]))))))
-                             (d*/close-sse! sse))}))
+                              (when cell-edit
+                                (let [{:keys [row-id col-key]} cell-edit
+                                      editing-path {(keyword row-id) {col-key false}}]
+                                  (d*/patch-signals! sse
+                                                    (json/write-str
+                                                     {:datatable {(keyword id) {:_editing editing-path
+                                                                                :cells nil}}}))))
+                              (d*/close-sse! sse))}))
 
         ;; Normal query/render flow
         (let [current-signals (-> raw-signals
@@ -244,7 +230,7 @@
                                                                                                                    :columns-state columns-state
                                                                                                                    :table-id id
                                                                                                                    :data-url data-url})})))
-                              (d*/close-sse! sse))}))))))
+                             (d*/close-sse! sse))}))))))
 
 (defn make-handlers
   "Creates method-specific datatable handlers.

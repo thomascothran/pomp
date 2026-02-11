@@ -26,10 +26,10 @@
             [pomp.rad.datatable.ui.cell.text :as cell-text]))
 
 (defn render-boolean-cell
-  "Renders a boolean cell as a toggle switch that auto-saves on change.
+  "Renders a boolean cell as a toggle switch that saves on double-click.
 
-   Unlike other editable cells, booleans don't need pencil/save buttons -
-   they show a toggle that saves immediately when clicked.
+   Unlike other editable cells, booleans don't use pencil/save buttons -
+   they stay as visible toggles and save when double-clicked.
 
    ctx contains:
    - :value    - The boolean value
@@ -64,7 +64,7 @@
    - :boolean          - Toggle switch
 
    Signal paths used:
-   - datatable.<table-id>.editing = {rowId: '...', colKey: '...'} - tracks which cell is being edited
+   - datatable.<table-id>._editing.<row-id>.<col-key> = 'active' | 'in-flight' - tracks per-cell edit state
    - datatable.<table-id>.cells.<row-id>.<col-key> - holds the current edit value
    - datatable.<table-id>.submitInProgress - prevents double-submit on blur after Enter"
   [{:keys [value row-id col table-id data-url row-idx col-idx] :as ctx}]
@@ -91,11 +91,11 @@
   (let [editable? (:editable col)
         col-type (:type col)]
     (cond
-      ;; Editable boolean: use auto-save toggle
+      ;; Editable boolean: keep toggle UI, but require double-click to save
       (and editable? (= col-type :boolean))
       (render-boolean-cell ctx)
 
-      ;; Other editable types: use pencil/save flow
+      ;; Other editable types: use shared double-click edit flow
       editable?
       (render-editable-cell ctx)
 
@@ -106,8 +106,9 @@
             cell-key (str row-idx "-" col-idx)
             signal-base (str "datatable." table-id)
             cell-base (str signal-base ".cells")
-            editing-signal (str signal-base ".editing")
-            editing-check (str "$" editing-signal "?.rowId === '" row-id "' && $" editing-signal "?.colKey === '" col-key "'")
+            editing-signal (str signal-base "._editing")
+            editing-check (str "$" editing-signal "?.['" row-id "']?.['" col-key "'] === 'active'"
+                               " || $" editing-signal "?.['" row-id "']?.['" col-key "'] === 'in-flight'")
             ;; Use raw-value for data-value if provided, otherwise fall back to value
             data-val (if (some? raw-value) raw-value value)
             display-value (if render (render value row) value)]

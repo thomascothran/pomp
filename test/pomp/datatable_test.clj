@@ -152,8 +152,8 @@
       (is (fn? handler)
           "make-handler should return a function when :save-fn is provided"))))
 
-(deftest make-handler-save-patches-elements-test
-  (testing "save patches cell display without signal patch"
+(deftest make-handler-save-cleans-edit-signal-without-cell-rerender-test
+  (testing "save response clears per-cell edit signal and does not patch cell html"
     (let [patches (atom [])
           element-patches (atom [])
           handler (datatable/make-handler {:id "test-table"
@@ -174,15 +174,74 @@
                     d*/close-sse! (fn [& _])]
         (handler {:query-params {"action" "save"}
                   :headers {"datastar-request" "true"}
-                  :body-params {:datatable {:test-table {:editing {:rowId "123" :colKey "name"}
-                                                         :cells {:123 {:name "Updated"}}}}}})
-        (is (empty? @patches) "Save should not patch signals")
-        (is (seq @element-patches) "Save should patch elements")
-        (let [payload (last @element-patches)
-              attrs (second payload)]
-          (is (= :span.flex-1 (first payload)) "Save should patch span display")
-          (is (= "cell-test-table-123-name" (:id attrs)) "Span id should target saved cell")
-          (is (= "Updated" (:data-value attrs)) "Span should carry updated data value"))))))
+                  :body-params {:datatable {:test-table {:cells {:123 {:name "Updated"}}}}}})
+        (is (seq @patches) "Save should patch signals to clear edit state")
+        (is (empty? @element-patches) "Save should not re-render cell HTML in response")
+        (when-let [last-patch (last @patches)]
+          (let [payload (json/read-str last-patch {:key-fn keyword})
+                table-signals (get-in payload [:datatable :test-table])
+                editing (get table-signals :_editing)
+                row-editing (get editing :123)]
+            (is (contains? table-signals :_editing)
+                "Save should patch _editing signal map")
+            (is (contains? table-signals :cells)
+                "Save should include cells cleanup patch")
+            (is (nil? (:cells table-signals))
+                "Save should clear cells signal after submit")
+            (is (contains? editing :123)
+                "Save should patch _editing for the edited row")
+            (is (contains? row-editing :name)
+                "Save should patch edited column state")
+            (is (= false (get row-editing :name))
+                "Save should clear _editing[row][col] to false after submit")))))))
+
+(deftest make-handler-save-enum-cleans-edit-signal-without-cell-rerender-test
+  (testing "enum save clears per-cell edit signal and does not patch cell html"
+    (let [patches (atom [])
+          element-patches (atom [])
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :school
+                                                      :label "School"
+                                                      :type :enum
+                                                      :editable true
+                                                      :options [{:value "Stoicism" :label "Stoicism"}
+                                                                {:value "Academy" :label "Academy"}]}]
+                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn identity
+                                           :save-fn (fn [_] {:success true})})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    d*/patch-signals! (fn [_ payload]
+                                        (swap! patches conj payload))
+                    d*/patch-elements! (fn [_ payload]
+                                         (swap! element-patches conj payload))
+                    d*/execute-script! (fn [& _])
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {"action" "save"}
+                  :headers {"datastar-request" "true"}
+                  :body-params {:datatable {:test-table {:cells {:123 {:school "Academy"}}}}}})
+        (is (seq @patches) "Enum save should patch signals to clear edit state")
+        (is (empty? @element-patches) "Enum save should not re-render cell HTML in response")
+        (when-let [last-patch (last @patches)]
+          (let [payload (json/read-str last-patch {:key-fn keyword})
+                table-signals (get-in payload [:datatable :test-table])
+                editing (get table-signals :_editing)
+                row-editing (get editing :123)]
+            (is (contains? table-signals :_editing)
+                "Enum save should patch _editing signal map")
+            (is (contains? table-signals :cells)
+                "Enum save should include cells cleanup patch")
+            (is (nil? (:cells table-signals))
+                "Enum save should clear cells signal after submit")
+            (is (contains? editing :123)
+                "Enum save should patch _editing for the edited row")
+            (is (contains? row-editing :school)
+                "Enum save should patch edited column state")
+            (is (= false (get row-editing :school))
+                "Enum save should clear _editing[row][col] to false after submit")))))))
 
 (deftest make-handler-initial-patch-omits-per-row-signals-test
   (testing "initial signal patch omits per-row/per-cell signals"
@@ -222,56 +281,34 @@
               "Submit flag should be absent on initial render"))))))
 
 (deftest extract-cell-edit-from-signals-test
-  (testing "extracts cell edit from signals using :editing state"
-    ;; The :editing state indicates which cell is being edited
-    ;; The :cells map contains the actual values
-    (let [signals {:editing {:rowId "123" :colKey "name"}
-                   :cells {:123 {:name "New Name"}}}
+  (testing "extracts a single edited cell directly from :cells"
+    (let [signals {:cells {:123 {:name "New Name"}}}
           result (datatable/extract-cell-edit signals)]
       (is (= {:row-id "123" :col-key :name :value "New Name"} result))))
 
-  (testing "returns nil when no editing state"
+  (testing "returns nil when there are no edited-cell candidates"
     (is (nil? (datatable/extract-cell-edit {})))
-    (is (nil? (datatable/extract-cell-edit {:cells {:123 {:name "Value"}}})))
-    (is (nil? (datatable/extract-cell-edit {:editing {:rowId nil :colKey nil}}))))
+    (is (nil? (datatable/extract-cell-edit {:cells {}})))
+    (is (nil? (datatable/extract-cell-edit {:cells {:123 {}}}))))
 
-  (testing "uses editing state to select correct cell from multiple"
-    ;; When multiple cells are present, :editing determines which one we want
-    (let [signals {:editing {:rowId "456" :colKey "age"}
-                   :cells {:123 {:name "Name1"} :456 {:age "30"}}}
-          result (datatable/extract-cell-edit signals)]
-      (is (= {:row-id "456" :col-key :age :value "30"} result))))
+  (testing "throws when more than one edited-cell candidate exists"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Expected exactly one edited cell"
+         (datatable/extract-cell-edit {:cells {:123 {:name "Ada"}
+                                               :456 {:age "30"}}}))))
 
-  (testing "returns nil value when cell not in cells map"
-    ;; Edge case: editing is set but cell value was cleared
-    (let [signals {:editing {:rowId "123" :colKey "name"}
-                   :cells {}}
-          result (datatable/extract-cell-edit signals)]
-      (is (= {:row-id "123" :col-key :name :value nil} result))))
-
-  (testing "extracts boolean true value"
-    ;; Boolean values from checkbox toggles may be actual booleans
-    (let [signals {:editing {:rowId "123" :colKey "verified"}
-                   :cells {:123 {:verified true}}}
-          result (datatable/extract-cell-edit signals)]
-      (is (= {:row-id "123" :col-key :verified :value true} result))))
-
-  (testing "extracts boolean false value"
-    ;; Boolean false should be extracted correctly
-    (let [signals {:editing {:rowId "123" :colKey "verified"}
+  (testing "ignores :editing and uses :cells as source of truth"
+    (let [signals {:editing {:rowId "999" :colKey "other"}
                    :cells {:123 {:verified false}}}
           result (datatable/extract-cell-edit signals)]
       (is (= {:row-id "123" :col-key :verified :value false} result))))
 
-  (testing "extracts string 'true' and 'false' values as-is"
-    ;; Datastar may send booleans as strings - extraction should preserve them
-    ;; The coercion happens in render-cell-display, not here
-    (let [signals-true {:editing {:rowId "123" :colKey "verified"}
-                        :cells {:123 {:verified "true"}}}
-          signals-false {:editing {:rowId "123" :colKey "verified"}
-                         :cells {:123 {:verified "false"}}}]
-      (is (= "true" (:value (datatable/extract-cell-edit signals-true))))
-      (is (= "false" (:value (datatable/extract-cell-edit signals-false)))))))
+  (testing "preserves boolean and string boolean values from :cells"
+    (is (= true
+           (:value (datatable/extract-cell-edit {:cells {:123 {:verified true}}}))))
+    (is (= "false"
+           (:value (datatable/extract-cell-edit {:cells {:123 {:verified "false"}}}))))))
 
 (deftest has-editable-columns-test
   (testing "returns true when any column is editable"

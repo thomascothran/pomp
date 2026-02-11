@@ -14,6 +14,7 @@
             [dev.logger :as log]
             [scratch.autocomplete :as scratch.autocomplete]
             [scratch.app-skeleton :as scratch.app-skeleton]
+            [scratch.detail :as scratch.detail]
             [scratch.navbar :as scratch.navbar]
             [starfederation.datastar.clojure.api :as d*]))
 
@@ -31,6 +32,7 @@
    ["/scratch/autocomplete/options" scratch.autocomplete/options-handler]
    ["/scratch/navbar" scratch.navbar/handler]
    ["/scratch/app-skeleton" scratch.app-skeleton/handler]
+   ["/scratch/detail" scratch.detail/handler]
    ["/assets/*" (ring/create-resource-handler)]])
 
 (defn make-middleware

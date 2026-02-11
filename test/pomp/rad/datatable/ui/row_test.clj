@@ -322,10 +322,10 @@
           "Edit entry should clear cellSelection signal")
       (is (re-find #"\$datatable\.philosophers\.cellSelection = \[\].*\$datatable\.philosophers\.cellSelection = null" dblclick-handler)
           "Edit entry should clear cellSelection with [] before null")
-      ;; Sets editing signal
-      (is (clojure.string/includes? dblclick-handler "editing"))
-      (is (clojure.string/includes? dblclick-handler "rowId"))
-      (is (clojure.string/includes? dblclick-handler "'123'"))
+      ;; Sets private per-cell editing signal
+      (is (clojure.string/includes? dblclick-handler "_editing"))
+      (is (clojure.string/includes? dblclick-handler "['123'] ||= {}"))
+      (is (clojure.string/includes? dblclick-handler "['123']['name'] = 'active'"))
       ;; Sets cell value signal
       (is (clojure.string/includes? dblclick-handler "cells"))
       (is (clojure.string/includes? dblclick-handler "editInput-123-name"))
@@ -351,9 +351,9 @@
       (is (some? dblclick-handler)
           "Display text should wire data-on:dblclick for edit entry")
       (when dblclick-handler
-        (is (clojure.string/includes? dblclick-handler "editing")
-            "Double-click handler should set editing signal"))
-      (is (not (clojure.string/includes? (or click-handler "") "editing"))
+        (is (clojure.string/includes? dblclick-handler "_editing")
+            "Double-click handler should set private per-cell editing signal"))
+      (is (not (clojure.string/includes? (or click-handler "") "_editing"))
           "Single click on display text should not enter edit mode"))))
 
 (deftest render-editable-cell-display-mode-hides-pencil-trigger-test
@@ -444,9 +444,9 @@
                                             :col-idx 0})
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
-      (is (clojure.string/includes? mousedown-handler "editing?.rowId"))
-      (is (clojure.string/includes? mousedown-handler "editing?.colKey"))
-      (is (clojure.string/includes? mousedown-handler "editing = {rowId: null, colKey: null}"))
+      (is (clojure.string/includes? mousedown-handler "_editing"))
+      (is (clojure.string/includes? mousedown-handler "Object.values"))
+      (is (clojure.string/includes? mousedown-handler "= false"))
       (is (clojure.string/includes? mousedown-handler "cells[editingRow][editingCol] = null"))
       (is (clojure.string/includes? mousedown-handler "else { return; }"))
       (is (clojure.string/includes? mousedown-handler "_cellSelectDragging = true")
@@ -458,7 +458,7 @@
       (is (not (clojure.string/includes? mousedown-handler ".cellSelectStart"))
           "Editable mousedown should not set public cellSelectStart")))
 
-  (testing "mousedown on editable cell does not assign cellSelection"
+  (testing "mousedown on editable cell assigns single-cell cellSelection"
     (let [result (row/render-editable-cell {:value "Plato"
                                             :row-id "123"
                                             :col {:key :name :editable true}
@@ -469,8 +469,8 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
-      (is (not (clojure.string/includes? mousedown-handler "cellSelection ="))
-          "mousedown should not assign cellSelection directly")))
+      (is (clojure.string/includes? mousedown-handler "$datatable.philosophers.cellSelection = ['0-0']")
+          "mousedown should assign one-cell selection for click copy/paste")))
 
   (testing "mousedown on editable cell skips selection when clicking inputs"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -496,10 +496,10 @@
                                    :col-idx 1})
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
-      ;; Uses optional chaining since editing signal may not exist in non-editable tables
-      (is (clojure.string/includes? mousedown-handler "editing?.rowId"))
-      (is (clojure.string/includes? mousedown-handler "editing?.colKey"))
-      (is (clojure.string/includes? mousedown-handler "editing = {rowId: null, colKey: null}"))
+      ;; Uses private per-cell editing map to detect active edits
+      (is (clojure.string/includes? mousedown-handler "_editing"))
+      (is (clojure.string/includes? mousedown-handler "Object.values"))
+      (is (clojure.string/includes? mousedown-handler "= false"))
       (is (clojure.string/includes? mousedown-handler "cells[editingRow][editingCol] = null"))
       (is (clojure.string/includes? mousedown-handler "else { return; }"))))
 
@@ -517,7 +517,7 @@
               (clojure.string/includes? mousedown-handler "evt.target.closest(\"input, button, select, textarea\")"))
           "Non-editable cell should guard against selection when interacting with inputs")))
 
-  (testing "mousedown on non-editable cell does not assign cellSelection"
+  (testing "mousedown on non-editable cell assigns single-cell cellSelection"
     (let [result (row/render-cell {:value "Athens"
                                    :row {:id 123 :name "Plato" :city "Athens"}
                                    :col {:key :city}
@@ -527,8 +527,8 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
-      (is (not (clojure.string/includes? mousedown-handler "cellSelection ="))
-          "mousedown should not assign cellSelection directly"))))
+      (is (clojure.string/includes? mousedown-handler "$datatable.philosophers.cellSelection = ['0-1']")
+          "mousedown should assign one-cell selection for click copy/paste"))))
 
 (deftest render-cell-selection-highlight-guards-test
   (testing "non-editable cells guard highlight against missing cellSelection"
@@ -651,8 +651,46 @@
       ;; Handles Enter key
       (is (clojure.string/includes? keydown-handler "Enter"))
       ;; Posts to data-url
-      (is (clojure.string/includes? keydown-handler "@post"))
-      (is (clojure.string/includes? keydown-handler "/data")))))
+       (is (clojure.string/includes? keydown-handler "@post"))
+       (is (clojure.string/includes? keydown-handler "/data")))))
+
+(deftest render-editable-cell-save-state-machine-test
+  (testing "non-boolean edit lifecycle uses string states and optimistic client updates"
+    (let [result (row/render-editable-cell {:value "Plato"
+                                            :row-id "123"
+                                            :col {:key :name :editable true :type :string}
+                                            :table-id "philosophers"
+                                            :data-url "/data"
+                                            :row-idx 0
+                                            :col-idx 0})
+          td-attrs (second result)
+          td-class (:data-class td-attrs)
+          input (find-input result)
+          keydown-handler (-> input second :data-on:keydown)
+          display-span (find-display-span result)
+          dblclick-handler (-> display-span second :data-on:dblclick)
+          save-handler (->> (find-button result)
+                            (keep #(-> % second :data-on:mousedown))
+                            (filter #(clojure.string/includes? % "@post"))
+                            first)]
+      (is (clojure.string/includes? (or dblclick-handler "") "['123']['name'] = 'active'")
+          "Double-click should mark cell edit state as 'active'")
+      (is (not (clojure.string/includes? (or dblclick-handler "") "['123']['name'] = true"))
+          "Double-click should not use boolean true for edit state")
+      (is (clojure.string/includes? (or td-class "") "'bg-warning/20'")
+          "Cell should include pending background class when state is in-flight")
+      (is (clojure.string/includes? (or td-class "") "'in-flight'")
+          "Pending class should be keyed off the 'in-flight' edit state")
+      (is (some? save-handler)
+          "Editable cell should include a save handler")
+      (is (re-find #"(?s)\['123'\]\['name'\]\s*=\s*'in-flight'.*@post" (or save-handler ""))
+          "Save button should set edit state to 'in-flight' before posting")
+      (is (re-find #"(?s)\['123'\]\['name'\]\s*=\s*'in-flight'.*@post" (or keydown-handler ""))
+          "Enter submit should set edit state to 'in-flight' before posting")
+      (is (clojure.string/includes? (or save-handler "") "dataset.value")
+          "Save button should optimistically update data-value client-side")
+      (is (clojure.string/includes? (or save-handler "") "textContent")
+          "Save button should optimistically update display text client-side"))))
 
 (deftest render-cell-editable-delegation-test
   (testing "editable column uses render-editable-cell"
@@ -802,10 +840,8 @@
           "Enum blur should compare timestamps")
       (is (clojure.string/includes? blur-handler "enumBlurLock")
           "Enum blur should honor blur lock")
-      (is (clojure.string/includes? blur-handler "editing?.rowId")
-          "Enum blur should check editing row")
-      (is (clojure.string/includes? blur-handler "editing?.colKey")
-          "Enum blur should check editing column")
+      (is (clojure.string/includes? blur-handler "_editing")
+          "Enum blur should check private per-cell editing signal")
       (is (some? change-handler)
           "Enum select should autosave on change")
       (when change-handler
@@ -813,13 +849,12 @@
             "Enum change handler should post")
         (is (clojure.string/includes? change-handler "action=save")
             "Enum change handler should post to save action")
-        (is (or (clojure.string/includes? change-handler "editing")
-                (clojure.string/includes? change-handler "rowId"))
-            "Enum change handler should clear editing")
-        (is (clojure.string/includes? change-handler "submitInProgress")
-            "Enum change handler should manage submitInProgress")
-        (is (clojure.string/includes? change-handler "submitInProgress = false")
-            "Enum change handler should clear submitInProgress"))
+        (is (clojure.string/includes? change-handler "'in-flight'")
+            "Enum change handler should mark in-flight state")
+        (is (clojure.string/includes? change-handler "dataset.value")
+            "Enum change handler should optimistically update data-value")
+        (is (clojure.string/includes? change-handler "textContent")
+            "Enum change handler should optimistically update display text"))
       (is (some? keydown-handler)
           "Enum select should keep keydown handler")
       (is (clojure.string/includes? keydown-handler "Escape")
@@ -912,7 +947,6 @@
 
 (deftest render-boolean-cell-test
   (testing "boolean cell renders as toggle (not pencil/save flow)"
-    ;; Boolean cells use auto-save toggle, not the pencil/save UI
     (let [result (row/render-cell {:value true
                                    :row-id "123"
                                    :col {:key :verified
@@ -924,17 +958,15 @@
                                    :col-idx 0})
           toggle (find-toggle result)
           buttons (find-button result)]
-      ;; Has toggle input directly (not hidden behind edit mode)
       (is (some? toggle))
-      ;; Is a checkbox
       (let [attrs (second toggle)]
         (is (= "checkbox" (:type attrs)))
         (is (nil? (:data-ref attrs))
             "Toggle input should not create a data-ref signal"))
-      ;; No pencil/save buttons - just the toggle
-      (is (empty? buttons))))
+      (is (empty? buttons)
+          "Boolean cell should not render edit buttons")))
 
-  (testing "boolean cell mousedown does not assign cellSelection"
+  (testing "boolean cell mousedown assigns single-cell cellSelection"
     (let [result (row/render-cell {:value true
                                    :row-id "123"
                                    :col {:key :verified
@@ -955,8 +987,8 @@
           "Boolean mousedown should not set public cellSelectDragging")
       (is (not (clojure.string/includes? mousedown-handler ".cellSelectStart"))
           "Boolean mousedown should not set public cellSelectStart")
-      (is (not (clojure.string/includes? mousedown-handler "cellSelection ="))
-          "mousedown should not assign cellSelection directly")))
+      (is (clojure.string/includes? mousedown-handler "$datatable.philosophers.cellSelection = ['0-0']")
+          "mousedown should assign one-cell selection for click copy/paste")))
 
   (testing "boolean cell mousedown skips selection when clicking inputs"
     (let [result (row/render-cell {:value true
@@ -976,7 +1008,6 @@
           "Boolean cell should guard against selection when interacting with inputs")))
 
   (testing "boolean true has checked attribute"
-
     (let [result (row/render-cell {:value true
                                    :row-id "123"
                                    :col {:key :verified
@@ -1004,7 +1035,7 @@
           attrs (second toggle)]
       (is (false? (:checked attrs)))))
 
-  (testing "toggle has auto-save on change handler"
+  (testing "toggle blocks single click and saves on double click"
     (let [result (row/render-cell {:value true
                                    :row-id "123"
                                    :col {:key :verified
@@ -1016,18 +1047,22 @@
                                    :col-idx 0})
           toggle (find-toggle result)
           attrs (second toggle)
-          change-handler (:data-on:change attrs)]
-      ;; Has change handler
-      (is (some? change-handler))
-      ;; Sets editing signal
-      (is (clojure.string/includes? change-handler "editing"))
-      ;; Sets cell value from checkbox state
-      (is (clojure.string/includes? change-handler "evt.target.checked"))
-      ;; Posts immediately
-      (is (clojure.string/includes? change-handler "@post"))
-      (is (clojure.string/includes? change-handler "/data"))))
+          click-handler (:data-on:click attrs)
+          dblclick-handler (:data-on:dblclick attrs)]
+      (is (some? click-handler))
+      (is (clojure.string/includes? click-handler "evt.preventDefault"))
+      (is (clojure.string/includes? click-handler "evt.stopPropagation"))
+      (is (some? dblclick-handler))
+      (is (clojure.string/includes? dblclick-handler "nextChecked"))
+      (is (clojure.string/includes? dblclick-handler "evt.target.checked = nextChecked"))
+      (is (re-find #"(?s)\['123'\]\['verified'\]\s*=\s*'in-flight'.*@post" (or dblclick-handler ""))
+          "Boolean save should set edit state to 'in-flight' before posting")
+      (is (clojure.string/includes? dblclick-handler "@post"))
+      (is (clojure.string/includes? dblclick-handler "/data"))
+      (is (nil? (:data-on:change attrs))
+          "Boolean toggle should not save on single-click change")))
 
-  (testing "toggle initializes cells with safe row keys"
+  (testing "toggle double-click handler initializes cells with safe row keys"
     (let [result (row/render-cell {:value true
                                    :row-id "row-1"
                                    :col {:key :verified
@@ -1039,11 +1074,11 @@
                                    :col-idx 0})
           toggle (find-toggle result)
           attrs (second toggle)
-          change-handler (:data-on:change attrs)]
-      (is (some? change-handler))
-      (is (clojure.string/includes? change-handler "cells ||= {}"))
-      (is (clojure.string/includes? change-handler "cells['row-1'] ||= {}"))
-      (is (clojure.string/includes? change-handler "cells['row-1']['verified']"))))
+          dblclick-handler (:data-on:dblclick attrs)]
+      (is (some? dblclick-handler))
+      (is (clojure.string/includes? dblclick-handler "cells ||= {}"))
+      (is (clojure.string/includes? dblclick-handler "cells['row-1'] ||= {}"))
+      (is (clojure.string/includes? dblclick-handler "cells['row-1']['verified']"))))
 
   (testing "toggle has correct ID for server patching"
     (let [result (row/render-cell {:value true

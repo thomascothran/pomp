@@ -2,37 +2,48 @@
   (:require [pomp.icons :as icons]))
 
 (defn cell-selection-class
-  [signal-base cell-key]
-  (str "{'bg-info/20': $" signal-base ".cellSelection && $" signal-base ".cellSelection.includes('" cell-key "')}"))
+  [signal-base cell-key in-flight-check]
+  (str "{'bg-info/20': $" signal-base ".cellSelection && $" signal-base ".cellSelection.includes('" cell-key "')"
+       (when in-flight-check
+         (str ", 'bg-warning/20': " in-flight-check))
+       "}"))
 
 (defn editable-mousedown-handler
   [{:keys [signal-base editing-signal editing-check cell-base row-idx col-idx]}]
-  (str "if (evt.target.closest('input, button, select, textarea')) return; "
-       "if ($" editing-signal "?.rowId) { "
-       "if (!(" editing-check ")) { "
-       "const editingRow = $" editing-signal ".rowId; "
-       "const editingCol = $" editing-signal ".colKey; "
-       "$" editing-signal " = {rowId: null, colKey: null}; "
-       "$" cell-base " ||= {}; "
-       "if ($" cell-base "[editingRow]) { $" cell-base "[editingRow][editingCol] = null; } "
-       "} else { return; } "
-       "} "
-       "$" signal-base "._cellSelectDragging = true; "
-       "$" signal-base "._cellSelectStart = {row: " row-idx ", col: " col-idx "}; "))
+  (let [cell-key (str row-idx "-" col-idx)]
+    (str "if (evt.target.closest('input, button, select, textarea')) return; "
+         "const editingMap = $" editing-signal " || {}; "
+         "const editingRow = Object.keys(editingMap).find((rowKey) => Object.values(editingMap[rowKey] || {}).some(Boolean)); "
+         "const editingCol = editingRow != null ? Object.keys(editingMap[editingRow] || {}).find((colKey) => editingMap[editingRow]?.[colKey] === true || editingMap[editingRow]?.[colKey] === 'active' || editingMap[editingRow]?.[colKey] === 'in-flight') : null; "
+         "if (editingRow != null && editingCol != null) { "
+         "if (!(" editing-check ")) { "
+         "$" editing-signal " ||= {}; "
+         "$" editing-signal "[editingRow] ||= {}; "
+         "$" editing-signal "[editingRow][editingCol] = false; "
+         "$" cell-base " ||= {}; "
+         "if ($" cell-base "[editingRow]) { $" cell-base "[editingRow][editingCol] = null; } "
+         "} else { return; } "
+         "} "
+         "$" signal-base ".cellSelection = ['" cell-key "']; "
+         "$" signal-base "._cellSelectDragging = true; "
+         "$" signal-base "._cellSelectStart = {row: " row-idx ", col: " col-idx "}; ")))
 
 (defn boolean-mousedown-handler
   [{:keys [signal-base editing-signal row-idx col-idx]}]
-  (str "if (evt.target.closest('input, button, select, textarea')) return; "
-       "if ($" editing-signal "?.rowId) return; "
-       "$" signal-base "._cellSelectDragging = true; "
-       "$" signal-base "._cellSelectStart = {row: " row-idx ", col: " col-idx "}; "))
+  (let [cell-key (str row-idx "-" col-idx)]
+    (str "if (evt.target.closest('input, button, select, textarea')) return; "
+         "const hasEditing = Object.values($" editing-signal " || {}).some((rowMap) => Object.values(rowMap || {}).some(Boolean)); "
+         "if (hasEditing) return; "
+         "$" signal-base ".cellSelection = ['" cell-key "']; "
+         "$" signal-base "._cellSelectDragging = true; "
+         "$" signal-base "._cellSelectStart = {row: " row-idx ", col: " col-idx "}; ")))
 
 (defn td-attrs
-  [{:keys [row-idx col-idx value signal-base cell-key mousedown-handler]}]
+  [{:keys [row-idx col-idx value signal-base cell-key mousedown-handler in-flight-check]}]
   {:data-row row-idx
    :data-col col-idx
    :data-value (str value)
-   :data-class (cell-selection-class signal-base cell-key)
+   :data-class (cell-selection-class signal-base cell-key in-flight-check)
    :data-on:mousedown mousedown-handler})
 
 (defn editable-base
@@ -44,25 +55,38 @@
         cell-base (str signal-base ".cells")
         cell-signal-path (str cell-base "['" row-id "']['" col-key "']")
         init-cells (str "$" cell-base " ||= {}; $" cell-base "['" row-id "'] ||= {}; ")
-        editing-signal (str signal-base ".editing")
+        editing-signal (str signal-base "._editing")
+        init-editing (str "$" editing-signal " ||= {}; $" editing-signal "['" row-id "'] ||= {}; ")
         submit-flag (str signal-base ".submitInProgress")
         enum-blur-lock (str signal-base ".enumBlurLock")
         input-id (str "editInput-" row-id "-" col-key)
         span-id (str "cell-" table-id "-" row-id "-" col-key)
-        editing-check (str "$" editing-signal "?.rowId === '" row-id "' && $" editing-signal "?.colKey === '" col-key "'")
-        cancel-edit (str "$" editing-signal " = {rowId: null, colKey: null}; "
+        editing-check (str "$" editing-signal "?.['" row-id "']?.['" col-key "'] === 'active'")
+        in-flight-check (str "$" editing-signal "?.['" row-id "']?.['" col-key "'] === 'in-flight'")
+        cancel-edit (str init-editing
+                         "$" editing-signal "['" row-id "']['" col-key "'] = false; "
                          init-cells
                          "$" cell-signal-path " = null")
+        optimistic-display-update (str "const displayEl = document.getElementById('" span-id "'); "
+                                     "const nextValue = $" cell-signal-path "; "
+                                     "if (displayEl) { "
+                                     "displayEl.dataset.value = String(nextValue ?? ''); "
+                                     "displayEl.textContent = String(nextValue ?? ''); "
+                                     "} ")
         save-handler (str "evt.stopPropagation(); "
+                          init-editing
+                          "$" editing-signal "['" row-id "']['" col-key "'] = 'in-flight'; "
+                          optimistic-display-update
                           "$" submit-flag " = true; "
-                          "@post('" data-url "?action=save'); "
-                          cancel-edit)
+                          "@post('" data-url "?action=save');")
         blur-handler (str "if ($" submit-flag ") { $" submit-flag " = false; return; } "
                           cancel-edit)
         keydown-handler (str "if (evt.key === 'Enter') { evt.stopPropagation(); "
+                             init-editing
+                             "$" editing-signal "['" row-id "']['" col-key "'] = 'in-flight'; "
+                             optimistic-display-update
                              "$" submit-flag " = true; "
-                             "@post('" data-url "?action=save'); "
-                             cancel-edit " } "
+                             "@post('" data-url "?action=save'); } "
                              "if (evt.key === 'Escape') { $" submit-flag " = true; " cancel-edit " }")
         enum-mousedown-handler (str "evt.stopPropagation(); $" enum-blur-lock " = Date.now()")
         enum-keydown-handler (str "if (evt.key === 'Escape' || evt.key === 'Esc') { evt.stopPropagation(); $" submit-flag " = true; " cancel-edit " } "
@@ -70,15 +94,17 @@
         enum-blur-handler (str "setTimeout(() => { "
                                "const now = Date.now(); "
                                "if ($" enum-blur-lock " && (now - $" enum-blur-lock " < 200)) { return; } "
-                               "if ($" editing-signal "?.rowId === '" row-id "' && $" editing-signal "?.colKey === '" col-key "') { "
+                               "if (" editing-check ") { "
                                cancel-edit
                                " } }, 0)")
         input-handler (str init-cells "$" cell-signal-path " = evt.target.value")
         enum-change-handler (str "evt.stopPropagation(); "
-                                 "$" submit-flag " = false; "
                                  input-handler
-                                 "; @post('" data-url "?action=save'); "
-                                 cancel-edit)]
+                                 "; "
+                                 init-editing
+                                 "$" editing-signal "['" row-id "']['" col-key "'] = 'in-flight'; "
+                                 optimistic-display-update
+                                 "@post('" data-url "?action=save');")]
     {:value value
      :row-id row-id
      :col col
@@ -89,13 +115,15 @@
      :cell-base cell-base
      :cell-signal-path cell-signal-path
      :init-cells init-cells
+     :init-editing init-editing
      :editing-signal editing-signal
      :submit-flag submit-flag
      :enum-blur-lock enum-blur-lock
      :input-id input-id
      :span-id span-id
      :editing-check editing-check
-     :cancel-edit cancel-edit
+      :in-flight-check in-flight-check
+      :cancel-edit cancel-edit
      :save-handler save-handler
      :blur-handler blur-handler
      :keydown-handler keydown-handler
@@ -108,10 +136,11 @@
      :col-idx col-idx}))
 
 (defn edit-handler
-  [{:keys [signal-base editing-signal row-id col-key init-cells cell-signal-path input-id]} read-current-value]
+  [{:keys [signal-base editing-signal row-id col-key init-cells init-editing cell-signal-path input-id]} read-current-value]
   (str "evt.stopPropagation(); "
        "$" signal-base ".cellSelection = []; " "$" signal-base ".cellSelection = null; "
-       "$" editing-signal " = {rowId: '" row-id "', colKey: '" col-key "'}; "
+       init-editing
+       "$" editing-signal "['" row-id "']['" col-key "'] = 'active'; "
        init-cells
        "const currentValue = " read-current-value "; "
        "$" cell-signal-path " = currentValue; "
@@ -120,13 +149,14 @@
        "setTimeout(() => document.getElementById('" input-id "')?.focus(), 0)"))
 
 (defn render-editable-cell
-  [{:keys [row-idx col-idx value signal-base cell-key editing-check span-id edit-handler display-content edit-input col-type save-handler mousedown-handler]}]
+  [{:keys [row-idx col-idx value signal-base cell-key editing-check in-flight-check span-id edit-handler display-content edit-input col-type save-handler mousedown-handler]}]
   [:td (td-attrs {:row-idx row-idx
                   :col-idx col-idx
                   :value value
                   :signal-base signal-base
                   :cell-key cell-key
-                  :mousedown-handler mousedown-handler})
+                  :mousedown-handler mousedown-handler
+                  :in-flight-check in-flight-check})
    [:div.relative
     [:div.flex.items-center.gap-1.group
      {:data-class (str "{'invisible': " editing-check "}")}
