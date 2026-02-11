@@ -442,21 +442,14 @@
                                             :data-url "/data"
                                             :row-idx 0
                                             :col-idx 0})
-          td-attrs (second result)
-          mousedown-handler (:data-on:mousedown td-attrs)]
-      (is (clojure.string/includes? mousedown-handler "_editing"))
-      (is (clojure.string/includes? mousedown-handler "Object.values"))
-      (is (clojure.string/includes? mousedown-handler "= false"))
-      (is (clojure.string/includes? mousedown-handler "cells[editingRow][editingCol] = null"))
-      (is (clojure.string/includes? mousedown-handler "else { return; }"))
-      (is (clojure.string/includes? mousedown-handler "_cellSelectDragging = true")
-          "Editable mousedown should set private _cellSelectDragging")
-      (is (clojure.string/includes? mousedown-handler "_cellSelectStart = {row: 0, col: 0}")
-          "Editable mousedown should set private _cellSelectStart")
-      (is (not (clojure.string/includes? mousedown-handler ".cellSelectDragging"))
-          "Editable mousedown should not set public cellSelectDragging")
-      (is (not (clojure.string/includes? mousedown-handler ".cellSelectStart"))
-          "Editable mousedown should not set public cellSelectStart")))
+           td-attrs (second result)
+           mousedown-handler (:data-on:mousedown td-attrs)]
+      (is (clojure.string/includes? mousedown-handler "window.pompCellMouseDown(evt, $datatable.philosophers"))
+      (is (clojure.string/includes? mousedown-handler "editingMap: $datatable.philosophers._editing"))
+      (is (clojure.string/includes? mousedown-handler "cellsMap: $datatable.philosophers.cells"))
+      (is (clojure.string/includes? mousedown-handler "clearExistingEdit: true"))
+      (is (not (clojure.string/includes? mousedown-handler "=== true"))
+          "Mousedown handler should not support legacy boolean true edit state")))
 
   (testing "mousedown on editable cell assigns single-cell cellSelection"
     (let [result (row/render-editable-cell {:value "Plato"
@@ -469,7 +462,7 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
-      (is (clojure.string/includes? mousedown-handler "$datatable.philosophers.cellSelection = ['0-0']")
+      (is (clojure.string/includes? mousedown-handler "cellSelectionKey: '0-0'")
           "mousedown should assign one-cell selection for click copy/paste")))
 
   (testing "mousedown on editable cell skips selection when clicking inputs"
@@ -483,9 +476,8 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
-      (is (or (clojure.string/includes? mousedown-handler "evt.target.closest('input, button, select, textarea')")
-              (clojure.string/includes? mousedown-handler "evt.target.closest(\"input, button, select, textarea\")"))
-          "Editable cell should guard against selection when interacting with inputs")))
+      (is (clojure.string/includes? mousedown-handler "window.pompCellMouseDown(evt, $datatable.philosophers")
+          "Editable cell should route mousedown behavior through shared helper")))
 
   (testing "mousedown on non-editable cell is skipped when any cell is editing"
     (let [result (row/render-cell {:value "Athens"
@@ -494,14 +486,14 @@
                                    :table-id "philosophers"
                                    :row-idx 0
                                    :col-idx 1})
-          td-attrs (second result)
-          mousedown-handler (:data-on:mousedown td-attrs)]
+           td-attrs (second result)
+           mousedown-handler (:data-on:mousedown td-attrs)]
       ;; Uses private per-cell editing map to detect active edits
-      (is (clojure.string/includes? mousedown-handler "_editing"))
-      (is (clojure.string/includes? mousedown-handler "Object.values"))
-      (is (clojure.string/includes? mousedown-handler "= false"))
-      (is (clojure.string/includes? mousedown-handler "cells[editingRow][editingCol] = null"))
-      (is (clojure.string/includes? mousedown-handler "else { return; }"))))
+      (is (clojure.string/includes? mousedown-handler "window.pompCellMouseDown(evt, $datatable.philosophers"))
+      (is (clojure.string/includes? mousedown-handler "editingMap: $datatable.philosophers._editing"))
+      (is (clojure.string/includes? mousedown-handler "clearExistingEdit: true"))
+      (is (not (clojure.string/includes? mousedown-handler "=== true"))
+          "Non-editable handler should not support legacy boolean true edit state")))
 
   (testing "mousedown on non-editable cell skips selection when clicking inputs"
     (let [result (row/render-cell {:value "Athens"
@@ -513,9 +505,8 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
-      (is (or (clojure.string/includes? mousedown-handler "evt.target.closest('input, button, select, textarea')")
-              (clojure.string/includes? mousedown-handler "evt.target.closest(\"input, button, select, textarea\")"))
-          "Non-editable cell should guard against selection when interacting with inputs")))
+      (is (clojure.string/includes? mousedown-handler "window.pompCellMouseDown(evt, $datatable.philosophers")
+          "Non-editable cell should route mousedown behavior through shared helper")))
 
   (testing "mousedown on non-editable cell assigns single-cell cellSelection"
     (let [result (row/render-cell {:value "Athens"
@@ -527,9 +518,8 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
-      (is (clojure.string/includes? mousedown-handler "$datatable.philosophers.cellSelection = ['0-1']")
+      (is (clojure.string/includes? mousedown-handler "cellSelectionKey: '0-1'")
           "mousedown should assign one-cell selection for click copy/paste"))))
-
 (deftest render-cell-selection-highlight-guards-test
   (testing "non-editable cells guard highlight against missing cellSelection"
     (let [result (row/render-cell {:value "Athens"
@@ -976,18 +966,15 @@
                                    :data-url "/data"
                                    :row-idx 0
                                    :col-idx 0})
-          td-attrs (second result)
-          mousedown-handler (:data-on:mousedown td-attrs)]
+           td-attrs (second result)
+           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
-      (is (clojure.string/includes? mousedown-handler "_cellSelectDragging = true")
-          "Boolean mousedown should set private _cellSelectDragging")
-      (is (clojure.string/includes? mousedown-handler "_cellSelectStart = {row: 0, col: 0}")
-          "Boolean mousedown should set private _cellSelectStart")
-      (is (not (clojure.string/includes? mousedown-handler ".cellSelectDragging"))
-          "Boolean mousedown should not set public cellSelectDragging")
-      (is (not (clojure.string/includes? mousedown-handler ".cellSelectStart"))
-          "Boolean mousedown should not set public cellSelectStart")
-      (is (clojure.string/includes? mousedown-handler "$datatable.philosophers.cellSelection = ['0-0']")
+      (is (clojure.string/includes? mousedown-handler "window.pompCellMouseDown(evt, $datatable.philosophers"))
+      (is (clojure.string/includes? mousedown-handler "blockOnAnyEditing: true")
+          "Boolean mousedown should block when another cell is editing")
+      (is (not (clojure.string/includes? mousedown-handler "=== true"))
+          "Boolean handler should not support legacy boolean true edit state")
+      (is (clojure.string/includes? mousedown-handler "cellSelectionKey: '0-0'")
           "mousedown should assign one-cell selection for click copy/paste")))
 
   (testing "boolean cell mousedown skips selection when clicking inputs"
@@ -1003,9 +990,8 @@
           td-attrs (second result)
           mousedown-handler (:data-on:mousedown td-attrs)]
       (is (some? mousedown-handler))
-      (is (or (clojure.string/includes? mousedown-handler "evt.target.closest('input, button, select, textarea')")
-              (clojure.string/includes? mousedown-handler "evt.target.closest(\"input, button, select, textarea\")"))
-          "Boolean cell should guard against selection when interacting with inputs")))
+      (is (clojure.string/includes? mousedown-handler "window.pompCellMouseDown(evt, $datatable.philosophers")
+          "Boolean cell should route mousedown behavior through shared helper")))
 
   (testing "boolean true has checked attribute"
     (let [result (row/render-cell {:value true

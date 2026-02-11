@@ -9,34 +9,12 @@
        "}"))
 
 (defn editable-mousedown-handler
-  [{:keys [signal-base editing-signal editing-check cell-base row-idx col-idx]}]
+  [{:keys [signal-base row-idx col-idx]}]
   (let [cell-key (str row-idx "-" col-idx)]
-    (str "if (evt.target.closest('input, button, select, textarea')) return; "
-         "const editingMap = $" editing-signal " || {}; "
-         "const editingRow = Object.keys(editingMap).find((rowKey) => Object.values(editingMap[rowKey] || {}).some(Boolean)); "
-         "const editingCol = editingRow != null ? Object.keys(editingMap[editingRow] || {}).find((colKey) => editingMap[editingRow]?.[colKey] === true || editingMap[editingRow]?.[colKey] === 'active' || editingMap[editingRow]?.[colKey] === 'in-flight') : null; "
-         "if (editingRow != null && editingCol != null) { "
-         "if (!(" editing-check ")) { "
-         "$" editing-signal " ||= {}; "
-         "$" editing-signal "[editingRow] ||= {}; "
-         "$" editing-signal "[editingRow][editingCol] = false; "
-         "$" cell-base " ||= {}; "
-         "if ($" cell-base "[editingRow]) { $" cell-base "[editingRow][editingCol] = null; } "
-         "} else { return; } "
-         "} "
-         "$" signal-base ".cellSelection = ['" cell-key "']; "
-         "$" signal-base "._cellSelectDragging = true; "
-         "$" signal-base "._cellSelectStart = {row: " row-idx ", col: " col-idx "}; ")))
-
-(defn boolean-mousedown-handler
-  [{:keys [signal-base editing-signal row-idx col-idx]}]
-  (let [cell-key (str row-idx "-" col-idx)]
-    (str "if (evt.target.closest('input, button, select, textarea')) return; "
-         "const hasEditing = Object.values($" editing-signal " || {}).some((rowMap) => Object.values(rowMap || {}).some(Boolean)); "
-         "if (hasEditing) return; "
-         "$" signal-base ".cellSelection = ['" cell-key "']; "
-         "$" signal-base "._cellSelectDragging = true; "
-         "$" signal-base "._cellSelectStart = {row: " row-idx ", col: " col-idx "}; ")))
+    (str "window.pompCellMouseDown(evt, $" signal-base ", {"
+         "cellSelectionKey: '" cell-key "', "
+         "row: " row-idx ", col: " col-idx
+         "});")))
 
 (defn td-attrs
   [{:keys [row-idx col-idx value signal-base cell-key mousedown-handler in-flight-check]}]
@@ -68,11 +46,11 @@
                          init-cells
                          "$" cell-signal-path " = null")
         optimistic-display-update (str "const displayEl = document.getElementById('" span-id "'); "
-                                     "const nextValue = $" cell-signal-path "; "
-                                     "if (displayEl) { "
-                                     "displayEl.dataset.value = String(nextValue ?? ''); "
-                                     "displayEl.textContent = String(nextValue ?? ''); "
-                                     "} ")
+                                       "const nextValue = $" cell-signal-path "; "
+                                       "if (displayEl) { "
+                                       "displayEl.dataset.value = String(nextValue ?? ''); "
+                                       "displayEl.textContent = String(nextValue ?? ''); "
+                                       "} ")
         save-handler (str "evt.stopPropagation(); "
                           init-editing
                           "$" editing-signal "['" row-id "']['" col-key "'] = 'in-flight'; "
@@ -122,8 +100,8 @@
      :input-id input-id
      :span-id span-id
      :editing-check editing-check
-      :in-flight-check in-flight-check
-      :cancel-edit cancel-edit
+     :in-flight-check in-flight-check
+     :cancel-edit cancel-edit
      :save-handler save-handler
      :blur-handler blur-handler
      :keydown-handler keydown-handler

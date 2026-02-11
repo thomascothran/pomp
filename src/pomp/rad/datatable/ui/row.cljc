@@ -107,17 +107,16 @@
             signal-base (str "datatable." table-id)
             cell-base (str signal-base ".cells")
             editing-signal (str signal-base "._editing")
-            editing-check (str "$" editing-signal "?.['" row-id "']?.['" col-key "'] === 'active'"
-                               " || $" editing-signal "?.['" row-id "']?.['" col-key "'] === 'in-flight'")
             ;; Use raw-value for data-value if provided, otherwise fall back to value
             data-val (if (some? raw-value) raw-value value)
             display-value (if render (render value row) value)]
         (let [mousedown-handler (cell-editable/editable-mousedown-handler {:signal-base signal-base
-                                                                          :editing-signal editing-signal
-                                                                          :editing-check editing-check
-                                                                          :cell-base cell-base
-                                                                          :row-idx row-idx
-                                                                          :col-idx col-idx})]
+                                                                           :editing-signal editing-signal
+                                                                           :cell-base cell-base
+                                                                           :row-id row-id
+                                                                           :col-key col-key
+                                                                           :row-idx row-idx
+                                                                           :col-idx col-idx})]
           [:td (cell-editable/td-attrs {:row-idx row-idx
                                       :col-idx col-idx
                                       :value data-val

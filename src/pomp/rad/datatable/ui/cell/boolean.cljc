@@ -20,10 +20,10 @@
                      :data-on:blur (:blur-handler base)}]
         mousedown-handler (editable/editable-mousedown-handler base)]
     (editable/render-editable-cell (assoc base
-                                        :edit-handler edit-handler
-                                        :display-content display-content
-                                        :edit-input edit-input
-                                        :mousedown-handler mousedown-handler))))
+                                          :edit-handler edit-handler
+                                          :display-content display-content
+                                          :edit-input edit-input
+                                          :mousedown-handler mousedown-handler))))
 
 (defn render-boolean-cell
   [{:keys [value row-id col table-id data-url row-idx col-idx] :as ctx}]
@@ -39,27 +39,28 @@
         toggle-id (str "cell-" table-id "-" row-id "-" col-key)
         click-handler "evt.preventDefault(); evt.stopPropagation();"
         dblclick-handler (str "evt.preventDefault(); evt.stopPropagation(); "
-                               init-cells
-                               init-editing
-                               "$" editing-signal "['" row-id "']['" col-key "'] = 'in-flight'; "
-                               "const nextChecked = !evt.target.checked; "
-                               "evt.target.checked = nextChecked; "
-                               "$" cell-signal-path " = nextChecked; "
-                               "@post('" data-url "?action=save');")
-        mousedown-handler (editable/boolean-mousedown-handler {:signal-base signal-base
-                                                              :editing-signal editing-signal
-                                                              :row-idx row-idx
-                                                             :col-idx col-idx})]
+                              init-cells
+                              init-editing
+                              "$" editing-signal "['" row-id "']['" col-key "'] = 'in-flight'; "
+                              "const nextChecked = !evt.target.checked; "
+                              "evt.target.checked = nextChecked; "
+                              "$" cell-signal-path " = nextChecked; "
+                              "@post('" data-url "?action=save');")
+        mousedown-handler (editable/editable-mousedown-handler
+                           {:signal-base signal-base
+                            :editing-signal editing-signal
+                            :row-idx row-idx
+                            :col-idx col-idx})]
     [:td (editable/td-attrs {:row-idx row-idx
-                           :col-idx col-idx
-                            :value value
-                            :signal-base signal-base
-                            :cell-key cell-key
-                            :mousedown-handler mousedown-handler
-                            :in-flight-check in-flight-check})
+                             :col-idx col-idx
+                             :value value
+                             :signal-base signal-base
+                             :cell-key cell-key
+                             :mousedown-handler mousedown-handler
+                             :in-flight-check in-flight-check})
      [:input.toggle.toggle-xs.toggle-success
       {:id toggle-id
-        :type "checkbox"
-        :checked value
-        :data-on:click click-handler
-        :data-on:dblclick dblclick-handler}]]))
+       :type "checkbox"
+       :checked value
+       :data-on:click click-handler
+       :data-on:dblclick dblclick-handler}]]))

@@ -9,30 +9,42 @@ if (!window.__pompDatatableCopyAttemptObserverInstalled) {
 }
 
 // Cell selection helper functions for datatable
+window.pompCellMouseDown = function(evt, tableSignals, options) {
+  if (evt.target.closest('input, button, select, textarea')) {
+    return;
+  }
+
+  const opts = options || {};
+
+  tableSignals.cellSelection = [opts.cellSelectionKey];
+  tableSignals._cellSelectDragging = true;
+  tableSignals._cellSelectStart = { row: opts.row, col: opts.col };
+};
+
 window.pompCellSelectMove = function(evt, tableId, isDragging, start) {
   if (!isDragging || !start) return;
-  
+
   const cell = evt.target.closest('td[data-row]');
   if (!cell) return;
-  
+
   const row = parseInt(cell.dataset.row);
   const col = parseInt(cell.dataset.col);
 
   if (row === start.row && col === start.col) return;
-  
+
   // Build rectangular selection
   const selection = [];
   const minRow = Math.min(start.row, row);
   const maxRow = Math.max(start.row, row);
   const minCol = Math.min(start.col, col);
   const maxCol = Math.max(start.col, col);
-  
+
   for (let r = minRow; r <= maxRow; r++) {
     for (let c = minCol; c <= maxCol; c++) {
       selection.push(`${r}-${c}`);
     }
   }
-  
+
   evt.target.dispatchEvent(new CustomEvent('pompcellselection', {
     bubbles: true,
     detail: { selection }
@@ -44,20 +56,20 @@ window.pompCellSelectCopy = function(evt, tableId, cellSelection) {
   const key = (evt.key || '').toLowerCase();
   if (!(evt.ctrlKey || evt.metaKey) || key !== 'c') return;
   if (!cellSelection || cellSelection.length === 0) return;
-  
+
   evt.preventDefault();
-  
+
   // Find selection bounds
   const coords = cellSelection.map(k => k.split('-').map(Number));
   const minRow = Math.min(...coords.map(c => c[0]));
   const maxRow = Math.max(...coords.map(c => c[0]));
   const minCol = Math.min(...coords.map(c => c[1]));
   const maxCol = Math.max(...coords.map(c => c[1]));
-  
+
   // Build TSV from DOM
   const table = document.getElementById(tableId);
   const lines = [];
-  
+
   for (let r = minRow; r <= maxRow; r++) {
     const cells = [];
     for (let c = minCol; c <= maxCol; c++) {
@@ -66,9 +78,9 @@ window.pompCellSelectCopy = function(evt, tableId, cellSelection) {
     }
     lines.push(cells.join('\t'));
   }
-  
+
   const tsvData = lines.join('\n');
-  
+
   // Use Clipboard API if available (secure context), otherwise fallback
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(tsvData);
