@@ -125,8 +125,7 @@
        :style {:position-anchor anchor-name
                :position "absolute"
                :top "anchor(bottom)"
-               :left "anchor(right)"
-               :translate "-100% 0"
+               :left "max(0px, calc(anchor(right) - 16rem))"
                :overflow "visible"}}
       [:form.flex.flex-col.gap-3
        {:data-on:submit__prevent
@@ -165,5 +164,4 @@
                               signal-path " = [{type: '" filter-type-str "', op: evt.target.closest('form').elements['filterOp'].value, value: encodeURIComponent(evt.target.closest('form').elements['filterVal'].value)}]; "
                                "@post('" data-url "')")}
          "Apply"]]]])))
-
 
