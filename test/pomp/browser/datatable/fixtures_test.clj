@@ -13,4 +13,5 @@
     (is (map? datatable/*state*) "Expected datatable fixture state")
     (is (seq (:columns datatable/*state*)) "Expected fixture columns")
     (is (seq (:rows datatable/*state*)) "Expected fixture rows")
-    (is (fn? (:query-fn datatable/*state*)) "Expected query-fn in fixture state")))
+    (is (fn? (:rows-fn datatable/*state*)) "Expected rows-fn in fixture state")
+    (is (fn? (:count-fn datatable/*state*)) "Expected count-fn in fixture state")))

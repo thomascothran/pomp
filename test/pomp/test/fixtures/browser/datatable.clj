@@ -37,7 +37,8 @@
   (datatable/make-handlers
    {:id "datatable"
     :columns demo.datatable/columns
-    :query-fn (in-memory/query-fn demo.datatable/philosophers)
+    :rows-fn (in-memory/rows-fn demo.datatable/philosophers)
+    :count-fn (in-memory/count-fn demo.datatable/philosophers)
     :data-url in-memory-data-url
     :render-html-fn demo.util/->html
     :page-sizes [10 25 100 250]
@@ -47,7 +48,7 @@
   (let [{:keys [get post]} (make-in-memory-data-handlers)]
     [["/demo/datatable-in-memory" in-memory-page-handler]
      ["/demo/datatable-in-memory/data" {:get get
-                                         :post post}]]))
+                                        :post post}]]))
 
 (def ^:dynamic *state* nil)
 
@@ -55,10 +56,12 @@
   [f]
   (let [rows demo.datatable/philosophers
         columns demo.datatable/columns
-        query-fn (in-memory/query-fn rows)
+        rows-fn (in-memory/rows-fn rows)
+        count-fn (in-memory/count-fn rows)
         state {:columns columns
                :rows rows
-               :query-fn query-fn
+               :rows-fn rows-fn
+               :count-fn count-fn
                :filters {}
                :sort []
                :group-by []

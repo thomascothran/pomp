@@ -29,11 +29,11 @@
 
 (defn- expected-first-name
   [direction]
-  (let [query-fn (:query-fn datatable/*state*)
-        {:keys [rows]} (query-fn {:filters {}
-                                  :sort [{:column "name" :direction direction}]
-                                  :page {:size 10 :current 0}}
-                                 nil)]
+  (let [rows-fn (:rows-fn datatable/*state*)
+        {:keys [rows]} (rows-fn {:filters {}
+                                 :sort [{:column "name" :direction direction}]
+                                 :page {:size 10 :current 0}}
+                                nil)]
     (-> rows first :name)))
 
 (deftest sort-by-name-asc-desc-test
@@ -41,11 +41,11 @@
     (open-datatable!)
     (let [expected-asc (expected-first-name "asc")
           expected-desc (expected-first-name "desc")]
-    (e/click browser/*driver* name-header-button)
-    (e/wait-has-text browser/*driver* first-name-cell expected-asc)
-    (is (= expected-asc (first-cell-text))
-        "Expected ascending sort after first click")
-    (e/click browser/*driver* name-header-button)
-    (e/wait-has-text browser/*driver* first-name-cell expected-desc)
-    (is (= expected-desc (first-cell-text))
-        "Expected descending sort after second click"))))
+      (e/click browser/*driver* name-header-button)
+      (e/wait-has-text browser/*driver* first-name-cell expected-asc)
+      (is (= expected-asc (first-cell-text))
+          "Expected ascending sort after first click")
+      (e/click browser/*driver* name-header-button)
+      (e/wait-has-text browser/*driver* first-name-cell expected-desc)
+      (is (= expected-desc (first-cell-text))
+          "Expected descending sort after second click"))))

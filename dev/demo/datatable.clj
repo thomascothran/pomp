@@ -146,12 +146,14 @@
         execute! (fn [sqlvec]
                    (jdbc/execute! ds sqlvec
                                   {:builder-fn rs/as-unqualified-lower-maps}))
-        table-search-query (sqlq/query-fn {:table-name "philosophers"} execute!)]
+        table-search-rows (sqlq/rows-fn {:table-name "philosophers"} execute!)
+        table-count (sqlq/count-fn {:table-name "philosophers"} execute!)]
     (datatable/make-handlers
      {:id "datatable"
       :columns columns
-      :query-fn table-search-query
-      :table-search-query table-search-query
+      :rows-fn table-search-rows
+      :count-fn table-count
+      :table-search-query table-search-rows
       :save-fn (sqlq/save-fn {:table "philosophers"} execute!)
       :data-url datatable-component-url
       :render-html-fn ->html

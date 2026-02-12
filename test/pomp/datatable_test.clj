@@ -140,7 +140,7 @@
           filter-ops {:string [{:value "custom" :label "Custom Op"}]}
           handler (datatable/make-handler {:id "test-table"
                                            :columns columns
-                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :data-url "/data"
                                            :render-html-fn (fn [_] "<html>")
                                            :filter-operations filter-ops})]
@@ -150,14 +150,16 @@
 
 (deftest make-handler-passes-render-table-search-to-table-render-test
   (testing "make-handler forwards :render-table-search while preserving toolbar"
-    (let [render-opts (atom nil)
-          render-table-search (fn [_] [:div "search"])
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string}]
-                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn identity
-                                           :render-table-search render-table-search})]
+      (let [render-opts (atom nil)
+            render-table-search (fn [_] [:div "search"])
+            handler (datatable/make-handler {:id "test-table"
+                                             :columns [{:key :name :label "Name" :type :string}]
+                                             :rows-fn (fn [query-signals _]
+                                                        {:rows [] :page (:page query-signals)})
+                                             :count-fn (fn [_ _] {:total-rows 0})
+                                             :data-url "/data"
+                                             :render-html-fn identity
+                                             :render-table-search render-table-search})]
       (with-redefs [ring/->sse-response (fn [_ opts]
                                           (when-let [on-open-fn (get opts ring/on-open)]
                                             (on-open-fn ::fake-sse))
@@ -180,7 +182,7 @@
   (testing "global search request patches dedicated :globalTableSearch signal"
     (let [handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string}]
-                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :data-url "/data"
                                            :render-html-fn str})
           resp (handler {:query-params {"action" "global-search"}
@@ -197,7 +199,7 @@
   (testing "global-search request forwards normalized :global-table-search into table/render"
     (let [handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string}]
-                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :data-url "/data"
                                            :render-html-fn str
                                            :render-table-search
@@ -216,7 +218,7 @@
           table-search-query-calls (atom [])
           handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string}]
-                                           :query-fn (fn [_ _]
+                                           :rows-fn (fn [_ _]
                                                        (swap! query-fn-calls inc)
                                                        {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :table-search-query (fn [query-signals req]
@@ -231,13 +233,13 @@
       (is (= 1 (count @table-search-query-calls))
           "When provided, :table-search-query should run in query flow")
       (is (zero? @query-fn-calls)
-          "When :table-search-query is provided, :query-fn should not be used for global search")))
+          "When :table-search-query is provided, :rows-fn should not be used for global search")))
 
-  (testing "uses :query-fn when :table-search-query is absent"
+  (testing "uses :rows-fn when :table-search-query is absent"
     (let [query-fn-calls (atom 0)
           handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string}]
-                                           :query-fn (fn [_ _]
+                                           :rows-fn (fn [_ _]
                                                        (swap! query-fn-calls inc)
                                                        {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :data-url "/data"
@@ -246,14 +248,14 @@
                 :headers {"datastar-request" "true"}
                 :body-params {:datatable {:test-table {:globalTableSearch "Stoa"}}}})
       (is (= 1 @query-fn-calls)
-          "Without :table-search-query, default :query-fn behavior should remain")))
+          "Without :table-search-query, default :rows-fn behavior should remain")))
 
   (testing "non-global actions still compose through :table-search-query when global search is active"
     (let [query-fn-calls (atom 0)
           table-search-query-signals (atom nil)
           handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string}]
-                                           :query-fn (fn [query-signals _]
+                                           :rows-fn (fn [query-signals _]
                                                        (swap! query-fn-calls inc)
                                                        {:rows [] :total-rows 0 :page (:page query-signals)})
                                            :table-search-query (fn [query-signals _]
@@ -268,18 +270,18 @@
       (is (some? @table-search-query-signals)
           "When global search has a valid value, normal table actions should still use :table-search-query")
       (is (zero? @query-fn-calls)
-          "When :table-search-query handles composed global search, :query-fn should not run")
+          "When :table-search-query handles composed global search, :rows-fn should not run")
       (is (= "Stoa" (:search-string @table-search-query-signals))
           "Composed query flow should normalize and forward the global search string")
       (is (= [{:column "name" :direction "asc"}] (:sort @table-search-query-signals))
           "Composed query flow should include non-global action state updates (sort)")))
 
-  (testing "non-global actions fall back to :query-fn when global search is blank or too short"
+  (testing "non-global actions fall back to :rows-fn when global search is blank or too short"
     (let [query-fn-signals (atom nil)
           table-search-query-calls (atom 0)
           handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string}]
-                                           :query-fn (fn [query-signals _]
+                                           :rows-fn (fn [query-signals _]
                                                        (reset! query-fn-signals query-signals)
                                                        {:rows [] :total-rows 0 :page (:page query-signals)})
                                            :table-search-query (fn [_ _]
@@ -305,7 +307,7 @@
                    {:key :school :label "School" :type :enum}]
           handler (datatable/make-handler {:id "test-table"
                                            :columns columns
-                                           :query-fn (fn [_ _]
+                                           :rows-fn (fn [_ _]
                                                        {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :table-search-query (fn [query-signals _]
                                                                  (reset! captured-query-signals query-signals)
@@ -330,7 +332,7 @@
           save-calls (atom 0)
           handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string :editable true}]
-                                           :query-fn (fn [_ _]
+                                           :rows-fn (fn [_ _]
                                                        (swap! query-fn-calls inc)
                                                        {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :table-search-query (fn [_ _]
@@ -361,7 +363,7 @@
           save-fn (fn [_] {:success true})
           handler (datatable/make-handler {:id "test-table"
                                            :columns columns
-                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :data-url "/data"
                                            :render-html-fn (fn [_] "<html>")
                                            :save-fn save-fn})]
@@ -375,7 +377,7 @@
           element-patches (atom [])
           handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string :editable true}]
-                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :data-url "/data"
                                            :render-html-fn identity
                                            :save-fn (fn [_] {:success true})})]
@@ -423,7 +425,7 @@
                                                       :editable true
                                                       :options [{:value "Stoicism" :label "Stoicism"}
                                                                 {:value "Academy" :label "Academy"}]}]
-                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                            :data-url "/data"
                                            :render-html-fn identity
                                            :save-fn (fn [_] {:success true})})]
@@ -466,7 +468,7 @@
           handler (datatable/make-handler {:id "test-table"
                                            :columns [{:key :name :label "Name" :type :string :editable true}
                                                      {:key :status :label "Status" :type :string}]
-                                           :query-fn (fn [_ _]
+                                           :rows-fn (fn [_ _]
                                                        {:rows [{:id "1" :name "Ada" :status "active"}
                                                                {:id "2" :name "Bob" :status "inactive"}]
                                                         :total-rows 2

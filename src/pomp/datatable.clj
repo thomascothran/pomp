@@ -109,7 +109,7 @@
    Required options:
    - :id            - Table element ID (string)
    - :columns       - Column definitions [{:key :name :label \"Name\" :type :string} ...]
-   - :query-fn      - Query function (see `pomp.rad.datatable.core/query-fn`)
+   - :rows-fn       - Row query function (see `pomp.rad.datatable.query.*`)
    - :data-url      - URL for data fetches (string)
    - :render-html-fn - Function to convert hiccup to HTML string
 
@@ -126,12 +126,13 @@
                            Map of type keyword to operations vector.
                            Example: {:string [{:value \"contains\" :label \"Includes\"}]
                                     :boolean [{:value \"is\" :label \"equals\"}]}
+   - :count-fn      - Optional count query function for total row count.
    - :render-table-search - Optional global search render function for table toolbar.
    - :save-fn       - Function to save cell edits. Called with {:row-id :col-key :value :req}.
                       See `pomp.rad.datatable.query.sql/save-fn` for SQL implementation.
 
    Returns a Ring handler function that handles datatable requests via SSE."
-  [{:keys [id columns query-fn table-search-query data-url render-html-fn
+  [{:keys [id columns rows-fn count-fn table-search-query data-url render-html-fn
            page-sizes selectable? skeleton-rows render-row render-header render-cell
            filter-operations render-table-search save-fn]
     :or {page-sizes [10 25 100]
@@ -168,13 +169,13 @@
               column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
               ordered-cols (column-state/reorder columns column-order)
               visible-cols (column-state/filter-visible ordered-cols columns-state)
-              run-query-fn (if table-search-query
-                             (fn [query-signals request]
-                               (if (seq (:search-string query-signals))
-                                 (table-search-query (assoc query-signals :columns columns) request)
-                                 (query-fn query-signals request)))
-                             query-fn)
-              {:keys [signals rows total-rows]} (state/query current-signals query-params req run-query-fn)
+              run-rows-fn (if table-search-query
+                            (fn [query-signals request]
+                              (if (seq (:search-string query-signals))
+                                (table-search-query (assoc query-signals :columns columns) request)
+                                (rows-fn query-signals request)))
+                            rows-fn)
+              {:keys [signals rows]} (state/query-rows current-signals query-params req run-rows-fn)
               group-by (:group-by signals)
               groups (when (seq group-by) (group-state/group-rows rows group-by))
               filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))
@@ -201,29 +202,36 @@
                                (d*/execute-script! sse cell-select-script))
                              (d*/patch-signals! sse (json/write-str
                                                      {:datatable {(keyword id) table-signals-patch}}))
-                             (d*/patch-elements! sse (render-html-fn (table/render {:id id
-                                                                                    :cols visible-cols
-                                                                                    :rows rows
-                                                                                    :groups groups
-                                                                                    :sort-state (:sort signals)
-                                                                                    :filters (:filters signals)
-                                                                                    :group-by group-by
-                                                                                    :total-rows total-rows
-                                                                                    :page-size (get-in signals [:page :size])
-                                                                                    :page-current (get-in signals [:page :current])
-                                                                                    :page-sizes page-sizes
-                                                                                    :data-url data-url
-                                                                                    :selectable? selectable?
-                                                                                    :render-row render-row
-                                                                                    :render-header render-header
-                                                                                    :render-cell render-cell
-                                                                                    :filter-operations filter-operations
-                                                                                    :render-table-search render-table-search
-                                                                                    :global-table-search (:search-string signals)
-                                                                                    :toolbar (columns-menu/render {:cols ordered-cols
-                                                                                                                   :columns-state columns-state
-                                                                                                                   :table-id id
-                                                                                                                   :data-url data-url})})))
+                             (let [render-table
+                                   (fn [total-rows]
+                                     (render-html-fn
+                                      (table/render {:id id
+                                                     :cols visible-cols
+                                                     :rows rows
+                                                     :groups groups
+                                                     :sort-state (:sort signals)
+                                                     :filters (:filters signals)
+                                                     :group-by group-by
+                                                     :total-rows total-rows
+                                                     :page-size (get-in signals [:page :size])
+                                                     :page-current (get-in signals [:page :current])
+                                                     :page-sizes page-sizes
+                                                     :data-url data-url
+                                                     :selectable? selectable?
+                                                     :render-row render-row
+                                                     :render-header render-header
+                                                     :render-cell render-cell
+                                                     :filter-operations filter-operations
+                                                     :render-table-search render-table-search
+                                                     :global-table-search (:search-string signals)
+                                                     :toolbar (columns-menu/render {:cols ordered-cols
+                                                                                    :columns-state columns-state
+                                                                                    :table-id id
+                                                                                    :data-url data-url})})))]
+                               (d*/patch-elements! sse (render-table nil))
+                               (when count-fn
+                                 (let [total-rows (state/query-count signals req count-fn)]
+                                   (d*/patch-elements! sse (render-table total-rows)))))
                              (d*/close-sse! sse))}))))))
 
 (defn make-handlers

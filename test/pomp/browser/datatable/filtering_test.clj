@@ -77,11 +77,11 @@
 
 (defn- expected-filter-rows
   [value]
-  (let [query-fn (:query-fn datatable/*state*)
-        {:keys [rows]} (query-fn {:filters {:name [{:type "string" :op "contains" :value value}]}
-                                  :sort []
-                                  :page {:size 10 :current 0}}
-                                 nil)]
+  (let [rows-fn (:rows-fn datatable/*state*)
+        {:keys [rows]} (rows-fn {:filters {:name [{:type "string" :op "contains" :value value}]}
+                                 :sort []
+                                 :page {:size 10 :current 0}}
+                                nil)]
     rows))
 
 (deftest filter-by-name-test

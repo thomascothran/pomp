@@ -202,6 +202,71 @@
      :total-rows total-groups
      :page {:size size :current clamped-current}}))
 
+(defn- filtered-rows
+  [rows {:keys [columns filters search-string]}]
+  (-> rows
+      (apply-global-search columns search-string)
+      (apply-filters filters)))
+
+(defn rows-fn
+  [rows]
+  (fn [{:keys [group-by page] :as params} _request]
+    (let [filtered (filtered-rows rows params)
+          size (:size page 10)
+          requested-current (:current page)]
+      (if (seq group-by)
+        (let [group-key (first group-by)
+              sort-spec (:sort params)
+              group-dir (or (group-sort-direction group-key sort-spec) "asc")
+              comparator (if (= group-dir "desc")
+                           #(compare %2 %1)
+                           compare)
+              total-groups (->> filtered
+                                (map group-key)
+                                distinct
+                                count)
+              total-pgs (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
+              current (if (nil? requested-current)
+                        (max 0 (dec total-pgs))
+                        requested-current)
+              group-values (->> filtered
+                                (map group-key)
+                                distinct
+                                (clojure.core/sort comparator)
+                                (drop (* current size))
+                                (take size)
+                                vec)
+              groups->rows (reduce (fn [m row]
+                                     (let [group-value (get row group-key)]
+                                       (update m group-value (fnil conj []) row)))
+                                   {}
+                                   filtered)
+              page-rows (mapcat #(get groups->rows %) group-values)]
+          {:rows (vec page-rows)
+           :page {:size size :current current}})
+        (let [total-rows (count filtered)
+              total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
+              current (if (nil? requested-current)
+                        (max 0 (dec total-pgs))
+                        requested-current)
+              sorted (sort-data filtered (:sort params))]
+          {:rows (->> sorted
+                      (drop (* current size))
+                      (take size)
+                      vec)
+           :page {:size size :current current}})))))
+
+(defn count-fn
+  [rows]
+  (fn [{:keys [group-by] :as params} _request]
+    (let [filtered (filtered-rows rows params)]
+      {:total-rows (if (seq group-by)
+                     (->> filtered
+                          (map (first group-by))
+                          distinct
+                          count)
+                     (count filtered))})))
+
 (defn query-fn
   [rows]
   (fn [{:keys [columns filters page group-by search-string] :as params} _request]

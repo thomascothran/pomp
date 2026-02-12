@@ -356,6 +356,77 @@
         params (when where-clause (rest where-clause))]
     (into [sql] params)))
 
+(defn rows-fn
+  [config execute!]
+  (fn [{:keys [columns filters page group-by search-string] :as params} _request]
+    (let [size (:size page 10)
+          requested-current (:current page)]
+      (if (seq group-by)
+        (let [sort-spec (:sort params)
+              current (if (nil? requested-current)
+                        (let [count-sql (generate-group-count-sql config {:columns columns
+                                                                          :filters filters
+                                                                          :group-by group-by
+                                                                          :search-string search-string})
+                              total-groups (-> (execute! count-sql) first :total)
+                              total-pgs (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))]
+                          (max 0 (dec total-pgs)))
+                        requested-current)
+              group-values-sql (generate-group-values-sql config {:columns columns
+                                                                  :filters filters
+                                                                  :group-by group-by
+                                                                  :search-string search-string
+                                                                  :sort sort-spec
+                                                                  :page {:size size :current current}})
+              group-key (first group-by)
+              group-col-key (keyword (col-name config group-key))
+              group-values (->> (execute! group-values-sql)
+                                (map group-col-key)
+                                vec)
+              rows (if (seq group-values)
+                     (let [grouped-query-sql (generate-grouped-query-sql config {:columns columns
+                                                                                 :filters filters
+                                                                                 :group-by group-by
+                                                                                 :search-string search-string
+                                                                                 :sort sort-spec
+                                                                                 :group-values group-values})]
+                       (execute! grouped-query-sql))
+                     [])]
+          {:rows rows
+           :page {:size size :current current}})
+        (let [current (if (nil? requested-current)
+                        (let [count-sql (generate-count-sql config {:columns columns
+                                                                    :filters filters
+                                                                    :search-string search-string})
+                              total-rows (-> (execute! count-sql) first :total)
+                              total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))]
+                          (max 0 (dec total-pgs)))
+                        requested-current)
+              query-sql (generate-query-sql config {:columns columns
+                                                    :filters filters
+                                                    :search-string search-string
+                                                    :sort (:sort params)
+                                                    :page {:size size :current current}})
+              rows (execute! query-sql)]
+          {:rows rows
+           :page {:size size :current current}})))))
+
+(defn count-fn
+  [config execute!]
+  (fn [{:keys [columns filters group-by search-string]} _request]
+    (if (seq group-by)
+      (let [count-sql (generate-group-count-sql config {:columns columns
+                                                        :filters filters
+                                                        :group-by group-by
+                                                        :search-string search-string})
+            total-groups (-> (execute! count-sql) first :total)]
+        {:total-rows total-groups})
+      (let [count-sql (generate-count-sql config {:columns columns
+                                                  :filters filters
+                                                  :search-string search-string})
+            total-rows (-> (execute! count-sql) first :total)]
+        {:total-rows total-rows}))))
+
 (defn query-fn
   "Creates a query function for SQL-backed datatable.
 

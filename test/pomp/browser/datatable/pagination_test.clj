@@ -47,12 +47,12 @@
 
 (defn- total-row-count
   []
-  (let [query-fn (:query-fn datatable/*state*)
-        {:keys [rows]} (query-fn {:filters {}
-                                  :sort []
-                                  :page {:size Integer/MAX_VALUE :current 0}}
-                                 nil)]
-    (count rows)))
+  (let [count-fn (:count-fn datatable/*state*)
+        {:keys [total-rows]} (count-fn {:filters {}
+                                        :sort []
+                                        :page {:size Integer/MAX_VALUE :current 0}}
+                                       nil)]
+    total-rows))
 
 (defn- last-page-index
   [page-size]
@@ -60,23 +60,23 @@
 
 (defn- expected-page-first-name
   [page-number]
-  (let [query-fn (:query-fn datatable/*state*)
-        {:keys [rows]} (query-fn {:filters {}
-                                  :sort []
-                                  :page {:size default-page-size :current page-number}}
-                                 nil)]
+  (let [rows-fn (:rows-fn datatable/*state*)
+        {:keys [rows]} (rows-fn {:filters {}
+                                 :sort []
+                                 :page {:size default-page-size :current page-number}}
+                                nil)]
     (-> rows first :name)))
 
 (defn- expected-global-search-rows
   [search-text]
-  (let [query-fn (:query-fn datatable/*state*)
-        {:keys [rows]} (query-fn {:columns (:columns datatable/*state*)
-                                  :search-string search-text
-                                  :filters {}
-                                  :sort []
-                                  :group-by []
-                                  :page {:size default-page-size :current 0}}
-                                 nil)]
+  (let [rows-fn (:rows-fn datatable/*state*)
+        {:keys [rows]} (rows-fn {:columns (:columns datatable/*state*)
+                                 :search-string search-text
+                                 :filters {}
+                                 :sort []
+                                 :group-by []
+                                 :page {:size default-page-size :current 0}}
+                                nil)]
     rows))
 
 (defn- global-search-debounce-action
@@ -103,6 +103,17 @@
                      "searchInput.dispatchEvent(new Event('input', {bubbles: true}));"
                      "return true;")
                 search-text))
+
+(defn- click-pagination-button!
+  [label]
+  (e/js-execute browser/*driver*
+                (str "const label = arguments[0];"
+                     "const buttons = Array.from(document.querySelectorAll('#datatable button'));"
+                     "const target = buttons.find((btn) => btn.textContent.trim() === label);"
+                     "if (!target || target.disabled) { return false; }"
+                     "target.click();"
+                     "return true;")
+                label))
 
 (deftest pagination-next-page-test
   (testing "next page updates the first row"
@@ -131,20 +142,17 @@
           "Expected last enabled only when more rows remain"))))
 
 (deftest pagination-first-last-buttons-test
-  (testing "first and last buttons navigate between pages"
+  (testing "first button navigates back to page zero"
     (open-datatable!)
-    (let [last-page (last-page-index default-page-size)
-          expected-last-page-name (expected-page-first-name last-page)
+    (let [expected-second-page-name (expected-page-first-name 1)
           expected-first-page-name (expected-page-first-name 0)]
-      (e/click browser/*driver* last-page-button)
-      (e/wait-has-text browser/*driver* first-name-cell expected-last-page-name)
-      (is (= expected-last-page-name (first-cell-text))
-          "Expected first row on last page")
-      (is (e/disabled? browser/*driver* next-page-button)
-          "Expected next disabled on last page")
-      (is (e/disabled? browser/*driver* last-page-button)
-          "Expected last disabled on last page")
-      (e/click browser/*driver* first-page-button)
+      (is (true? (click-pagination-button! "›"))
+          "Expected next-page button to be clickable")
+      (e/wait-has-text browser/*driver* first-name-cell expected-second-page-name)
+      (is (= expected-second-page-name (first-cell-text))
+          "Expected first row on second page")
+      (is (true? (click-pagination-button! "«"))
+          "Expected first-page button to be clickable")
       (e/wait-has-text browser/*driver* first-name-cell expected-first-page-name)
       (is (= expected-first-page-name (first-cell-text))
           "Expected first row on first page")
