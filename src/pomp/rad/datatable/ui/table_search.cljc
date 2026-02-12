@@ -5,8 +5,9 @@
   (let [signal-path (str "datatable." table-id ".globalTableSearch")
         signal-ref (str "$" signal-path)
         bind-key (keyword (str "data-bind:" signal-path))]
-    [:input.input.input-sm.w-full.max-w-xs
-     (cond-> {:type "search"
+    [:input
+     (cond-> {:class "input input-sm input-bordered w-56 focus:outline-none focus:outline-offset-0"
+              :type "search"
               :placeholder "Search table..."
               :autocomplete "off"
               :value (or global-table-search "")

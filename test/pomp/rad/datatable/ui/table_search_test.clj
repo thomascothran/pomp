@@ -11,7 +11,10 @@
         debounce-handler (get attrs debounce-key)
         input-handler (:data-on:input attrs)
         bind-key :data-bind:datatable.datatable.globalTableSearch]
-    (is (= :input.input.input-sm.w-full.max-w-xs (first result)))
+    (is (= :input (first result)))
+    (is (= "input input-sm input-bordered w-56 focus:outline-none focus:outline-offset-0"
+           (:class attrs))
+        "Should apply daisy-first polished search classes")
     (is (= true (get attrs bind-key))
         "Should bind to datatable.<id>.globalTableSearch signal")
     (is (string? input-handler))
