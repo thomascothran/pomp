@@ -30,7 +30,7 @@
           query-fn (fn [query-signals _]
                      (reset! captured-signals query-signals)
                      {:rows [] :total-rows 0 :page (:page query-signals)})]
-      (table-state/query signals {"action" "global-search"} {} query-fn)
+      (table-state/query-rows signals {"action" "global-search"} {} query-fn)
       (is (= "" (:search-string @captured-signals))
           "Search shorter than 2 chars should be normalized to empty")
       (is (= (:filters signals) (:filters @captured-signals))
