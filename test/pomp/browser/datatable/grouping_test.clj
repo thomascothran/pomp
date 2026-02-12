@@ -14,7 +14,7 @@
   datatable/datatable-state-fixture)
 
 (def first-name-cell
-  {:css "#datatable td[data-row='0'][data-col='0']"})
+  {:css "button[popovertarget='col-menu-school']"})
 
 (def school-menu-button
   {:css "button[popovertarget='col-menu-school']"})

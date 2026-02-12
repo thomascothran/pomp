@@ -69,7 +69,7 @@
 
 ;; =============================================================================
 ;; dt/render tests - filter-operations passthrough
-;; This tests the public API that make-handler uses internally
+;; This tests the public API that make-handlers uses internally
 ;; =============================================================================
 
 (deftest dt-render-accepts-filter-operations-test
@@ -131,35 +131,41 @@
           "Boolean column should NOT have 'contains' operation"))))
 
 ;; =============================================================================
-;; make-handler tests - verifies :filter-operations is accepted as a parameter
+;; make-handlers tests - verifies :filter-operations is accepted as a parameter
 ;; =============================================================================
 
-(deftest make-handler-accepts-filter-operations-test
-  (testing "make-handler accepts :filter-operations without error"
+(defn- make-get-handler [opts]
+  (:get (datatable/make-handlers opts)))
+
+(defn- make-post-handler [opts]
+  (:post (datatable/make-handlers opts)))
+
+(deftest make-handlers-accepts-filter-operations-test
+  (testing "make-handlers accepts :filter-operations without error"
     (let [columns [{:key :name :label "Name" :type :string}]
           filter-ops {:string [{:value "custom" :label "Custom Op"}]}
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns columns
-                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn (fn [_] "<html>")
-                                           :filter-operations filter-ops})]
+          handler (make-get-handler {:id "test-table"
+                                     :columns columns
+                                     :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn (fn [_] "<html>")
+                                     :filter-operations filter-ops})]
       ;; Handler should be created successfully
       (is (fn? handler)
-          "make-handler should return a function when :filter-operations is provided"))))
+          "make-handlers :get should return a function when :filter-operations is provided"))))
 
-(deftest make-handler-passes-render-table-search-to-table-render-test
-  (testing "make-handler forwards :render-table-search while preserving toolbar"
+(deftest make-handlers-passes-render-table-search-to-table-render-test
+  (testing "make-handlers :get forwards :render-table-search while preserving toolbar"
       (let [render-opts (atom nil)
             render-table-search (fn [_] [:div "search"])
-            handler (datatable/make-handler {:id "test-table"
-                                             :columns [{:key :name :label "Name" :type :string}]
-                                             :rows-fn (fn [query-signals _]
-                                                        {:rows [] :page (:page query-signals)})
-                                             :count-fn (fn [_ _] {:total-rows 0})
-                                             :data-url "/data"
-                                             :render-html-fn identity
-                                             :render-table-search render-table-search})]
+            handler (make-get-handler {:id "test-table"
+                                       :columns [{:key :name :label "Name" :type :string}]
+                                       :rows-fn (fn [query-signals _]
+                                                  {:rows [] :page (:page query-signals)})
+                                       :count-fn (fn [_ _] {:total-rows 0})
+                                       :data-url "/data"
+                                       :render-html-fn identity
+                                       :render-table-search render-table-search})]
       (with-redefs [ring/->sse-response (fn [_ opts]
                                           (when-let [on-open-fn (get opts ring/on-open)]
                                             (on-open-fn ::fake-sse))
@@ -178,13 +184,13 @@
         (is (some? (:toolbar @render-opts))
             "table/render should still receive :toolbar controls")))))
 
-(deftest make-handler-patches-global-table-search-signal-test
+(deftest make-handlers-patches-global-table-search-signal-test
   (testing "global search request patches dedicated :globalTableSearch signal"
-    (let [handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string}]
-                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn str})
+    (let [handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn str})
           resp (handler {:query-params {"action" "global-search"}
                          :headers {"datastar-request" "true"}
                          :body-params {:datatable {:test-table {:globalTableSearch "Stoa"}}}})
@@ -195,16 +201,16 @@
       (is (contains? table-signals :globalTableSearch)
           "Handler response should patch datatable.<id>.globalTableSearch"))))
 
-(deftest make-handler-forwards-normalized-global-table-search-to-table-render-test
+(deftest make-handlers-forwards-normalized-global-table-search-to-table-render-test
   (testing "global-search request forwards normalized :global-table-search into table/render"
-    (let [handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string}]
-                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn str
-                                           :render-table-search
-                                           (fn [{:keys [global-table-search]}]
-                                             [:span (str "GS=" global-table-search)])})
+    (let [handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn str
+                                     :render-table-search
+                                     (fn [{:keys [global-table-search]}]
+                                       [:span (str "GS=" global-table-search)])})
           sse-body (-> (handler {:query-params {"action" "global-search"}
                                  :headers {"datastar-request" "true"}
                                  :body-params {:datatable {:test-table {:globalTableSearch "  Stoa  "}}}})
@@ -212,21 +218,21 @@
       (is (re-find #"GS=Stoa" sse-body)
           "table/render should receive normalized global search value via :global-table-search"))))
 
-(deftest make-handler-table-search-query-wiring-test
+(deftest make-handlers-table-search-query-wiring-test
   (testing "uses :table-search-query when provided"
     (let [query-fn-calls (atom 0)
           table-search-query-calls (atom [])
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string}]
-                                           :rows-fn (fn [_ _]
-                                                       (swap! query-fn-calls inc)
-                                                       {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :table-search-query (fn [query-signals req]
-                                                                 (swap! table-search-query-calls conj {:query-signals query-signals
-                                                                                                        :req req})
-                                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn str})]
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _]
+                                                (swap! query-fn-calls inc)
+                                                {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :table-search-query (fn [query-signals req]
+                                                           (swap! table-search-query-calls conj {:query-signals query-signals
+                                                                                                  :req req})
+                                                           {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn str})]
       (handler {:query-params {"action" "global-search"}
                 :headers {"datastar-request" "true"}
                 :body-params {:datatable {:test-table {:globalTableSearch "Stoa"}}}})
@@ -237,13 +243,13 @@
 
   (testing "uses :rows-fn when :table-search-query is absent"
     (let [query-fn-calls (atom 0)
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string}]
-                                           :rows-fn (fn [_ _]
-                                                       (swap! query-fn-calls inc)
-                                                       {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn str})]
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _]
+                                                (swap! query-fn-calls inc)
+                                                {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn str})]
       (handler {:query-params {"action" "global-search"}
                 :headers {"datastar-request" "true"}
                 :body-params {:datatable {:test-table {:globalTableSearch "Stoa"}}}})
@@ -253,16 +259,16 @@
   (testing "non-global actions still compose through :table-search-query when global search is active"
     (let [query-fn-calls (atom 0)
           table-search-query-signals (atom nil)
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string}]
-                                           :rows-fn (fn [query-signals _]
-                                                       (swap! query-fn-calls inc)
-                                                       {:rows [] :total-rows 0 :page (:page query-signals)})
-                                           :table-search-query (fn [query-signals _]
-                                                                 (reset! table-search-query-signals query-signals)
-                                                                 {:rows [] :total-rows 0 :page (:page query-signals)})
-                                           :data-url "/data"
-                                           :render-html-fn str})]
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [query-signals _]
+                                                (swap! query-fn-calls inc)
+                                                {:rows [] :total-rows 0 :page (:page query-signals)})
+                                     :table-search-query (fn [query-signals _]
+                                                           (reset! table-search-query-signals query-signals)
+                                                           {:rows [] :total-rows 0 :page (:page query-signals)})
+                                     :data-url "/data"
+                                     :render-html-fn str})]
       (handler {:query-params {"clicked" "name"}
                 :headers {"datastar-request" "true"}
                 :body-params {:datatable {:test-table {:globalTableSearch "  Stoa  "
@@ -279,16 +285,16 @@
   (testing "non-global actions fall back to :rows-fn when global search is blank or too short"
     (let [query-fn-signals (atom nil)
           table-search-query-calls (atom 0)
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string}]
-                                           :rows-fn (fn [query-signals _]
-                                                       (reset! query-fn-signals query-signals)
-                                                       {:rows [] :total-rows 0 :page (:page query-signals)})
-                                           :table-search-query (fn [_ _]
-                                                                 (swap! table-search-query-calls inc)
-                                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn str})]
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [query-signals _]
+                                                (reset! query-fn-signals query-signals)
+                                                {:rows [] :total-rows 0 :page (:page query-signals)})
+                                     :table-search-query (fn [_ _]
+                                                           (swap! table-search-query-calls inc)
+                                                           {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn str})]
       (handler {:query-params {"clicked" "name"}
                 :headers {"datastar-request" "true"}
                 :body-params {:datatable {:test-table {:globalTableSearch " a "
@@ -300,20 +306,20 @@
       (is (= "" (:search-string @query-fn-signals))
           "Fallback query flow should still normalize short global search to empty"))))
 
-(deftest make-handler-table-search-query-contract-payload-test
+(deftest make-handlers-table-search-query-contract-payload-test
   (testing ":table-search-query receives contract payload keys"
     (let [captured-query-signals (atom nil)
           columns [{:key :name :label "Name" :type :string}
                    {:key :school :label "School" :type :enum}]
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns columns
-                                           :rows-fn (fn [_ _]
-                                                       {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :table-search-query (fn [query-signals _]
-                                                                 (reset! captured-query-signals query-signals)
-                                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn str})]
+          handler (make-get-handler {:id "test-table"
+                                     :columns columns
+                                     :rows-fn (fn [_ _]
+                                                {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :table-search-query (fn [query-signals _]
+                                                           (reset! captured-query-signals query-signals)
+                                                           {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn str})]
       (handler {:query-params {"clicked" "name" "groupBy" "school"}
                 :headers {"datastar-request" "true"}
                 :body-params {:datatable {:test-table {:globalTableSearch "Stoa"
@@ -325,24 +331,24 @@
                   [:columns :search-string :filters :sort :page :group-by])
           "Payload contract must include :columns, :search-string, :filters, :sort, :page, and :group-by"))))
 
-(deftest make-handler-save-bypasses-query-flow-test
+(deftest make-handlers-save-bypasses-query-flow-test
   (testing "save action bypasses query flow even when :table-search-query is present"
     (let [query-fn-calls (atom 0)
           table-search-query-calls (atom 0)
           save-calls (atom 0)
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string :editable true}]
-                                           :rows-fn (fn [_ _]
-                                                       (swap! query-fn-calls inc)
-                                                       {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :table-search-query (fn [_ _]
-                                                                 (swap! table-search-query-calls inc)
-                                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :save-fn (fn [_]
-                                                      (swap! save-calls inc)
-                                                      {:success true})
-                                           :data-url "/data"
-                                           :render-html-fn str})]
+          handler (make-post-handler {:id "test-table"
+                                      :columns [{:key :name :label "Name" :type :string :editable true}]
+                                      :rows-fn (fn [_ _]
+                                                 (swap! query-fn-calls inc)
+                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                      :table-search-query (fn [_ _]
+                                                            (swap! table-search-query-calls inc)
+                                                            {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                      :save-fn (fn [_]
+                                                 (swap! save-calls inc)
+                                                 {:success true})
+                                      :data-url "/data"
+                                      :render-html-fn str})]
       (handler {:query-params {"action" "save"}
                 :headers {"datastar-request" "true"}
                 :body-params {:datatable {:test-table {:cells {:123 {:name "Updated"}}}}}})
@@ -354,33 +360,33 @@
           "Save action should bypass table-search query flow"))))
 
 ;; =============================================================================
-;; make-handler tests - save-fn support
+;; make-handlers tests - save-fn support
 ;; =============================================================================
 
-(deftest make-handler-accepts-save-fn-test
-  (testing "make-handler accepts :save-fn without error"
+(deftest make-handlers-accepts-save-fn-test
+  (testing "make-handlers :post accepts :save-fn without error"
     (let [columns [{:key :name :label "Name" :type :string :editable true}]
           save-fn (fn [_] {:success true})
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns columns
-                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn (fn [_] "<html>")
-                                           :save-fn save-fn})]
+          handler (make-post-handler {:id "test-table"
+                                      :columns columns
+                                      :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                      :data-url "/data"
+                                      :render-html-fn (fn [_] "<html>")
+                                      :save-fn save-fn})]
       ;; Handler should be created successfully
       (is (fn? handler)
-          "make-handler should return a function when :save-fn is provided"))))
+          "make-handlers :post should return a function when :save-fn is provided"))))
 
-(deftest make-handler-save-cleans-edit-signal-without-cell-rerender-test
+(deftest make-handlers-save-cleans-edit-signal-without-cell-rerender-test
   (testing "save response clears per-cell edit signal and does not patch cell html"
     (let [patches (atom [])
           element-patches (atom [])
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string :editable true}]
-                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn identity
-                                           :save-fn (fn [_] {:success true})})]
+          handler (make-post-handler {:id "test-table"
+                                      :columns [{:key :name :label "Name" :type :string :editable true}]
+                                      :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                      :data-url "/data"
+                                      :render-html-fn identity
+                                      :save-fn (fn [_] {:success true})})]
       (with-redefs [ring/->sse-response (fn [_ opts]
                                           (when-let [on-open-fn (get opts ring/on-open)]
                                             (on-open-fn ::fake-sse))
@@ -414,21 +420,21 @@
             (is (= false (get row-editing :name))
                 "Save should clear _editing[row][col] to false after submit")))))))
 
-(deftest make-handler-save-enum-cleans-edit-signal-without-cell-rerender-test
+(deftest make-handlers-save-enum-cleans-edit-signal-without-cell-rerender-test
   (testing "enum save clears per-cell edit signal and does not patch cell html"
     (let [patches (atom [])
           element-patches (atom [])
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :school
-                                                      :label "School"
-                                                      :type :enum
-                                                      :editable true
-                                                      :options [{:value "Stoicism" :label "Stoicism"}
-                                                                {:value "Academy" :label "Academy"}]}]
-                                           :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn identity
-                                           :save-fn (fn [_] {:success true})})]
+          handler (make-post-handler {:id "test-table"
+                                      :columns [{:key :school
+                                                 :label "School"
+                                                 :type :enum
+                                                 :editable true
+                                                 :options [{:value "Stoicism" :label "Stoicism"}
+                                                           {:value "Academy" :label "Academy"}]}]
+                                      :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                      :data-url "/data"
+                                      :render-html-fn identity
+                                      :save-fn (fn [_] {:success true})})]
       (with-redefs [ring/->sse-response (fn [_ opts]
                                           (when-let [on-open-fn (get opts ring/on-open)]
                                             (on-open-fn ::fake-sse))
@@ -462,19 +468,19 @@
             (is (= false (get row-editing :school))
                 "Enum save should clear _editing[row][col] to false after submit")))))))
 
-(deftest make-handler-initial-patch-omits-per-row-signals-test
+(deftest make-handlers-initial-patch-omits-per-row-signals-test
   (testing "initial signal patch omits per-row/per-cell signals"
     (let [patches (atom [])
-          handler (datatable/make-handler {:id "test-table"
-                                           :columns [{:key :name :label "Name" :type :string :editable true}
-                                                     {:key :status :label "Status" :type :string}]
-                                           :rows-fn (fn [_ _]
-                                                       {:rows [{:id "1" :name "Ada" :status "active"}
-                                                               {:id "2" :name "Bob" :status "inactive"}]
-                                                        :total-rows 2
-                                                        :page {:size 10 :current 0}})
-                                           :data-url "/data"
-                                           :render-html-fn (fn [_] "<html>")})]
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string :editable true}
+                                               {:key :status :label "Status" :type :string}]
+                                     :rows-fn (fn [_ _]
+                                                {:rows [{:id "1" :name "Ada" :status "active"}
+                                                        {:id "2" :name "Bob" :status "inactive"}]
+                                                 :total-rows 2
+                                                 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn (fn [_] "<html>")})]
       (with-redefs [ring/->sse-response (fn [_ opts]
                                           (when-let [on-open-fn (get opts ring/on-open)]
                                             (on-open-fn ::fake-sse))
@@ -498,6 +504,36 @@
               "Cell signals should be absent on initial render")
           (is (not (contains? table-signals :submitInProgress))
               "Submit flag should be absent on initial render"))))))
+
+(deftest make-handlers-get-skips-initial-load-effects-when-signals-present-test
+  (testing "get handler does not render skeleton or execute script when signals exist"
+    (let [element-patches (atom [])
+          scripts (atom 0)
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _]
+                                                {:rows []
+                                                 :total-rows 0
+                                                 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn identity})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    d*/patch-signals! (fn [& _])
+                    d*/patch-elements! (fn [_ payload]
+                                         (swap! element-patches conj payload))
+                    d*/execute-script! (fn [& _]
+                                         (swap! scripts inc))
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {"action" "global-search"}
+                  :headers {"datastar-request" "true"}
+                  :body-params {:datatable {:test-table {:globalTableSearch "Stoa"}}}})
+        (is (= 1 (count @element-patches))
+            "Signal-bearing GET should only patch the rendered table")
+        (is (= 0 @scripts)
+            "Signal-bearing GET should not execute initial-load script")))))
 
 (deftest extract-cell-edit-from-signals-test
   (testing "extracts a single edited cell directly from :cells"

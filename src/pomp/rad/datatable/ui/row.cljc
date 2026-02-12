@@ -3,7 +3,7 @@
 
    These are the default implementations that can be overridden
    by passing `:render-row` to `pomp.rad.datatable.core/render` or
-   `pomp.datatable/make-handler`.
+   `pomp.datatable/make-handlers`.
 
    Functions:
    - `render-row`           - Renders a complete table row (default for :render-row)

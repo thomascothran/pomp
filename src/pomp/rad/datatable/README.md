@@ -26,28 +26,33 @@ A server-rendered datatable component for Clojure web applications using Datasta
    {:id 2 :name "Bob" :email "bob@example.com" :role "User"}
    {:id 3 :name "Carol" :email "carol@example.com" :role "User"}])
 
-(def users-table-handler
-  (dt/make-handler {:query-fn (imq/query-fn users)
-                    :columns [{:key :name :label "Name" :type :text}
-                              {:key :email :label "Email" :type :text}
-                              {:key :role :label "Role" :type :enum}]
-                    :id "users-table"
-                    :data-url "/api/users"}))
+(def users-table-handlers
+  (let [{:keys [get post]}
+        (dt/make-handlers {:query-fn (imq/query-fn users)
+                           :columns [{:key :name :label "Name" :type :text}
+                                     {:key :email :label "Email" :type :text}
+                                     {:key :role :label "Role" :type :enum}]
+                           :id "users-table"
+                           :data-url "/api/users"})]
+    {:get get
+     :post post}))
 
 ;; Add to your routes
-;; ["/api/users" users-table-handler]
+;; ["/api/users" {:get (get users-table-handlers :get)
+;;                 :post (get users-table-handlers :post)}]
 ```
 
 ## API Reference
 
-### `make-handler`
+### `make-handlers`
 
-Creates a Ring handler for datatable data updates. Handles filtering, sorting, pagination, column visibility, and grouping.
+Creates method-specific Ring handlers for datatable data updates. Handles filtering, sorting, pagination, column visibility, and grouping.
 
 #### Signature
 
 ```clojure
-(make-handler opts) => (fn [request] ring-response)
+(make-handlers opts) => {:get (fn [request] ring-response)
+                         :post (fn [request] ring-response)}
 ```
 
 #### Required options
@@ -190,15 +195,15 @@ Complete example with inline editing and SQL persistence:
 
 (def execute! (fn [sqlvec] (jdbc/execute! my-ds sqlvec)))
 
-(def users-table-handler
-  (dt/make-handler
-    {:query-fn (sqlq/query-fn {:table-name "users"} execute!)
-     :save-fn (sqlq/save-fn {:table "users"} execute!)
-     :columns [{:key :name :label "Name" :type :text :editable true}
-               {:key :email :label "Email" :type :text :editable true}
-               {:key :role :label "Role" :type :enum}]
-     :id "users-table"
-     :data-url "/api/users"}))
+(def users-table-handlers
+  (dt/make-handlers
+   {:query-fn (sqlq/query-fn {:table-name "users"} execute!)
+    :save-fn (sqlq/save-fn {:table "users"} execute!)
+    :columns [{:key :name :label "Name" :type :text :editable true}
+              {:key :email :label "Email" :type :text :editable true}
+              {:key :role :label "Role" :type :enum}]
+    :id "users-table"
+    :data-url "/api/users"}))
 ```
 
 ### Editing behavior

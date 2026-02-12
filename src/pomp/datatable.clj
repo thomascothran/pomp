@@ -1,7 +1,7 @@
 (ns pomp.datatable
   "Main entry point for the datatable component.
 
-   Use `make-handler` to create a Ring handler for your datatable.
+   Use `make-handlers` to create method-specific Ring handlers for your datatable.
 
    For more control, you can require the sub-namespaces directly:
    - `pomp.rad.datatable.state.*` for state transition functions
@@ -138,7 +138,7 @@
     :or {page-sizes [10 25 100]
          selectable? false
          skeleton-rows 10}}
-   save-action?]
+   {:keys [save-action?]}]
   (fn [req]
     (let [query-params (:query-params req)
           raw-signals (get-signals req id)
@@ -241,16 +241,5 @@
    - :get always executes the query/render flow.
    - :post executes save flow when query-param action=save, otherwise query/render flow."
   [opts]
-  {:get (make-handler* opts (fn [_ _] false))
-   :post (make-handler* opts (fn [_ action] (= action "save")))})
-
-(defn make-handler
-  "Compatibility wrapper that returns a single handler function.
-
-   Preserves historical behavior where action=save routes through save flow."
-  [opts]
-  (let [{:keys [get post]} (make-handlers opts)]
-    (fn [req]
-      (if (= "save" (get-in req [:query-params "action"]))
-        (post req)
-        (get req)))))
+  {:get (make-handler* opts {:save-action? (constantly false)})
+   :post (make-handler* opts {:save-action? (fn [_ action] (= action "save"))})})
