@@ -19,3 +19,7 @@ dev-resources/public/output.css
 
 logs/
 resources/pomp-tailwind-classes.txt
+
+tmp/
+test-results/
+target/
