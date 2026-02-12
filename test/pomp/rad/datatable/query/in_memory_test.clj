@@ -248,6 +248,63 @@
                                nil)))
           "total-rows is count after filtering, before pagination"))))
 
+(def global-search-test-rows
+  [{:id 1 :name "Socrates" :school "Academy" :city "Athens"}
+   {:id 2 :name "Plato" :school "Stoa" :city "Athens"}
+   {:id 3 :name "Stoa Keeper" :school "Garden" :city "Sparta"}
+   {:id 4 :name "Zeno" :school "THE STOA" :city "Athens"}
+   {:id 5 :name "Aristotle" :school "Lyceum" :city "Athens"}])
+
+(def global-search-columns
+  [{:key :name :global-search? true}
+   {:key :school :global-search? true}
+   {:key :city}])
+
+(deftest query-fn-global-search-or-across-columns-test
+  (testing "global search matches case-insensitively across configured columns with OR semantics"
+    (let [qfn (query/query-fn global-search-test-rows)]
+      (is (= {:rows [{:id 2 :name "Plato" :school "Stoa" :city "Athens"}
+                     {:id 3 :name "Stoa Keeper" :school "Garden" :city "Sparta"}
+                     {:id 4 :name "Zeno" :school "THE STOA" :city "Athens"}]
+              :total-rows 3
+              :page {:size 10 :current 0}}
+             (qfn {:columns global-search-columns
+                   :search-string "  sToA  "
+                   :filters {}
+                   :sort [{:column "id" :direction "asc"}]
+                   :page {:size 10 :current 0}}
+                  nil))))))
+
+(deftest query-fn-global-search-short-input-test
+  (testing "trimmed global search input shorter than 2 characters does not narrow results"
+    (let [qfn (query/query-fn global-search-test-rows)
+          without-search (qfn {:columns global-search-columns
+                               :filters {}
+                               :sort [{:column "id" :direction "asc"}]
+                               :page {:size 10 :current 0}}
+                              nil)
+          short-search (qfn {:columns global-search-columns
+                             :search-string " a "
+                             :filters {}
+                             :sort [{:column "id" :direction "asc"}]
+                             :page {:size 10 :current 0}}
+                            nil)]
+      (is (= without-search short-search)))))
+
+(deftest query-fn-global-search-composes-with-query-flow-test
+  (testing "global search composes with filters, sorting, pagination, and filtered total count"
+    (let [qfn (query/query-fn global-search-test-rows)]
+      (is (= {:rows [{:id 2 :name "Plato" :school "Stoa" :city "Athens"}
+                     {:id 4 :name "Zeno" :school "THE STOA" :city "Athens"}]
+              :total-rows 2
+              :page {:size 2 :current 0}}
+             (qfn {:columns global-search-columns
+                   :search-string "stoa"
+                   :filters {:city [{:type "string" :op "equals" :value "athens"}]}
+                   :sort [{:column "name" :direction "asc"}]
+                   :page {:size 2 :current 0}}
+                  nil))))))
+
 ;; =============================================================================
 ;; Boolean Filter Tests
 ;; =============================================================================

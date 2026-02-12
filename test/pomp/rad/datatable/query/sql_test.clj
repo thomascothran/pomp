@@ -517,6 +517,82 @@
       ;; Second call is query
       (is (str/starts-with? (first (second @execute-calls)) "SELECT *")))))
 
+(def global-search-sql-columns
+  [{:key :name :global-search? true}
+   {:key :school :global-search? true}
+   {:key :region}])
+
+(deftest query-fn-global-search-portable-or-sql-test
+  (testing "global search uses portable LOWER/LIKE with OR across searchable columns"
+    (let [execute-calls (atom [])
+          execute! (fn [sqlvec]
+                     (swap! execute-calls conj sqlvec)
+                     (if (str/starts-with? (first sqlvec) "SELECT COUNT")
+                       [{:total 3}]
+                       mock-philosophers))
+          qfn (sql/query-fn {:table-name "philosophers"
+                             :columns global-search-sql-columns}
+                            execute!)]
+      (qfn {:columns global-search-sql-columns
+            :search-string "  sToA  "
+            :filters {}
+            :sort [{:column "id" :direction "asc"}]
+            :page {:size 10 :current 0}}
+           nil)
+      (let [[count-sql & count-params] (first @execute-calls)
+            [query-sql & query-params] (second @execute-calls)]
+        (is (re-find #"LOWER\(name\) LIKE \? OR LOWER\(school\) LIKE \?" count-sql))
+        (is (re-find #"LOWER\(name\) LIKE \? OR LOWER\(school\) LIKE \?" query-sql))
+        (is (not (re-find #"ILIKE" count-sql)))
+        (is (not (re-find #"ILIKE" query-sql)))
+        (is (= ["%stoa%" "%stoa%"] count-params))
+        (is (= ["%stoa%" "%stoa%" 10 0] query-params))))))
+
+(deftest query-fn-global-search-short-input-and-composition-test
+  (let [execute-calls (atom [])
+        execute! (fn [sqlvec]
+                   (swap! execute-calls conj sqlvec)
+                   (if (str/starts-with? (first sqlvec) "SELECT COUNT")
+                     [{:total 3}]
+                     mock-philosophers))
+        qfn (sql/query-fn {:table-name "philosophers"
+                           :columns global-search-sql-columns}
+                          execute!)]
+    (testing "trimmed global search shorter than 2 chars does not narrow results"
+      (qfn {:columns global-search-sql-columns
+            :search-string " a "
+            :filters {:region [{:type "string" :op "equals" :value "Greece"}]}
+            :sort [{:column "id" :direction "asc"}]
+            :page {:size 2 :current 0}}
+           nil)
+      (let [[count-sql & count-params] (first @execute-calls)
+            [query-sql & query-params] (second @execute-calls)]
+        (is (= "SELECT COUNT(*) AS total FROM philosophers WHERE LOWER(region) = ?" count-sql))
+        (is (= "SELECT * FROM philosophers WHERE LOWER(region) = ? ORDER BY id ASC LIMIT ? OFFSET ?" query-sql))
+        (is (= ["greece"] count-params))
+        (is (= ["greece" 2 0] query-params))))
+
+    (testing "global search composes with filters, sorting, pagination, and grouping"
+      (reset! execute-calls [])
+      (qfn {:columns global-search-sql-columns
+            :search-string "stoa"
+            :filters {:region [{:type "string" :op "equals" :value "Greece"}]}
+            :sort [{:column "school" :direction "asc"}]
+            :group-by [:school]
+            :page {:size 2 :current 0}}
+           nil)
+      (let [[count-sql & count-params] (first @execute-calls)
+            [group-values-sql & group-values-params] (second @execute-calls)]
+        (is (re-find #"COUNT\(DISTINCT school\)" count-sql))
+        (is (re-find #"LOWER\(region\) = \?" count-sql))
+        (is (re-find #"LOWER\(name\) LIKE \? OR LOWER\(school\) LIKE \?" count-sql))
+        (is (re-find #"SELECT DISTINCT school FROM philosophers" group-values-sql))
+        (is (re-find #"LOWER\(region\) = \?" group-values-sql))
+        (is (re-find #"LOWER\(name\) LIKE \? OR LOWER\(school\) LIKE \?" group-values-sql))
+        (is (re-find #"ORDER BY school ASC LIMIT \? OFFSET \?" group-values-sql))
+        (is (= ["greece" "%stoa%" "%stoa%"] count-params))
+        (is (= ["greece" "%stoa%" "%stoa%" 2 0] group-values-params))))))
+
 ;; =============================================================================
 ;; Integration with H2
 ;; =============================================================================
@@ -615,8 +691,37 @@
             mem-result (mem-qfn query-params nil)]
         (is (= (:total-rows sql-result) (:total-rows mem-result)))
         (is (= (:page sql-result) (:page mem-result)))
-        ;; Compare row contents (ids should match when sorted by id)
-        (is (= (map :id (:rows sql-result)) (map :id (:rows mem-result))))))))
+         ;; Compare row contents (ids should match when sorted by id)
+         (is (= (map :id (:rows sql-result)) (map :id (:rows mem-result))))))))
+
+(deftest h2-vs-in-memory-global-search-parity-test
+  (testing "SQL and in-memory stay equivalent for global search semantics"
+    (let [ds (jdbc/get-datasource h2-db)
+          rows [{:id 1 :name "Socrates" :century -5 :school "Academy" :region "Greece"}
+                {:id 2 :name "Plato" :century -4 :school "Stoa" :region "Greece"}
+                {:id 3 :name "Stoa Keeper" :century -3 :school "Garden" :region "Greece"}
+                {:id 4 :name "Zeno" :century -3 :school "THE STOA" :region "Greece"}
+                {:id 5 :name "Confucius" :century -5 :school "Confucianism" :region "China"}]
+          columns [{:key :name :global-search? true}
+                   {:key :school :global-search? true}
+                   {:key :region}]
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))]
+      (setup-h2-db ds)
+      (seed-h2-data! ds rows)
+      (let [sql-qfn (sql/query-fn {:table-name "philosophers"
+                                   :columns columns}
+                                  execute!)
+            mem-qfn (imq/query-fn rows)
+            query-params {:columns columns
+                          :search-string "  sToA  "
+                          :filters {:region [{:type "string" :op "equals" :value "Greece"}]}
+                          :sort [{:column "id" :direction "asc"}]
+                          :page {:size 2 :current 0}}
+            sql-result (sql-qfn query-params nil)
+            mem-result (mem-qfn query-params nil)]
+        (is (= (:total-rows sql-result) (:total-rows mem-result)))
+        (is (= (:page sql-result) (:page mem-result)))
+        (is (= (:rows sql-result) (:rows mem-result)))))))
 
 (deftest query-fn-grouped-pagination-test
   (testing "grouped pagination counts groups and keeps groups intact"

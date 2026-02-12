@@ -67,6 +67,43 @@
                                  nil)]
     (-> rows first :name)))
 
+(defn- expected-global-search-rows
+  [search-text]
+  (let [query-fn (:query-fn datatable/*state*)
+        {:keys [rows]} (query-fn {:columns (:columns datatable/*state*)
+                                  :search-string search-text
+                                  :filters {}
+                                  :sort []
+                                  :group-by []
+                                  :page {:size default-page-size :current 0}}
+                                 nil)]
+    rows))
+
+(defn- global-search-debounce-action
+  []
+  (e/js-execute browser/*driver*
+                (str "const inputs = Array.from(document.querySelectorAll('input'));"
+                     "const searchInput = inputs.find((input) => {"
+                     "  const debounce = input.getAttribute('data-on:input__debounce.300ms') || '';"
+                     "  return debounce.includes('action=global-search');"
+                     "});"
+                     "return searchInput ? searchInput.getAttribute('data-on:input__debounce.300ms') : null;")))
+
+(defn- fill-global-search!
+  [search-text]
+  (e/js-execute browser/*driver*
+                (str "const inputs = Array.from(document.querySelectorAll('input'));"
+                     "const searchInput = inputs.find((input) => {"
+                     "  const debounce = input.getAttribute('data-on:input__debounce.300ms') || '';"
+                     "  return debounce.includes('action=global-search');"
+                     "});"
+                     "if (!searchInput) { return false; }"
+                     "searchInput.focus();"
+                     "searchInput.value = arguments[0];"
+                     "searchInput.dispatchEvent(new Event('input', {bubbles: true}));"
+                     "return true;")
+                search-text))
+
 (deftest pagination-next-page-test
   (testing "next page updates the first row"
     (open-datatable!)
@@ -115,3 +152,39 @@
           "Expected first disabled on first page")
       (is (e/disabled? browser/*driver* prev-page-button)
           "Expected prev disabled on first page"))))
+
+(deftest pagination-global-search-resets-page-test
+  (testing "global search narrows results and resets pagination to first page"
+    (open-datatable!)
+    (let [search-text "Socrates"
+          second-page-first-name (expected-page-first-name 1)
+          expected-rows (expected-global-search-rows search-text)
+          expected-first-name (-> expected-rows first :name)]
+      (is (< (count expected-rows) default-page-size)
+          "Expected search fixture value to narrow visible rows")
+      (e/click browser/*driver* next-page-button)
+      (e/wait-has-text browser/*driver* first-name-cell second-page-first-name)
+      (is (not (e/disabled? browser/*driver* prev-page-button))
+          "Expected to be on a page greater than index 0 before searching")
+      (let [debounce-action (global-search-debounce-action)]
+        (is (string? debounce-action)
+            "Expected a global search input with a debounce action")
+        (when (string? debounce-action)
+          (is (clojure.string/includes? debounce-action "action=global-search")
+              "Expected global search input debounce action to post with action=global-search")
+          (is (true? (fill-global-search! search-text))
+              "Expected to fill global search input")
+          (is (= second-page-first-name (first-cell-text))
+              "Expected rows to remain unchanged immediately before debounce fires")
+          (is (not (e/disabled? browser/*driver* prev-page-button))
+              "Expected pagination controls to remain on current page before debounce fires")
+          (e/wait-predicate #(= (count expected-rows) (visible-row-count)))
+          (e/wait-has-text browser/*driver* first-name-cell expected-first-name)
+          (is (= expected-first-name (first-cell-text))
+              "Expected global search to narrow rows and show first matching result")
+          (is (= (count expected-rows) (visible-row-count))
+              "Expected visible rows to match global search query result count")
+          (is (e/disabled? browser/*driver* first-page-button)
+              "Expected first-page button disabled after page reset to index 0")
+          (is (e/disabled? browser/*driver* prev-page-button)
+              "Expected prev-page button disabled after page reset to index 0"))))))

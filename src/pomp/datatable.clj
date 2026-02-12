@@ -123,16 +123,17 @@
                       Used by the default render-row; ignored if :render-row is provided
                       unless the custom render-row chooses to use it.
    - :filter-operations - Override filter operations per type or column
-                          Map of type keyword to operations vector.
-                          Example: {:string [{:value \"contains\" :label \"Includes\"}]
-                                   :boolean [{:value \"is\" :label \"equals\"}]}
+                           Map of type keyword to operations vector.
+                           Example: {:string [{:value \"contains\" :label \"Includes\"}]
+                                    :boolean [{:value \"is\" :label \"equals\"}]}
+   - :render-table-search - Optional global search render function for table toolbar.
    - :save-fn       - Function to save cell edits. Called with {:row-id :col-key :value :req}.
                       See `pomp.rad.datatable.query.sql/save-fn` for SQL implementation.
 
    Returns a Ring handler function that handles datatable requests via SSE."
-  [{:keys [id columns query-fn data-url render-html-fn
+  [{:keys [id columns query-fn table-search-query data-url render-html-fn
            page-sizes selectable? skeleton-rows render-row render-header render-cell
-           filter-operations save-fn]
+           filter-operations render-table-search save-fn]
     :or {page-sizes [10 25 100]
          selectable? false
          skeleton-rows 10}}
@@ -167,10 +168,28 @@
               column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
               ordered-cols (column-state/reorder columns column-order)
               visible-cols (column-state/filter-visible ordered-cols columns-state)
-              {:keys [signals rows total-rows]} (state/query current-signals query-params req query-fn)
+              run-query-fn (if table-search-query
+                             (fn [query-signals request]
+                               (if (seq (:search-string query-signals))
+                                 (table-search-query (assoc query-signals :columns columns) request)
+                                 (query-fn query-signals request)))
+                             query-fn)
+              {:keys [signals rows total-rows]} (state/query current-signals query-params req run-query-fn)
               group-by (:group-by signals)
               groups (when (seq group-by) (group-state/group-rows rows group-by))
-              filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))]
+              filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))
+              table-signals-patch (cond-> {:sort (:sort signals)
+                                           :page (:page signals)
+                                           :filters filters-patch
+                                           :groupBy (mapv name group-by)
+                                           :openFilter ""
+                                           :columnOrder column-order
+                                           :dragging nil
+                                           :dragOver nil}
+                                    (or (= action "global-search")
+                                        (and table-search-query
+                                             (contains? current-signals :globalTableSearch)))
+                                    (assoc :globalTableSearch (:search-string signals)))]
           (->sse-response req
                           {on-open
                            (fn [sse]
@@ -181,14 +200,7 @@
                                                                                                :selectable? selectable?})))
                                (d*/execute-script! sse cell-select-script))
                              (d*/patch-signals! sse (json/write-str
-                                                     {:datatable {(keyword id) {:sort (:sort signals)
-                                                                                :page (:page signals)
-                                                                                :filters filters-patch
-                                                                                :groupBy (mapv name group-by)
-                                                                                :openFilter ""
-                                                                                :columnOrder column-order
-                                                                                :dragging nil
-                                                                                :dragOver nil}}}))
+                                                     {:datatable {(keyword id) table-signals-patch}}))
                              (d*/patch-elements! sse (render-html-fn (table/render {:id id
                                                                                     :cols visible-cols
                                                                                     :rows rows
@@ -206,6 +218,8 @@
                                                                                     :render-header render-header
                                                                                     :render-cell render-cell
                                                                                     :filter-operations filter-operations
+                                                                                    :render-table-search render-table-search
+                                                                                    :global-table-search (:search-string signals)
                                                                                     :toolbar (columns-menu/render {:cols ordered-cols
                                                                                                                    :columns-state columns-state
                                                                                                                    :table-id id

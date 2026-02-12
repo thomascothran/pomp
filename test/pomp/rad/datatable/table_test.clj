@@ -36,6 +36,22 @@
     (seq? hiccup)
     (some find-table-attrs hiccup)
 
+     :else nil))
+
+(defn- find-toolbar-node
+  "Finds the toolbar container div in rendered hiccup."
+  [hiccup]
+  (cond
+    (and (vector? hiccup)
+         (= :div.flex.items-center.px-2.py-1.border-b.border-base-300.bg-base-200 (first hiccup)))
+    hiccup
+
+    (vector? hiccup)
+    (some find-toolbar-node hiccup)
+
+    (seq? hiccup)
+    (some find-toolbar-node hiccup)
+
     :else nil))
 
 (defn- find-group-toggle-handler
@@ -238,6 +254,72 @@
           "Boolean column should have 'is' operation")
       (is (not (contains? active-ops "contains"))
           "Boolean column should NOT have 'contains' operation"))))
+
+(deftest table-render-toolbar-slots-test
+  (testing "renders toolbar left and right content in the same row"
+    (let [left [:div {:id "left-slot"} "search"]
+          right [:div {:id "right-slot"} "columns"]
+          result (table/render {:id "test-table"
+                                :cols [{:key :name :label "Name" :type :string}]
+                                :rows []
+                                :sort-state []
+                                :filters {}
+                                :total-rows 0
+                                :page-size 10
+                                :page-current 0
+                                :page-sizes [10 25]
+                                :data-url "/data"
+                                :toolbar-left left
+                                :toolbar-right right})
+          toolbar-node (find-toolbar-node result)
+          toolbar-attrs (second toolbar-node)
+          toolbar-children (drop 2 toolbar-node)
+          left-container (first toolbar-children)
+          right-container (second toolbar-children)]
+      (is (some? toolbar-node))
+      (is (= "space-between" (get-in toolbar-attrs [:style :justify-content])))
+      (is (= [:div.flex.items-center.gap-2 left] left-container))
+      (is (= [:div.flex.items-center.gap-2.ml-auto right] right-container))))
+
+  (testing "keeps legacy :toolbar content right aligned"
+    (let [legacy-toolbar [:button.btn.btn-sm "Columns"]
+          result (table/render {:id "test-table"
+                                :cols [{:key :name :label "Name" :type :string}]
+                                :rows []
+                                :sort-state []
+                                :filters {}
+                                :total-rows 0
+                                :page-size 10
+                                :page-current 0
+                                :page-sizes [10 25]
+                                :data-url "/data"
+                                :toolbar legacy-toolbar})
+          toolbar-node (find-toolbar-node result)
+          toolbar-children (drop 2 toolbar-node)
+          right-container (second toolbar-children)]
+      (is (some? toolbar-node))
+      (is (= [:div.flex.items-center.gap-2.ml-auto legacy-toolbar] right-container)))))
+
+(deftest table-render-passes-global-search-to-custom-renderer-test
+  (testing "custom table-search renderer receives current :global-table-search"
+    (let [renderer-ctx (atom nil)
+          result (table/render {:id "test-table"
+                                :cols [{:key :name :label "Name" :type :string}]
+                                :rows []
+                                :sort-state []
+                                :filters {}
+                                :total-rows 0
+                                :page-size 10
+                                :page-current 0
+                                :page-sizes [10 25]
+                                :data-url "/data"
+                                :global-table-search "Sto"
+                                :render-table-search (fn [ctx]
+                                                       (reset! renderer-ctx ctx)
+                                                       [:div {:id "custom-search"} "search"])})]
+      (is (some? result))
+      (is (= "Sto" (:global-table-search @renderer-ctx))
+          "Renderer context should include the current :global-table-search value"))))
 
 (deftest table-render-header-select-all-handler-targets-visible-row-signals-test
   (testing "table render passes visible row ids to header select-all signal writes"

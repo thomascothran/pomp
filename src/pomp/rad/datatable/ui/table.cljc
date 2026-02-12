@@ -1,7 +1,8 @@
 (ns pomp.rad.datatable.ui.table
   (:require [pomp.rad.datatable.ui.header :as header]
             [pomp.rad.datatable.ui.body :as body]
-            [pomp.rad.datatable.ui.pagination :as pagination]))
+            [pomp.rad.datatable.ui.pagination :as pagination]
+            [pomp.rad.datatable.ui.table-search :as table-search]))
 
 (defn render
   "Renders a complete datatable with header, body, and pagination.
@@ -25,7 +26,11 @@
    - :page-sizes   - Available page sizes [10 25 100]
    - :selectable?  - Enable row selection
    - :row-id-fn    - Function to get row ID (default: :id)
-   - :toolbar      - Toolbar hiccup to render above table
+   - :toolbar       - Legacy toolbar hiccup; renders in the right slot
+   - :toolbar-left  - Toolbar hiccup for left slot
+   - :toolbar-right - Toolbar hiccup for right slot
+   - :render-table-search - Optional search renderer fn:
+                          (fn [{:keys [data-url table-id global-table-search]}] hiccup)
 
    Render overrides:
    - :render-cell   - Custom cell render function. Receives:
@@ -44,26 +49,36 @@
                       {:cols [...] :sort-state [...] :filters {...} :data-url str
                        :selectable? bool :table-id str :group-by [...]}
                       See pomp.rad.datatable.ui.header/render-sortable for default."
-  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar render-row render-header render-cell filter-operations]}]
+  [{:keys [id cols rows groups sort-state filters group-by total-rows page-size page-current page-sizes data-url selectable? row-id-fn toolbar toolbar-left toolbar-right render-table-search global-table-search render-row render-header render-cell filter-operations]}]
   (let [row-id-fn (or row-id-fn :id)
+        default-toolbar-left (when render-table-search
+                               (render-table-search {:data-url data-url
+                                                     :table-id id
+                                                     :global-table-search global-table-search}))
+        toolbar-left-content (or toolbar-left default-toolbar-left)
+        toolbar-right-content (or toolbar-right toolbar)
+        show-toolbar? (or toolbar-left-content toolbar-right-content)
         visible-row-ids (if (seq groups)
                           (mapcat :row-ids groups)
                           (map row-id-fn rows))
         header-ctx {:cols cols
-                     :sort-state sort-state
-                     :filters filters
-                     :data-url data-url
-                     :selectable? selectable?
-                     :table-id id
-                     :group-by group-by
-                     :visible-row-ids visible-row-ids
-                     :filter-operations filter-operations}
+                    :sort-state sort-state
+                    :filters filters
+                    :data-url data-url
+                    :selectable? selectable?
+                    :table-id id
+                    :group-by group-by
+                    :visible-row-ids visible-row-ids
+                    :filter-operations filter-operations}
         render-header-fn (or render-header header/render-sortable)]
     [:div {:id id}
-     (when toolbar
+     (when show-toolbar?
        [:div.flex.items-center.px-2.py-1.border-b.border-base-300.bg-base-200
-        {:style {:justify-content "flex-end"}}
-        toolbar])
+        {:style {:justify-content (if toolbar-left-content "space-between" "flex-end")}}
+        [:div.flex.items-center.gap-2
+         toolbar-left-content]
+        [:div.flex.items-center.gap-2.ml-auto
+         toolbar-right-content]])
      [:div.overflow-x-auto
       [:table.table.table-sm
        {:data-class (str "{'select-none': $datatable." id "._cellSelectDragging}")
@@ -78,12 +93,12 @@
         :data-on:keydown__window (str "if (evt.key === 'Escape') { $datatable." id ".cellSelection = []; $datatable." id ".cellSelection = null } "
                                       "else { pompCellSelectCopy(evt, '" id "', $datatable." id ".cellSelection) }")}
        (render-header-fn header-ctx)
-        (body/render {:cols cols
-                      :rows rows
-                      :groups groups
-                      :group-by group-by
-                      :selectable? selectable?
-                      :row-id-fn row-id-fn
+       (body/render {:cols cols
+                     :rows rows
+                     :groups groups
+                     :group-by group-by
+                     :selectable? selectable?
+                     :row-id-fn row-id-fn
                      :table-id id
                      :data-url data-url
                      :render-row render-row
@@ -94,6 +109,10 @@
                          :filters filters
                          :page-sizes page-sizes
                          :data-url data-url})]))
+
+(defn default-render-table-search
+  [ctx]
+  (table-search/render-table-search ctx))
 
 (defn render-skeleton
   "Renders a loading skeleton for the datatable.

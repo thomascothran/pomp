@@ -53,6 +53,20 @@
                 nil))]
       (find-menu hiccup))))
 
+(defn- sse-response->string
+  "Renders an SSE Ring response body to a UTF-8 string."
+  [resp]
+  (let [out (java.io.ByteArrayOutputStream.)]
+    (.write_body_to_stream (:body resp) resp out)
+    (.toString out "UTF-8")))
+
+(defn- first-signals-payload
+  "Extracts the first datastar signal payload map from SSE text."
+  [sse-body]
+  (some-> (re-find #"data: signals (\{.*\})" sse-body)
+          second
+          (json/read-str {:key-fn keyword})))
+
 ;; =============================================================================
 ;; dt/render tests - filter-operations passthrough
 ;; This tests the public API that make-handler uses internally
@@ -133,6 +147,209 @@
       ;; Handler should be created successfully
       (is (fn? handler)
           "make-handler should return a function when :filter-operations is provided"))))
+
+(deftest make-handler-passes-render-table-search-to-table-render-test
+  (testing "make-handler forwards :render-table-search while preserving toolbar"
+    (let [render-opts (atom nil)
+          render-table-search (fn [_] [:div "search"])
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string}]
+                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn identity
+                                           :render-table-search render-table-search})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    table/render (fn [opts]
+                                   (reset! render-opts opts)
+                                   [:div])
+                    table/render-skeleton (fn [_] [:div])
+                    d*/patch-signals! (fn [& _])
+                    d*/patch-elements! (fn [& _])
+                    d*/execute-script! (fn [& _])
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {}})
+        (is (= render-table-search (:render-table-search @render-opts))
+            "table/render should receive :render-table-search")
+        (is (some? (:toolbar @render-opts))
+            "table/render should still receive :toolbar controls")))))
+
+(deftest make-handler-patches-global-table-search-signal-test
+  (testing "global search request patches dedicated :globalTableSearch signal"
+    (let [handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string}]
+                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn str})
+          resp (handler {:query-params {"action" "global-search"}
+                         :headers {"datastar-request" "true"}
+                         :body-params {:datatable {:test-table {:globalTableSearch "Stoa"}}}})
+          table-signals (-> resp
+                            sse-response->string
+                            first-signals-payload
+                            (get-in [:datatable :test-table]))]
+      (is (contains? table-signals :globalTableSearch)
+          "Handler response should patch datatable.<id>.globalTableSearch"))))
+
+(deftest make-handler-forwards-normalized-global-table-search-to-table-render-test
+  (testing "global-search request forwards normalized :global-table-search into table/render"
+    (let [handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string}]
+                                           :query-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn str
+                                           :render-table-search
+                                           (fn [{:keys [global-table-search]}]
+                                             [:span (str "GS=" global-table-search)])})
+          sse-body (-> (handler {:query-params {"action" "global-search"}
+                                 :headers {"datastar-request" "true"}
+                                 :body-params {:datatable {:test-table {:globalTableSearch "  Stoa  "}}}})
+                       sse-response->string)]
+      (is (re-find #"GS=Stoa" sse-body)
+          "table/render should receive normalized global search value via :global-table-search"))))
+
+(deftest make-handler-table-search-query-wiring-test
+  (testing "uses :table-search-query when provided"
+    (let [query-fn-calls (atom 0)
+          table-search-query-calls (atom [])
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string}]
+                                           :query-fn (fn [_ _]
+                                                       (swap! query-fn-calls inc)
+                                                       {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :table-search-query (fn [query-signals req]
+                                                                 (swap! table-search-query-calls conj {:query-signals query-signals
+                                                                                                        :req req})
+                                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn str})]
+      (handler {:query-params {"action" "global-search"}
+                :headers {"datastar-request" "true"}
+                :body-params {:datatable {:test-table {:globalTableSearch "Stoa"}}}})
+      (is (= 1 (count @table-search-query-calls))
+          "When provided, :table-search-query should run in query flow")
+      (is (zero? @query-fn-calls)
+          "When :table-search-query is provided, :query-fn should not be used for global search")))
+
+  (testing "uses :query-fn when :table-search-query is absent"
+    (let [query-fn-calls (atom 0)
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string}]
+                                           :query-fn (fn [_ _]
+                                                       (swap! query-fn-calls inc)
+                                                       {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn str})]
+      (handler {:query-params {"action" "global-search"}
+                :headers {"datastar-request" "true"}
+                :body-params {:datatable {:test-table {:globalTableSearch "Stoa"}}}})
+      (is (= 1 @query-fn-calls)
+          "Without :table-search-query, default :query-fn behavior should remain")))
+
+  (testing "non-global actions still compose through :table-search-query when global search is active"
+    (let [query-fn-calls (atom 0)
+          table-search-query-signals (atom nil)
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string}]
+                                           :query-fn (fn [query-signals _]
+                                                       (swap! query-fn-calls inc)
+                                                       {:rows [] :total-rows 0 :page (:page query-signals)})
+                                           :table-search-query (fn [query-signals _]
+                                                                 (reset! table-search-query-signals query-signals)
+                                                                 {:rows [] :total-rows 0 :page (:page query-signals)})
+                                           :data-url "/data"
+                                           :render-html-fn str})]
+      (handler {:query-params {"clicked" "name"}
+                :headers {"datastar-request" "true"}
+                :body-params {:datatable {:test-table {:globalTableSearch "  Stoa  "
+                                                       :page {:size 25 :current 2}}}}})
+      (is (some? @table-search-query-signals)
+          "When global search has a valid value, normal table actions should still use :table-search-query")
+      (is (zero? @query-fn-calls)
+          "When :table-search-query handles composed global search, :query-fn should not run")
+      (is (= "Stoa" (:search-string @table-search-query-signals))
+          "Composed query flow should normalize and forward the global search string")
+      (is (= [{:column "name" :direction "asc"}] (:sort @table-search-query-signals))
+          "Composed query flow should include non-global action state updates (sort)")))
+
+  (testing "non-global actions fall back to :query-fn when global search is blank or too short"
+    (let [query-fn-signals (atom nil)
+          table-search-query-calls (atom 0)
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string}]
+                                           :query-fn (fn [query-signals _]
+                                                       (reset! query-fn-signals query-signals)
+                                                       {:rows [] :total-rows 0 :page (:page query-signals)})
+                                           :table-search-query (fn [_ _]
+                                                                 (swap! table-search-query-calls inc)
+                                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn str})]
+      (handler {:query-params {"clicked" "name"}
+                :headers {"datastar-request" "true"}
+                :body-params {:datatable {:test-table {:globalTableSearch " a "
+                                                       :page {:size 10 :current 1}}}}})
+      (is (zero? @table-search-query-calls)
+          "Short global search should not force :table-search-query for normal actions")
+      (is (some? @query-fn-signals)
+          "Short global search should keep default query flow")
+      (is (= "" (:search-string @query-fn-signals))
+          "Fallback query flow should still normalize short global search to empty"))))
+
+(deftest make-handler-table-search-query-contract-payload-test
+  (testing ":table-search-query receives contract payload keys"
+    (let [captured-query-signals (atom nil)
+          columns [{:key :name :label "Name" :type :string}
+                   {:key :school :label "School" :type :enum}]
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns columns
+                                           :query-fn (fn [_ _]
+                                                       {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :table-search-query (fn [query-signals _]
+                                                                 (reset! captured-query-signals query-signals)
+                                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :data-url "/data"
+                                           :render-html-fn str})]
+      (handler {:query-params {"clicked" "name" "groupBy" "school"}
+                :headers {"datastar-request" "true"}
+                :body-params {:datatable {:test-table {:globalTableSearch "Stoa"
+                                                       :filters {}
+                                                       :page {:size 25 :current 1}}}}})
+      (is (map? @captured-query-signals)
+          "Expected :table-search-query to receive a query payload map")
+      (is (every? #(contains? @captured-query-signals %)
+                  [:columns :search-string :filters :sort :page :group-by])
+          "Payload contract must include :columns, :search-string, :filters, :sort, :page, and :group-by"))))
+
+(deftest make-handler-save-bypasses-query-flow-test
+  (testing "save action bypasses query flow even when :table-search-query is present"
+    (let [query-fn-calls (atom 0)
+          table-search-query-calls (atom 0)
+          save-calls (atom 0)
+          handler (datatable/make-handler {:id "test-table"
+                                           :columns [{:key :name :label "Name" :type :string :editable true}]
+                                           :query-fn (fn [_ _]
+                                                       (swap! query-fn-calls inc)
+                                                       {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :table-search-query (fn [_ _]
+                                                                 (swap! table-search-query-calls inc)
+                                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                           :save-fn (fn [_]
+                                                      (swap! save-calls inc)
+                                                      {:success true})
+                                           :data-url "/data"
+                                           :render-html-fn str})]
+      (handler {:query-params {"action" "save"}
+                :headers {"datastar-request" "true"}
+                :body-params {:datatable {:test-table {:cells {:123 {:name "Updated"}}}}}})
+      (is (= 1 @save-calls)
+          "Save action should still execute :save-fn")
+      (is (zero? @query-fn-calls)
+          "Save action should bypass default query flow")
+      (is (zero? @table-search-query-calls)
+          "Save action should bypass table-search query flow"))))
 
 ;; =============================================================================
 ;; make-handler tests - save-fn support

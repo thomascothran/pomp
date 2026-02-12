@@ -4,6 +4,7 @@
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as rs]
             [pomp.datatable :as datatable]
+            [pomp.rad.datatable.ui.table :as table]
             [pomp.rad.datatable.query.sql :as sqlq]))
 
 (defn format-century
@@ -22,9 +23,9 @@
     (str abs-n suffix era)))
 
 (def columns
-  [{:key :name :label "Name" :type :string :editable true}
+  [{:key :name :label "Name" :type :string :editable true :global-search? true}
    {:key :century :label "Century" :type :number :display-fn format-century :editable true}
-   {:key :school :label "School" :type :enum :groupable true :editable true
+   {:key :school :label "School" :type :enum :groupable true :editable true :global-search? true
     :options ["Classical Greek" "Platonism" "Peripatetic" "Confucianism" "Taoism"
               "Epicureanism" "Stoicism" "Christian Platonism" "Scholasticism"
               "Rationalism" "Empiricism" "German Idealism" "Existentialism"]}
@@ -144,14 +145,17 @@
   (let [ds (get-datasource)
         execute! (fn [sqlvec]
                    (jdbc/execute! ds sqlvec
-                                  {:builder-fn rs/as-unqualified-lower-maps}))]
+                                  {:builder-fn rs/as-unqualified-lower-maps}))
+        table-search-query (sqlq/query-fn {:table-name "philosophers"} execute!)]
     (datatable/make-handlers
      {:id "datatable"
       :columns columns
-      :query-fn (sqlq/query-fn {:table-name "philosophers"} execute!)
+      :query-fn table-search-query
+      :table-search-query table-search-query
       :save-fn (sqlq/save-fn {:table "philosophers"} execute!)
       :data-url datatable-component-url
       :render-html-fn ->html
+      :render-table-search table/default-render-table-search
       :page-sizes [10 25 100 250]
       :selectable? true})))
 

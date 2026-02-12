@@ -1,6 +1,6 @@
 (ns pomp.rad.datatable.query.sql
   "SQL query generator for datatable.
-   
+
    Generates ANSI-compliant SQL for filtering, sorting, and pagination.
    Designed for use with next.jdbc."
   (:require [clojure.string :as str]))
@@ -185,6 +185,39 @@
               params (mapcat rest clauses)]
           (into [(str "WHERE " (str/join " AND " sql-parts))] params))))))
 
+(defn- generate-global-search-clause
+  [config columns search-string]
+  (let [trimmed-search (some-> search-string str/trim)
+        searchable-cols (->> (or columns (:columns config))
+                             (filter :global-search?)
+                             (map :key))]
+    (when (and (not (str/blank? trimmed-search))
+               (>= (count trimmed-search) 2)
+               (seq searchable-cols))
+      (let [search-term (str/lower-case trimmed-search)
+            sql-parts (map #(str "LOWER(" (col-name config %) ") LIKE ?") searchable-cols)
+            params (map (fn [_] (str "%" search-term "%")) searchable-cols)]
+        (into [(str "(" (str/join " OR " sql-parts) ")")] params)))))
+
+(defn- combine-where-clauses
+  [filter-clause global-search-clause]
+  (let [drop-where-prefix (fn [s] (subs s (count "WHERE ")))]
+    (cond
+      (and filter-clause global-search-clause)
+      (into [(str "WHERE "
+                  (drop-where-prefix (first filter-clause))
+                  " AND "
+                  (first global-search-clause))]
+            (concat (rest filter-clause) (rest global-search-clause)))
+
+      filter-clause filter-clause
+
+      global-search-clause
+      (into [(str "WHERE " (first global-search-clause))]
+            (rest global-search-clause))
+
+      :else nil)))
+
 (defn generate-order-clause
   "Generates an ORDER BY clause from sort spec.
    Returns a string or nil if no sort."
@@ -213,12 +246,14 @@
 (defn generate-group-count-sql
   "Generates a COUNT DISTINCT query for grouped total rows.
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [filters group-by]}]
+  [config {:keys [columns filters group-by search-string]}]
   (let [group-key (first group-by)
         table-name (:table-name config)
         col (col-name config group-key)
         base-sql (str "SELECT COUNT(DISTINCT " col ") AS total FROM " table-name)
-        where-clause (generate-where-clause config filters)
+        where-clause (combine-where-clauses
+                      (generate-where-clause config filters)
+                      (generate-global-search-clause config columns search-string))
         sql (if where-clause
               (str base-sql " " (first where-clause))
               base-sql)
@@ -228,13 +263,15 @@
 (defn generate-group-values-sql
   "Generates a DISTINCT group value query for grouped pagination.
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [filters group-by sort page]}]
+  [config {:keys [columns filters group-by page search-string sort]}]
   (let [group-key (first group-by)
         table-name (:table-name config)
         col (col-name config group-key)
         dir (str/upper-case (or (group-sort-direction group-key sort) "asc"))
         base-sql (str "SELECT DISTINCT " col " FROM " table-name)
-        where-clause (generate-where-clause config filters)
+        where-clause (combine-where-clauses
+                      (generate-where-clause config filters)
+                      (generate-global-search-clause config columns search-string))
         order-clause (str "ORDER BY " col " " dir)
         limit-clause (generate-limit-clause page)
         sql-parts (cond-> [base-sql]
@@ -247,8 +284,10 @@
     (into [sql] params)))
 
 (defn- generate-grouped-where
-  [config filters group-key group-values]
-  (let [filter-clause (generate-where-clause config filters)
+  [config columns filters group-key group-values search-string]
+  (let [filter-clause (combine-where-clauses
+                       (generate-where-clause config filters)
+                       (generate-global-search-clause config columns search-string))
         filter-sql (when filter-clause
                      (subs (first filter-clause) (count "WHERE ")))
         filter-params (when filter-clause (rest filter-clause))
@@ -266,13 +305,13 @@
 (defn generate-grouped-query-sql
   "Generates a SELECT query for grouped rows based on group values.
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [filters group-by sort group-values]}]
+  [config {:keys [columns filters group-by group-values search-string sort]}]
   (let [group-key (first group-by)
         table-name (:table-name config)
         col (col-name config group-key)
         dir (str/upper-case (or (group-sort-direction group-key sort) "asc"))
         base-sql (str "SELECT * FROM " table-name)
-        [where-sql where-params] (generate-grouped-where config filters group-key group-values)
+        [where-sql where-params] (generate-grouped-where config columns filters group-key group-values search-string)
         order-clause (str "ORDER BY " col " " dir)
         sql-parts (cond-> [base-sql]
                     where-sql (conj where-sql)
@@ -283,10 +322,12 @@
 (defn generate-query-sql
   "Generates a complete SELECT query with filtering, sorting, and pagination.
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [filters sort page]}]
+  [config {:keys [columns filters page search-string sort]}]
   (let [table-name (:table-name config)
         base-sql (str "SELECT * FROM " table-name)
-        where-clause (generate-where-clause config filters)
+        where-clause (combine-where-clauses
+                      (generate-where-clause config filters)
+                      (generate-global-search-clause config columns search-string))
         order-clause (generate-order-clause config sort)
         limit-clause (generate-limit-clause page)
         ;; Build SQL string
@@ -303,10 +344,12 @@
 (defn generate-count-sql
   "Generates a COUNT query for total rows (after filtering).
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [filters]}]
+  [config {:keys [columns filters search-string]}]
   (let [table-name (:table-name config)
         base-sql (str "SELECT COUNT(*) AS total FROM " table-name)
-        where-clause (generate-where-clause config filters)
+        where-clause (combine-where-clauses
+                      (generate-where-clause config filters)
+                      (generate-global-search-clause config columns search-string))
         sql (if where-clause
               (str base-sql " " (first where-clause))
               base-sql)
@@ -315,17 +358,20 @@
 
 (defn query-fn
   "Creates a query function for SQL-backed datatable.
-   
+
    config: {:table-name \"table\" :column-map {...} :case-sensitive? false :columns [...]}
    execute!: (fn [sqlvec] rows) - executes SQL and returns rows
-   
+
    Returns a function with signature:
    (fn [{:keys [filters sort page]} request] {:rows [...] :total-rows n :page {...}})"
   [config execute!]
-  (fn [{:keys [filters page group-by] :as params} _request]
+  (fn [{:keys [columns filters page group-by search-string] :as params} _request]
     (if (seq group-by)
       (let [sort-spec (:sort params)
-            count-sql (generate-group-count-sql config {:filters filters :group-by group-by})
+            count-sql (generate-group-count-sql config {:columns columns
+                                                        :filters filters
+                                                        :group-by group-by
+                                                        :search-string search-string})
             total-groups (-> (execute! count-sql) first :total)
             size (:size page 10)
             total-pages (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
@@ -334,18 +380,22 @@
                               (nil? current) (max 0 (dec total-pages))
                               (>= current total-pages) (max 0 (dec total-pages))
                               :else current)
-            group-values-sql (generate-group-values-sql config {:filters filters
-                                                               :group-by group-by
-                                                               :sort sort-spec
-                                                               :page {:size size :current clamped-current}})
+            group-values-sql (generate-group-values-sql config {:columns columns
+                                                                :filters filters
+                                                                :group-by group-by
+                                                                :search-string search-string
+                                                                :sort sort-spec
+                                                                :page {:size size :current clamped-current}})
             group-key (first group-by)
             group-col-key (keyword (col-name config group-key))
             group-values (->> (execute! group-values-sql)
                               (map group-col-key)
                               vec)
             rows (if (seq group-values)
-                   (let [grouped-query-sql (generate-grouped-query-sql config {:filters filters
+                   (let [grouped-query-sql (generate-grouped-query-sql config {:columns columns
+                                                                               :filters filters
                                                                                :group-by group-by
+                                                                               :search-string search-string
                                                                                :sort sort-spec
                                                                                :group-values group-values})]
                      (execute! grouped-query-sql))
@@ -355,7 +405,9 @@
          :page {:size size :current clamped-current}})
       (let [sort-spec (:sort params)
             ;; Get total count first
-            count-sql (generate-count-sql config {:filters filters})
+            count-sql (generate-count-sql config {:columns columns
+                                                  :filters filters
+                                                  :search-string search-string})
             total-rows (-> (execute! count-sql) first :total)
             ;; Calculate page clamping (same logic as in-memory)
             size (:size page 10)
@@ -365,8 +417,10 @@
                               (nil? current) (max 0 (dec total-pages))
                               (>= current total-pages) (max 0 (dec total-pages))
                               :else current)
-            ;; Generate query with clamped page
-            query-sql (generate-query-sql config {:filters filters
+             ;; Generate query with clamped page
+            query-sql (generate-query-sql config {:columns columns
+                                                  :filters filters
+                                                  :search-string search-string
                                                   :sort sort-spec
                                                   :page {:size size :current clamped-current}})
             rows (execute! query-sql)]
@@ -376,16 +430,16 @@
 
 (defn save-fn
   "Creates a save function for cell edits.
-   
+
    config:
    - :table      - Table name (string)
    - :id-column  - Column to use for WHERE clause (default :id)
-   
+
    execute!: (fn [sqlvec] result) - executes SQL (same as query-fn)
-   
+
    Returns a function with signature:
    (fn [{:keys [row-id col-key value]}] {:success true})
-   
+
    Example:
      (def save! (save-fn {:table \"philosophers\"} execute!))
      (save! {:row-id 1 :col-key :name :value \"Socrates the Wise\"})"

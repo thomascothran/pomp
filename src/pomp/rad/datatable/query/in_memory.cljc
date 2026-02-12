@@ -116,8 +116,27 @@
                           rows)))
                     filtered-rows
                     filter-specs))
+           rows
+           filters))
+
+(defn- apply-global-search
+  [rows columns search-string]
+  (let [trimmed-search (some-> search-string str/trim)]
+    (if (or (str/blank? trimmed-search)
+            (< (count trimmed-search) 2))
+      rows
+      (let [search-term (str/lower-case trimmed-search)
+            searchable-cols (->> columns
+                                 (filter :global-search?)
+                                 (map :key))]
+        (if (empty? searchable-cols)
           rows
-          filters))
+          (filter (fn [row]
+                    (some (fn [col-key]
+                            (str/includes? (str/lower-case (str (or (get row col-key) "")))
+                                           search-term))
+                          searchable-cols))
+                  rows))))))
 
 (defn sort-data [rows sort-spec]
   (if (empty? sort-spec)
@@ -185,8 +204,9 @@
 
 (defn query-fn
   [rows]
-  (fn [{:keys [filters page group-by] :as params} _request]
-    (let [filtered (apply-filters rows filters)]
+  (fn [{:keys [columns filters page group-by search-string] :as params} _request]
+    (let [globally-filtered (apply-global-search rows columns search-string)
+          filtered (apply-filters globally-filtered filters)]
       (if (seq group-by)
         (grouped-page filtered params)
         (let [sorted (sort-data filtered (:sort params))
