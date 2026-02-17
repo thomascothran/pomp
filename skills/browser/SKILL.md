@@ -5,6 +5,9 @@ description: Control a browser programmatically. Use for integration testing, ma
 
 Control a browser with etaoin, a clojure library, using Clojure.
 
+Always start browser sessions with `e/with-chrome-headless` so WebDriver and Chromium processes are cleaned up automatically.
+Do not create a top-level `(def driver ...)` in examples.
+
 ## Getting Started
 
 An example at the REPL:
@@ -14,16 +17,16 @@ An example at the REPL:
          '[etaoin.keys :as k]
          '[clojure.string :as str])
 
-(def driver (e/chrome {:headless true}))
-(e/driver-type driver) ;; => :chrome
+(e/with-chrome-headless driver
+  (e/driver-type driver) ;; => :chrome
 
-(e/go driver "http://localhost:3000/demo/datatable")
+  (e/go driver "http://localhost:3000/demo/datatable")
 
-;; make sure we aren't using a large screen layout
-(e/set-window-size driver {:width 1280 :height 800})
+  ;; make sure we aren't using a large screen layout
+  (e/set-window-size driver {:width 1280 :height 800})
 
-;; wait for the search input to load
-(e/wait-visible driver [{:tag :input :name :search}])
+  ;; wait for the search input to load
+  (e/wait-visible driver [{:tag :input :name :search}]))
 ```
 
 

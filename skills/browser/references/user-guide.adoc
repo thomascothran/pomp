@@ -239,75 +239,72 @@ endif::[]
          '[etaoin.keys :as k]
          '[clojure.string :as str])
 
-;; Start WebDriver for Firefox
-(def driver (e/firefox)) ;; a Firefox window should appear
-(e/driver-type driver)
-;; => :firefox
+(e/with-chrome-headless driver
+  (e/driver-type driver)
+  ;; => :chrome
 
-;; let's perform a quick Wiki session
+  ;; let's perform a quick Wiki session
 
-;; navigate to Wikipedia
-(e/go driver "https://en.wikipedia.org/")
+  ;; navigate to Wikipedia
+  (e/go driver "https://en.wikipedia.org/")
 
-;; make sure we aren't using a large screen layout
-(e/set-window-size driver {:width 1280 :height 800})
+  ;; make sure we aren't using a large screen layout
+  (e/set-window-size driver {:width 1280 :height 800})
 
-;; wait for the search input to load
-(e/wait-visible driver [{:tag :input :name :search}])
+  ;; wait for the search input to load
+  (e/wait-visible driver [{:tag :input :name :search}])
 
-;; search for something interesting
-(e/fill driver {:tag :input :name :search} "Clojure programming language")
-(e/wait driver 1)
+  ;; search for something interesting
+  (e/fill driver {:tag :input :name :search} "Clojure programming language")
+  (e/wait driver 1)
 
-;; select first match presented in drop down
-(e/fill driver {:tag :input :name :search} k/arrow-down)
-(e/fill driver {:tag :input :name :search} k/enter)
+  ;; select first match presented in drop down
+  (e/fill driver {:tag :input :name :search} k/arrow-down)
+  (e/fill driver {:tag :input :name :search} k/enter)
 
-(e/wait-visible driver {:id :firstHeading})
+  (e/wait-visible driver {:id :firstHeading})
 
-;; check our new url location
-;; (wikipedia can tack on a querystring, for result consistency we'll ignore it)
-(-> (e/get-url driver) (str/split #"\?") first)
-;; => "https://en.wikipedia.org/wiki/Clojure"
+  ;; check our new url location
+  ;; (wikipedia can tack on a querystring, for result consistency we'll ignore it)
+  (-> (e/get-url driver) (str/split #"\?") first)
+  ;; => "https://en.wikipedia.org/wiki/Clojure"
 
-;; and our new title
-(e/get-title driver)
-;; => "Clojure - Wikipedia"
+  ;; and our new title
+  (e/get-title driver)
+  ;; => "Clojure - Wikipedia"
 
-;; does the page have Clojure in it?
-(e/has-text? driver "Clojure")
-;; => true
+  ;; does the page have Clojure in it?
+  (e/has-text? driver "Clojure")
+  ;; => true
 
-;; navigate through history
-(e/back driver)
-(e/forward driver)
-(e/refresh driver)
-(e/get-title driver)
-;; => "Clojure - Wikipedia"
+  ;; navigate through history
+  (e/back driver)
+  (e/forward driver)
+  (e/refresh driver)
+  (e/get-title driver)
+  ;; => "Clojure - Wikipedia"
 
-;; let's explore the info box
-;; What's header? Let's select it with a css query:
-(e/get-element-text driver {:css "table.infobox tr th"})
-;; => "Clojure"
+  ;; let's explore the info box
+  ;; What's header? Let's select it with a css query:
+  (e/get-element-text driver {:css "table.infobox tr th"})
+  ;; => "Clojure"
 
-;; Ok, now let's try something trickier
-;; Maybe we are interested in what value the infobox holds for the Family row:
-(let [wikitable (e/query driver {:css "table.infobox.vevent tbody"})
-      row-els (e/query-all-from driver wikitable {:tag :tr})]
-  (for [row row-els
-        :let [header-col-text (e/with-http-error
-                                (e/get-element-text-el driver
-                                                       (e/query-from driver row {:tag :th})))]
-        :when (= "Family" header-col-text)]
-    (e/get-element-text-el driver (e/query-from driver row {:tag :td}))))
-;; => ("Lisp")
+  ;; Ok, now let's try something trickier
+  ;; Maybe we are interested in what value the infobox holds for the Family row:
+  (let [wikitable (e/query driver {:css "table.infobox.vevent tbody"})
+        row-els (e/query-all-from driver wikitable {:tag :tr})]
+    (for [row row-els
+          :let [header-col-text (e/with-http-error
+                                  (e/get-element-text-el driver
+                                                         (e/query-from driver row {:tag :th})))]
+          :when (= "Family" header-col-text)]
+      (e/get-element-text-el driver (e/query-from driver row {:tag :td}))))
+  ;; => ("Lisp")
 
-;; Etaoin gives you many options; we can do the same-ish in one swoop in XPath:
-(e/get-element-text driver "//table[@class='infobox vevent']/tbody/tr/th[text()='Family']/../td")
-;; => "Lisp"
-
-;; When we are done, we quit, which stops the Firefox WebDriver
-(e/quit driver) ;; the Firefox Window should close
+  ;; Etaoin gives you many options; we can do the same-ish in one swoop in XPath:
+  (e/get-element-text driver "//table[@class='infobox vevent']/tbody/tr/th[text()='Family']/../td")
+  ;; => "Lisp"
+  )
 ----
 
 Most api functions require the driver as the first argument.
@@ -319,19 +316,17 @@ A portion of the above rewritten with `doto`:
 (require '[etaoin.api :as e]
          '[etaoin.keys :as k])
 
-(def driver (e/firefox))
-
-(doto driver
-  (e/go "https://en.wikipedia.org/")
-  (e/set-window-size {:width 1280 :height 800})
-  (e/wait-visible [{:tag :input :name :search}])
-  (e/fill {:tag :input :name :search} "Clojure programming language")
-  (e/wait 1)
-  (e/fill {:tag :input :name :search} k/enter)
-  (e/wait-visible {:class :mw-search-results})
-  (e/click [{:class :mw-search-results} {:class :mw-search-result-heading} {:tag :a}])
-  (e/wait-visible {:id :firstHeading})
-  (e/quit))
+(e/with-chrome-headless driver
+  (doto driver
+    (e/go "https://en.wikipedia.org/")
+    (e/set-window-size {:width 1280 :height 800})
+    (e/wait-visible [{:tag :input :name :search}])
+    (e/fill {:tag :input :name :search} "Clojure programming language")
+    (e/wait 1)
+    (e/fill {:tag :input :name :search} k/enter)
+    (e/wait-visible {:class :mw-search-results})
+    (e/click [{:class :mw-search-results} {:class :mw-search-result-heading} {:tag :a}])
+    (e/wait-visible {:id :firstHeading})))
 ----
 
 == Playing Along in your REPL
@@ -352,8 +347,10 @@ Unless otherwise directed, our examples throughout the rest of this guide will a
 
 (def sample-page (-> "doc/user-guide-sample.html" io/file .toURI str))
 
-(def driver (e/chrome)) ;; or replace chrome with your preference
-(e/go driver sample-page)
+(e/with-chrome-headless driver
+  (e/go driver sample-page)
+  ;; run the rest of the examples in this body
+  )
 ----
 
 == More Getting Started
@@ -387,11 +384,11 @@ into:
 ----
 
 If any exception occurs during a browser session, the WebDriver process might hang around until you kill it manually.
-To prevent that, we recommend the `with-<browser>` macros:
+To prevent that, this guide standardizes on `with-chrome-headless`:
 
 [source,clojure]
 ----
-(e/with-firefox driver
+(e/with-chrome-headless driver
   (doto driver
     (e/go "https://google.com")
     ;; ... your code here
@@ -410,9 +407,9 @@ In addition to these docs, the link:{url-tests}[Etaoin api tests] are also a goo
 
 Etaoin provides many ways to create a WebDriver instance.
 
-TIP: As mentioned, we recommend the `with-<browser>` convention when you need proper cleanup.
+TIP: In this guide, use `with-chrome-headless` for examples so cleanup always happens.
 
-Let's say we want to create a chrome headless driver:
+Let's say we want to create a chrome headless driver safely:
 
 // let's not pollute our main test-doc-block ns with these driver vars:
 //{:test-doc-blocks/test-ns user-guide-driver-creation-test}
@@ -420,34 +417,25 @@ Let's say we want to create a chrome headless driver:
 ----
 (require '[etaoin.api :as e])
 
-;; at the base we have:
-(def driver (e/boot-driver :chrome {:headless true}))
-;; do stuff
-(e/quit driver)
+(e/with-chrome-headless driver
+  ;; do stuff
+  )
 
-;; This can also be expressed as:
-(def driver (e/chrome {:headless true}))
-;; do stuff
-(e/quit driver)
-
-;; Or...
-(def driver (e/chrome-headless))
-;; do stuff
-(e/quit driver)
+;; with additional options:
+(e/with-chrome-headless {:args ["--window-size=1280,800"]} driver
+  ;; do stuff
+  )
 ----
 
-The `with-<browser>` functions handle cleanup nicely:
+The `with-chrome-headless` function handles cleanup nicely:
 
 [source,clojure]
 ----
-(e/with-chrome {:headless true} driver
-  (e/go driver "https://clojure.org"))
-
 (e/with-chrome-headless driver
   (e/go driver "https://clojure.org"))
 ----
 
-Replace `chrome` with `firefox`, `edge` or `safari` for other variants.
+Use this pattern for browser sessions in this skill.
 See link:{url-doc}[API docs] for details.
 
 See <<driver-options>> for all options available when creating a driver.
@@ -1005,24 +993,16 @@ You can collect elements into a vector and arbitrarily interact with them at any
 Some basic interactions are covered under <<querying>>, here we go into other types of interactions and more detail.
 
 === UNICODE and Emojis
-As of this writing, Chrome, and Edge https://bugs.chromium.org/p/chromedriver/issues/detail?id=2269[only support] filling inputs with UNICODE in the https://en.wikipedia.org/wiki/Plane_(Unicode)#Basic_Multilingual_Plane[Basic Multilingual Plane].
-This includes many characters but not many emojis 😢.
-
-Firefox and Safari seem to support UNICODE more generally 🙂.
+As of this writing, Chrome and Edge https://bugs.chromium.org/p/chromedriver/issues/detail?id=2269[only support] filling inputs with UNICODE in the https://en.wikipedia.org/wiki/Plane_(Unicode)#Basic_Multilingual_Plane[Basic Multilingual Plane].
+This includes many characters but not many emojis.
 
 [source,clojure]
 ----
-(e/with-chrome driver
+(e/with-chrome-headless driver
   (e/go driver sample-page)
   (e/fill driver :uname "ⱾⱺⱮⱸ ᢹⓂ Ᵽ")
   (e/get-element-value driver :uname))
 ;; => "ⱾⱺⱮⱸ ᢹⓂ Ᵽ"
-
-(e/with-firefox driver
-  (e/go driver sample-page)
-  (e/fill driver :uname "ⱾⱺⱮⱸ ᢹⓂ Ᵽ plus 👍🔥🙂")
-  (e/get-element-value driver :uname))
-;; => "ⱾⱺⱮⱸ ᢹⓂ Ᵽ plus 👍🔥🙂"
 ----
 
 === Emulate how a Real Person Might Type
@@ -1568,7 +1548,7 @@ For example, the default `:normal` strategy:
 
 [source,clojure]
 ----
-(e/with-chrome driver
+(e/with-chrome-headless driver
   (e/go driver sample-page)
   ;; by default you'll hang on this line until the page loads
   ;; (do-something)
@@ -1579,7 +1559,7 @@ Load strategy option of `:none`:
 
 [source,clojure]
 ----
-(e/with-chrome {:load-strategy :none} driver
+(e/with-chrome-headless {:load-strategy :none} driver
   (e/go driver sample-page)
   ;; no pause, no waiting, acts immediately
   ;; (do-something)
@@ -1759,7 +1739,7 @@ Use `print-page` to print the current page to a PDF file:
 
 [source,clojure]
 ----
-(e/with-firefox-headless driver
+(e/with-chrome-headless driver
   (e/go driver sample-page)
   (e/print-page driver "target/etaoin-play/printed.pdf"))
 ----
@@ -1784,7 +1764,7 @@ Here we use Etaoin's `execute` function to ask Chrome to do this:
 
 [source,clojure]
 ----
-(e/with-chrome driver
+(e/with-chrome-headless driver
   ;; navigate to our sample page
   (e/go driver sample-page)
   ;; send the Chrome-specific request for a transparent background
@@ -1838,7 +1818,7 @@ To start a driver with devtools support enabled, specify a `:dev` map.
 ----
 (require '[etaoin.api :as e])
 
-(e/with-chrome driver {:dev {}}
+(e/with-chrome-headless {:dev {}} driver
   ;; do some stuff
 )
 ----
@@ -1863,15 +1843,18 @@ We'll work with a driver that enables everything:
 ----
 (require '[etaoin.api :as e])
 
-(def driver (e/chrome {:dev
-                       {:perf
-                        {:level :all
-                         :network? true
-                         :page? true
-                         :interval 1000
-                         :categories [:devtools
-                                      :devtools.network
-                                      :devtools.timeline]}}}))
+(e/with-chrome-headless {:dev
+                         {:perf
+                          {:level :all
+                           :network? true
+                           :page? true
+                           :interval 1000
+                           :categories [:devtools
+                                        :devtools.network
+                                        :devtools.timeline]}}}
+                        driver
+  ;; do stuff
+  )
 ----
 
 Under the hood, Etaoin sets up a special `perfLoggingPrefs` dictionary inside the `chromeOptions` object.
@@ -1883,28 +1866,38 @@ The results will be different when you try this, but here's what I experienced:
 //{:test-doc-blocks/test-ns user-guide-devtools-test}
 [source,clojure]
 ----
-(require '[etaoin.dev :as dev])
+(require '[etaoin.api :as e]
+         '[etaoin.dev :as dev])
 
-(e/go driver "https://google.com")
+(e/with-chrome-headless {:dev {:perf {:level :all
+                                      :network? true
+                                      :page? true
+                                      :interval 1000
+                                      :categories [:devtools
+                                                   :devtools.network
+                                                   :devtools.timeline]}}}
+                        driver
+  (e/go driver "https://google.com")
 
-(def reqs (dev/get-requests driver))
+  (def reqs (dev/get-requests driver))
 
-;; reqs is a vector of maps
-(count reqs)
-;; 23
+  ;; reqs is a vector of maps
+  (count reqs)
+  ;; 23
 
-;; what were the request types?
-(frequencies (map :type reqs))
-;; {:script 6,
-;;  :other 2,
-;;  :xhr 4,
-;;  :image 5,
-;;  :stylesheet 1,
-;;  :ping 3,
-;;  :document 1,
-;;  :manifest 1}
+  ;; what were the request types?
+  (frequencies (map :type reqs))
+  ;; {:script 6,
+  ;;  :other 2,
+  ;;  :xhr 4,
+  ;;  :image 5,
+  ;;  :stylesheet 1,
+  ;;  :ping 3,
+  ;;  :document 1,
+  ;;  :manifest 1}
 
-;; Interesting, we've got Js requests, images, AJAX and other stuff
+  ;; Interesting, we've got Js requests, images, AJAX and other stuff
+  )
 ----
 
 //{:test-doc-blocks/test-ns user-guide-devtools-test}
@@ -2147,14 +2140,7 @@ The maps have many keys, and the number of items in collections can be large.
 Printing a slew of events might freeze your editor.
 Consider using `clojure.pprint/pprint` as it relies on max level and length limits.
 
-// hidden cleanup of our devtools driver
-ifdef::env-test-doc-blocks[]
-//{:test-doc-blocks/test-ns user-guide-devtools-test}
-[source,clojure]
-----
-(e/quit driver)
-----
-endif::[]
+// Cleanup is handled by with-chrome-headless in examples above.
 
 === Postmortem: Auto-save Artifacts in Case of Exception [[postmortem]]
 
@@ -2219,7 +2205,9 @@ Here, for example, we set an explicit path to the chrome *WebDriver* binary:
 //:test-doc-blocks/skip
 [source,clojure]
 ----
-(def driver (e/chrome {:path-driver "/Users/ivan/downloads/chromedriver"}))
+(e/with-chrome-headless {:path-driver "/Users/ivan/downloads/chromedriver"} driver
+  ;; do stuff
+  )
 ----
 [id=opt-host,refext=`:host`]
 === `:host` for WebDriver
@@ -2515,9 +2503,9 @@ This flag is ignored for Safari, which, as of August 2024, still does not suppor
 ----
 (require '[etaoin.api :as e])
 
-(def driver (e/chrome {:headless true})) ;; runs headless Chrome
-;; do some stuff
-(e/quit driver)
+(e/with-chrome-headless driver
+  ;; do some stuff
+  )
 ----
 
 or
@@ -2525,12 +2513,11 @@ or
 //{:test-doc-blocks/test-ns user-guide-headless-test}
 [source,clojure]
 ----
-(def driver (e/firefox {:headless true})) ;; runs headless Firefox
-;; you can also check if a driver is in headless mode:
-(e/headless? driver)
-;; => true
-(e/wait 1) ;; seems to appease Firefox on Linux
-(e/quit driver)
+(e/with-chrome-headless driver
+  ;; you can also check if a driver is in headless mode:
+  (e/headless? driver)
+  ;; => true
+  )
 ----
 
 There are several shortcuts to run Chrome or Firefox in headless mode:
@@ -2538,24 +2525,13 @@ There are several shortcuts to run Chrome or Firefox in headless mode:
 //{:test-doc-blocks/test-ns user-guide-headless-test}
 [source,clojure]
 ----
-(def driver (e/chrome-headless))
-;; do some stuff
-(e/quit driver)
-
-;; or
-
-(def driver (e/firefox-headless {:log-level :all})) ;; with extra settings
-;; do some stuff
-(e/quit driver)
-
-;; or
-
 (require '[etaoin.api :as e])
 
 (e/with-chrome-headless driver
   (e/go driver "https://clojure.org"))
 
-(e/with-firefox-headless {:log-level :all} driver ;; notice extra settings
+;; with extra settings
+(e/with-chrome-headless {:log-level :all} driver
   (e/go driver "https://clojure.org"))
 ----
 
@@ -2564,7 +2540,7 @@ There are also the `when-headless` and `when-not-headless` macros that condition
 //{:test-doc-blocks/test-ns user-guide-headless-test}
 [source,clojure]
 ----
-(e/with-chrome driver
+(e/with-chrome-headless driver
   (e/when-not-headless driver
     ;;... some actions that might not be available in headless mode
     )
@@ -2579,9 +2555,9 @@ To specify a directory where the browser should download files, use the `:downlo
 //:test-doc-blocks/skip
 [source,clojure]
 ----
-(def driver (e/chrome {:download-dir "target/etaoin-play/chrome-downloads"}))
-;; do some downloading
-(e/driver quit)
+(e/with-chrome-headless {:download-dir "target/etaoin-play/chrome-downloads"} driver
+  ;; do some downloading
+  )
 ----
 
 Now, when you click on a download link, the file will be saved to that folder.
@@ -2594,11 +2570,12 @@ If you need to add your own one, override that Firefox preference manually via t
 //:test-doc-blocks/skip
 [source,clojure]
 ----
-(def driver (e/firefox {:download-dir "target/etaoin-play/firefox-downloads"
-                        :prefs {:browser.helperApps.neverAsk.saveToDisk
-                                "some-mime/type-1;other-mime/type-2"}}))
-;; do some downloading
-(e/driver quit)
+(e/with-chrome-headless {:download-dir "target/etaoin-play/firefox-downloads"
+                         :prefs {:browser.helperApps.neverAsk.saveToDisk
+                                 "some-mime/type-1;other-mime/type-2"}}
+                        driver
+  ;; do some downloading
+  )
 ----
 
 To check whether a file was downloaded during UI tests, see <<test-file-downloads>>.
@@ -2609,9 +2586,8 @@ Set a custom `User-Agent` header with the `:user-agent` option when creating a d
 
 [source,clojure]
 ----
-(e/with-firefox {:user-agent "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)"}
-                driver
-  (e/wait 1) ;; seems to appease Firefox on Linux
+(e/with-chrome-headless {:user-agent "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)"}
+                        driver
   (e/get-user-agent driver))
 ;; => "Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1)"
 ----
@@ -2634,8 +2610,11 @@ To set proxy settings use environment variables `HTTP_PROXY`/`HTTPS_PROXY` or pa
          :pac-url "localhost:8888"}}
 
 ;; example
-(e/chrome {:proxy {:http "some.proxy.com:8080"
-                   :ssl "some.proxy.com:8080"}})
+(e/with-chrome-headless {:proxy {:http "some.proxy.com:8080"
+                                 :ssl "some.proxy.com:8080"}}
+                        driver
+  ;; do stuff
+  )
 ----
 
 NOTE: A `:pac-url` is for a https://en.wikipedia.org/wiki/Proxy_auto-config#The_PAC_File[proxy autoconfiguration file].
@@ -2646,16 +2625,19 @@ To fine-tune the proxy you use the original https://www.w3.org/TR/webdriver/#pro
 //:test-doc-blocks/skip
 [source,clojure]
 ----
-(e/chrome {:capabilities
-           {:proxy
-            {:proxyType "manual"
-             :proxyAutoconfigUrl "some.proxy.com:8080"
-             :ftpProxy "some.proxy.com:8080"
-             :httpProxy "some.proxy.com:8080"
-             :noProxy ["http://this.url" "http://that.url"]
-             :sslProxy "some.proxy.com:8080"
-             :socksProxy "some.proxy.com:1080"
-             :socksVersion 5}}})
+(e/with-chrome-headless {:capabilities
+                         {:proxy
+                          {:proxyType "manual"
+                           :proxyAutoconfigUrl "some.proxy.com:8080"
+                           :ftpProxy "some.proxy.com:8080"
+                           :httpProxy "some.proxy.com:8080"
+                           :noProxy ["http://this.url" "http://that.url"]
+                           :sslProxy "some.proxy.com:8080"
+                           :socksProxy "some.proxy.com:1080"
+                           :socksVersion 5}}}
+                        driver
+  ;; do stuff
+  )
 ----
 === Connecting to an Existing Running WebDriver [[connecting-existing]]
 
@@ -2674,17 +2656,16 @@ Example:
 [source,clojure]
 ----
 ;; Connect to an existing chromedriver process on localhost on port 9515
-(def driver (e/chrome {:host "127.0.0.1" :port 9515})) ;; for connection to driver on localhost on port 9515
-
-;; Connect to an existing geckodriver process on remote most on default port
-(def driver (e/firefox {:host "192.168.1.11"})) ;; the default port for firefox is 4444
+(e/with-chrome-headless {:host "127.0.0.1" :port 9515} driver
+  ;; do stuff
+  ) ;; for connection to driver on localhost on port 9515
 
 ;; Connect to a chrome instance on browserless.io via :webdriver-url
 ;; (replace YOUR-API-TOKEN with a valid browserless.io api token if you want to try this out)
-(e/with-chrome {:webdriver-url "https://chrome.browserless.io/webdriver"
-                :capabilities {"browserless:token" "YOUR-API-TOKEN"
-                               "chromeOptions" {"args" ["--no-sandbox"]}}}
-               driver
+(e/with-chrome-headless {:webdriver-url "https://chrome.browserless.io/webdriver"
+                         :capabilities {"browserless:token" "YOUR-API-TOKEN"
+                                        "chromeOptions" {"args" ["--no-sandbox"]}}}
+                        driver
   (e/go driver "https://en.wikipedia.org/")
   (e/wait-visible driver [{:id :simpleSearch} {:tag :input :name :search}])
   (e/fill driver {:tag :input :name :search} "Clojure programming language")
@@ -2735,13 +2716,17 @@ Once you've got a profile path, launch a driver with the `:profile` key as follo
 (def chrome-profile
   "/Users/ivan/Library/Application Support/Google/Chrome/Profile 2/Default")
 
-(def chrome-driver (e/chrome {:profile chrome-profile}))
+(e/with-chrome-headless {:profile chrome-profile} chrome-driver
+  ;; do stuff
+  )
 
 ;; Firefox
 (def ff-profile
   "/Users/ivan/Library/Application Support/Firefox/Profiles/iy4iitbg.Test")
 
-(def firefox-driver (e/firefox {:profile ff-profile}))
+(e/with-chrome-headless {:profile ff-profile} firefox-driver
+  ;; do stuff
+  )
 ----
 
 == Writing and Running Integration Tests For Your Application
@@ -2811,7 +2796,7 @@ A dynamic `+*driver*+` var might be used to hold the driver.
   "Executes a test running a driver. Bounds a driver
    with the global *driver* variable."
   [f]
-  (e/with-chrome [driver]
+  (e/with-chrome-headless driver
     (binding [*driver* driver]
       (f))))
 
@@ -3026,16 +3011,16 @@ Example:
 
 ;; Top-level declarations
 (def DL-DIR "/Users/ivan/Desktop")
-(def driver (e/chrome {:download-dir DL-DIR}))
 
-;; Later, in tests...
-(e/click-visible driver :download-that-application)
-(e/wait driver 7) ;; wait for a file has been downloaded
+(e/with-chrome-headless {:download-dir DL-DIR} driver
+  ;; Later, in tests...
+  (e/click-visible driver :download-that-application)
+  (e/wait driver 7) ;; wait for a file has been downloaded
 
-;; Now, scan the directory and try to find a file:
-(let [files (file-seq (io/file DL-DIR))
-      found (some xlsx? files)]
-  (is found (format "No *.xlsx file found in %s directory." DL-DIR)))
+  ;; Now, scan the directory and try to find a file:
+  (let [files (file-seq (io/file DL-DIR))
+        found (some xlsx? files)]
+    (is found (format "No *.xlsx file found in %s directory." DL-DIR))))
 ----
 
 == Running Selenium IDE files [[selenium-ide]]
@@ -3056,8 +3041,6 @@ Now that you have a `test.side` file, you could do something like this:
 (require '[clojure.java.io :as io]
          '[etaoin.api :as e]
          '[etaoin.ide.flow :as flow])
-
-(def driver (e/chrome))
 
 (def ide-file (io/resource "ide/test.side"))
 
@@ -3084,7 +3067,8 @@ Now that you have a `test.side` file, you could do something like this:
      :suite-ids   [...]
      :suite-names [...]})
 
-(flow/run-ide-script driver ide-file opt)
+(e/with-chrome-headless driver
+  (flow/run-ide-script driver ide-file opt))
 ----
 
 Everything related to the IDE feature can be found under the link:{url-doc}/CURRENT/api/etaoin.ide[etaoin.ide] namespace.
@@ -3159,8 +3143,9 @@ If the port is not specified, the <<driver-options,default>> port is set.
 //:test-doc-blocks/skip
 [source,clojure]
 ----
-(def driver (e/chrome-headless {:host "localhost" :port 9515 :args ["--no-sandbox"]}))
-(def driver (e/firefox-headless {:host "localhost"})) ;; will try to connect to port 4444
+(e/with-chrome-headless {:host "localhost" :port 9515 :args ["--no-sandbox"]} driver
+  ;; do stuff
+  )
 ----
 
 == Troubleshooting [[troubleshooting]]
@@ -3178,7 +3163,7 @@ Reproduction:: For example, `chromedriver` used to throw an error when calling `
 +
 [source,clojure]
 ----
-(e/with-chrome driver
+(e/with-chrome-headless driver
   (e/maximize driver))
 ;; an exception with "cannot get automation extension" was thrown
 ----
@@ -3289,7 +3274,9 @@ Reproduction:: When you try to start the driver you get an error:
 +
 [source,clojure]
 ----
-(def driver (e/firefox {:headless true}))
+(e/with-chrome-headless driver
+  ;; equivalent reproduction setup
+  (e/go driver "https://example.com"))
 ;; throws an exception containing message with 'invalid argument: can't kill an exited process'
 ----
 
@@ -3300,7 +3287,10 @@ To Diagnose:: Run the driver with the path to the log files and the "trace" log 
 +
 [source,clojure]
 ----
-(def driver (firefox {:log-stdout "ffout.log" :log-stderr "fferr.log" :driver-log-level "trace"}))
+(e/with-chrome-headless {:log-stdout "ffout.log" :log-stderr "fferr.log" :driver-log-level "trace"}
+                        driver
+  ;; inspect logs after running steps
+  )
 ----
 Similar Problem:: https://github.com/mozilla/geckodriver/issues/1655
 
@@ -3311,7 +3301,9 @@ Reproduction:: When you try to start the chromedriver you get an error:
 //:test-doc-blocks/skip
 [source,clojure]
 ----
-(def driver (e/chrome))
+(e/with-chrome-headless driver
+  ;; equivalent reproduction setup
+  (e/go driver "https://example.com"))
 ;; throws an exception with message containing 'DevToolsActivePort file doesn't exist'
 ----
 
@@ -3329,16 +3321,10 @@ This bypasses the OS security model.
 +
 [source,clojure]
 ----
-(e/with-chrome {:args ["--no-sandbox"]} driver
+(e/with-chrome-headless {:args ["--no-sandbox"]} driver
   (e/go driver "https://clojure.org"))
 ----
 
 Similiar Problem:: A similar problem is described https://stackoverflow.com/questions/50642308/webdriverexception-unknown-error-devtoolsactiveport-file-doesnt-exist-while-t[here]
 
-// A little invisible cheat to cleanup our driver
-ifdef::env-test-doc-blocks[]
-[source,clojure]
-----
-(e/quit driver)
-----
-endif::[]
+// Cleanup is handled by with-chrome-headless in examples above.
