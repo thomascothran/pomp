@@ -86,6 +86,11 @@
                      "if (!p) return null;"
                      "return {x: p.x, y: p.y};")))
 
+(defn- selected-node-properties-state
+  []
+  (e/js-execute browser/*driver*
+                "const body = document.querySelector('#cy-selected-node-properties'); if (!body) return {exists: false, text: null}; return {exists: true, text: (body.textContent || '').trim()};"))
+
 (defn- rendered-position-drift
   [node-id previous-position]
   (when (and (map? previous-position)
@@ -123,11 +128,19 @@
     (let [selected-id (emit-node-event! "project:apollo" "click")]
       (is (= "project:apollo" selected-id)
           "Expected project seed node to be selectable")
-      (e/wait-predicate #(= "project:apollo"
-                            (e/get-element-text browser/*driver* {:css "#cy-selected-node-id"})))
-      (is (= "project:apollo"
-             (e/get-element-text browser/*driver* {:css "#cy-selected-node-id"}))
-          "Selected node details should reflect click selection"))
+      (e/wait-predicate #(let [{:keys [exists text]} (selected-node-properties-state)]
+                           (and exists
+                                (string? text)
+                                (str/includes? text "domain")
+                                (str/includes? text "platform"))))
+      (let [{:keys [exists text] :as properties-state}
+            (selected-node-properties-state)]
+        (is exists
+            (str "Selected properties container should exist: " (pr-str properties-state)))
+        (is (and (string? text)
+                 (str/includes? text "domain")
+                 (str/includes? text "platform"))
+            (str "Selected node details should include domain property value: " (pr-str properties-state)))))
     (let [before-expand (node-count)
           source-node-id "story:auth-hardening"
           source-rendered-pos-before (node-rendered-position source-node-id)]
@@ -159,8 +172,13 @@
     (is (node-has-class? "story:auth-hardening" "error")
         "Target node should show local error class on anomaly")
     (emit-node-event! "project:apollo" "click")
-    (e/wait-predicate #(= "project:apollo"
-                          (e/get-element-text browser/*driver* {:css "#cy-selected-node-id"})))
-    (is (= "project:apollo"
-           (e/get-element-text browser/*driver* {:css "#cy-selected-node-id"}))
+    (e/wait-predicate #(let [{:keys [exists text]} (selected-node-properties-state)]
+                         (and exists
+                              (string? text)
+                              (str/includes? text "domain")
+                              (str/includes? text "platform"))))
+    (is (let [{:keys [text]} (selected-node-properties-state)]
+          (and (string? text)
+               (str/includes? text "domain")
+               (str/includes? text "platform")))
         "Graph should remain interactive after local expansion error")))

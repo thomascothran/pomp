@@ -114,6 +114,54 @@
     }));
   }
 
+  function normalizeProperties(properties) {
+    if (!properties) {
+      return null;
+    }
+
+    if (typeof properties === 'string') {
+      try {
+        const parsed = JSON.parse(properties);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch (_e) {
+        return null;
+      }
+
+      return null;
+    }
+
+    if (typeof properties !== 'object' || Array.isArray(properties)) {
+      return null;
+    }
+
+    return properties;
+  }
+
+  function formatNodeProperties(properties) {
+    const normalized = normalizeProperties(properties);
+    if (!normalized) {
+      return 'none';
+    }
+
+    const keys = Object.keys(normalized).filter(Boolean).sort();
+    if (keys.length === 0) {
+      return 'none';
+    }
+
+    return keys
+      .map(function(key) {
+        const value = normalized[key];
+        if (value === null || value === undefined) {
+          return key + ' -> null';
+        }
+
+        return key + ' -> ' + String(value);
+      })
+      .join('\n');
+  }
+
   function parseClasses(raw) {
     if (!raw) {
       return [];
@@ -624,9 +672,15 @@
         return;
       }
 
+      const nodeData = evt && evt.target && typeof evt.target.data === 'function'
+        ? Object.assign({}, evt.target.data())
+        : null;
+
       dispatchGraphEvent(hostEl, NODE_SELECT_EVENT, {
         graphId: graphId,
-        nodeId: targetNodeId
+        nodeId: targetNodeId,
+        node: nodeData,
+        nodePropertiesText: formatNodeProperties(nodeData && nodeData.properties)
       });
     });
 
