@@ -392,6 +392,54 @@
     return merged;
   }
 
+  function sourceRenderedPosition(cy, nodeId) {
+    if (!nodeId) {
+      return null;
+    }
+
+    const source = cy.getElementById(nodeId);
+    if (!source || source.empty()) {
+      return null;
+    }
+
+    const rendered = source.renderedPosition();
+    if (!rendered || typeof rendered.x !== 'number' || typeof rendered.y !== 'number') {
+      return null;
+    }
+
+    return {
+      x: rendered.x,
+      y: rendered.y
+    };
+  }
+
+  function anchorSourceRenderedPosition(cy, nodeId, previousRenderedPosition) {
+    if (!previousRenderedPosition || !nodeId) {
+      return;
+    }
+
+    const currentRenderedPosition = sourceRenderedPosition(cy, nodeId);
+    if (!currentRenderedPosition) {
+      return;
+    }
+
+    const dx = previousRenderedPosition.x - currentRenderedPosition.x;
+    const dy = previousRenderedPosition.y - currentRenderedPosition.y;
+    if (dx === 0 && dy === 0) {
+      return;
+    }
+
+    const currentPan = cy.pan();
+    if (!currentPan || typeof currentPan.x !== 'number' || typeof currentPan.y !== 'number') {
+      return;
+    }
+
+    cy.pan({
+      x: currentPan.x + dx,
+      y: currentPan.y + dy
+    });
+  }
+
   function runExpansionLayout(cy, payload) {
     if (!cy || typeof cy.layout !== 'function') {
       return;
@@ -403,7 +451,39 @@
       return;
     }
 
-    cy.layout(layoutOptions(payload, 'expand')).run();
+    const sourceNodeId = nodeIdFrom(payload);
+    const previousSourceRenderedPosition = sourceRenderedPosition(cy, sourceNodeId);
+    const layout = cy.layout(layoutOptions(payload, 'expand'));
+
+    if (!layout || typeof layout.run !== 'function') {
+      return;
+    }
+
+    let anchored = false;
+    function anchorAfterLayout() {
+      if (anchored) {
+        return;
+      }
+
+      anchored = true;
+      anchorSourceRenderedPosition(cy, sourceNodeId, previousSourceRenderedPosition);
+    }
+
+    if (previousSourceRenderedPosition && typeof layout.one === 'function') {
+      layout.one('layoutstop', anchorAfterLayout);
+    }
+
+    layout.run();
+
+    if (!previousSourceRenderedPosition) {
+      return;
+    }
+
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(anchorAfterLayout);
+    } else {
+      window.setTimeout(anchorAfterLayout, 0);
+    }
   }
 
   function defaultStyle() {

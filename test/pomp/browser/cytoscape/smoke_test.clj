@@ -57,9 +57,38 @@
                       "const cy = g.cy || g;"
                       "const source = cy.getElementById('" source-node-id "');"
                       "if (!source || source.empty()) return false;"
-                      "const sourcePos = source.position();"
-                      "const newlyAdded = cy.nodes().filter((n) => !before.has(n.id()));"
-                      "return newlyAdded.some((n) => { const p = n.position(); return p && p.x === sourcePos.x && p.y === sourcePos.y; });"))))
+                       "const sourcePos = source.position();"
+                       "const newlyAdded = cy.nodes().filter((n) => !before.has(n.id()));"
+                       "return newlyAdded.some((n) => { const p = n.position(); return p && p.x === sourcePos.x && p.y === sourcePos.y; });"))))
+
+(defn- node-rendered-position
+  [node-id]
+  (e/js-execute browser/*driver*
+                (str "const g = window.pompGraphs && window.pompGraphs['scratch-cytoscape'];"
+                     "if (!g) return null;"
+                     "const cy = g.cy || g;"
+                     "const node = cy.getElementById('" node-id "');"
+                     "if (!node || node.empty()) return null;"
+                     "const p = node.renderedPosition();"
+                     "if (!p) return null;"
+                     "return {x: p.x, y: p.y};")))
+
+(defn- rendered-position-drift
+  [node-id previous-position]
+  (when (and (map? previous-position)
+             (number? (:x previous-position))
+             (number? (:y previous-position)))
+    (e/js-execute browser/*driver*
+                  (str "const g = window.pompGraphs && window.pompGraphs['scratch-cytoscape'];"
+                       "if (!g) return null;"
+                       "const cy = g.cy || g;"
+                       "const node = cy.getElementById('" node-id "');"
+                       "if (!node || node.empty()) return null;"
+                       "const p = node.renderedPosition();"
+                       "if (!p) return null;"
+                       "const dx = p.x - " (:x previous-position) ";"
+                       "const dy = p.y - " (:y previous-position) ";"
+                       "return Math.sqrt((dx * dx) + (dy * dy));"))))
 
 (deftest scratch-page-loads-and-host-present-test
   (testing "scratch cytoscape page initializes graph runtime"
@@ -81,14 +110,21 @@
       (is (= "project:apollo"
              (e/get-element-text browser/*driver* {:css "#cy-selected-node-id"}))
           "Selected node details should reflect click selection"))
-    (let [before-expand (node-count)]
+    (let [before-expand (node-count)
+          source-node-id "story:auth-hardening"
+          source-rendered-pos-before (node-rendered-position source-node-id)]
+      (is (map? source-rendered-pos-before)
+          "Expected source node to have a rendered position before expansion")
       (let [before-node-ids (node-ids)]
-        (emit-node-event! "story:auth-hardening" "dbltap")
+        (emit-node-event! source-node-id "dbltap")
         (e/wait-predicate #(< before-expand (node-count)))
-        (is (false? (expanded-nodes-overlap-source? "story:auth-hardening" before-node-ids))
-            "Expanded nodes should not be placed exactly on top of the source node"))
+        (e/wait-predicate #(number? (rendered-position-drift source-node-id source-rendered-pos-before)))
+        (is (<= (double (rendered-position-drift source-node-id source-rendered-pos-before)) 8.0)
+            "Expanded layout should keep source node anchored within 8px rendered drift")
+        (is (false? (expanded-nodes-overlap-source? source-node-id before-node-ids))
+             "Expanded nodes should not be placed exactly on top of the source node"))
       (let [after-first-expand (node-count)]
-        (emit-node-event! "story:auth-hardening" "dbltap")
+        (emit-node-event! source-node-id "dbltap")
         (Thread/sleep 200)
         (is (= after-first-expand (node-count))
             "Repeated expansion should not duplicate existing nodes")))))
