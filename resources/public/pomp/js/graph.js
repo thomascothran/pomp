@@ -492,9 +492,10 @@
         selector: 'node',
         style: {
           label: 'data(label)',
-          'background-color': '#1f6aa5',
+          'background-color': '#64748b',
+          shape: 'round-rectangle',
           'border-width': 2,
-          'border-color': '#1f6aa5',
+          'border-color': '#475569',
           color: '#0f172a',
           'font-size': 12,
           'text-wrap': 'wrap',
@@ -504,6 +505,62 @@
           'text-background-shape': 'roundrectangle',
           'text-background-padding': 4,
           'text-margin-y': -1
+        }
+      },
+      {
+        selector: 'node[type = "project"]',
+        style: {
+          shape: 'ellipse',
+          'background-color': '#2563eb',
+          'border-color': '#1d4ed8'
+        }
+      },
+      {
+        selector: 'node[type = "story"]',
+        style: {
+          shape: 'round-rectangle',
+          'background-color': '#0f766e',
+          'border-color': '#115e59'
+        }
+      },
+      {
+        selector: 'node[type = "task"]',
+        style: {
+          shape: 'rectangle',
+          'background-color': '#ea580c',
+          'border-color': '#c2410c'
+        }
+      },
+      {
+        selector: 'node[type = "subtask"]',
+        style: {
+          shape: 'diamond',
+          'background-color': '#7c3aed',
+          'border-color': '#6d28d9'
+        }
+      },
+      {
+        selector: 'node[type = "developer"]',
+        style: {
+          shape: 'hexagon',
+          'background-color': '#0891b2',
+          'border-color': '#0e7490'
+        }
+      },
+      {
+        selector: 'node[type = "qa"]',
+        style: {
+          shape: 'vee',
+          'background-color': '#65a30d',
+          'border-color': '#4d7c0f'
+        }
+      },
+      {
+        selector: 'node[type = "product-owner"]',
+        style: {
+          shape: 'tag',
+          'background-color': '#be123c',
+          'border-color': '#9f1239'
         }
       },
       {

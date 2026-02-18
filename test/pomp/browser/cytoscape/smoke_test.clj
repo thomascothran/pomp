@@ -17,6 +17,19 @@
                     "const g = window.pompGraphs && window.pompGraphs['scratch-cytoscape']; if (!g) return 0; const cy = g.cy || g; return cy && cy.nodes ? cy.nodes().length : 0;")
       0))
 
+(defn- page-contains-text?
+  [needle]
+  (true?
+   (e/js-execute browser/*driver*
+                 (str "const text = (document.body && document.body.textContent) || '';"
+                      "return text.includes(" (pr-str needle) ");"))))
+
+(defn- legend-node-type-labels
+  []
+  (or (e/js-execute browser/*driver*
+                    "return Array.from(document.querySelectorAll('[data-cy-node-type-label]')).map((el) => (el.textContent || '').trim()).filter(Boolean);")
+      []))
+
 (defn- emit-node-event!
   [node-id event-name]
   (e/js-execute browser/*driver*
@@ -96,7 +109,12 @@
     (e/wait-visible browser/*driver* {:css "#scratch-cytoscape-host"})
     (e/wait-predicate #(pos? (node-count)))
     (is (pos? (node-count))
-        "Expected Cytoscape graph to contain at least one node after init")))
+        "Expected Cytoscape graph to contain at least one node after init")
+    (is (false? (page-contains-text? "Graph runtime loads on init if Cytoscape is available"))
+        "Runtime overlay helper text should not be rendered")
+    (is (= #{"project" "story" "task" "subtask" "developer" "qa" "product-owner"}
+           (set (legend-node-type-labels)))
+        "Legend should list all node types")))
 
 (deftest select-and-expand-adds-neighbors-test
   (testing "select updates details and expand adds nodes without duplicates"
