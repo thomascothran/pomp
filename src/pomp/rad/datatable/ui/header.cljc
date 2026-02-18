@@ -32,14 +32,23 @@
   (let [table-filter-ops filter-operations
         grouped? (seq group-by)
         group-col-key (first group-by)
+        group-col-keys (set group-by)
+        grouped-cols (map (fn [group-key]
+                           (or (first
+                                (filter #(= (:key %) group-key) cols))
+                               {:key group-key :label (name group-key)}))
+                         group-by)
+        grouped-label (string/join " > " (map :label grouped-cols))
         visible-cols (if grouped?
-                       (remove #(= (:key %) group-col-key) cols)
-                       cols)
+                        (remove #(contains? group-col-keys (:key %)) cols)
+                        cols)
         total-cols (count visible-cols)
         group-col (some #(when (= (:key %) group-col-key) %) cols)
         current-sort (first sort-state)
         group-col-name (when group-col-key (name group-col-key))
-        group-col-label (or (:label group-col) "Group")
+        group-col-label (if (= 1 (count group-by))
+                         (or (:label group-col) "Group")
+                         (str "Grouped by: " grouped-label))
         group-col-type (:type group-col)
         group-col-filter-ops (:filter-operations group-col)
         group-col-filters (get filters group-col-key)

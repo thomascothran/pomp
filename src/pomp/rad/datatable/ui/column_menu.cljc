@@ -1,6 +1,10 @@
 (ns pomp.rad.datatable.ui.column-menu
   (:require [pomp.rad.datatable.ui.primitives :as primitives]))
 
+(defn- group-action-handler
+  [hide-popover data-url action]
+  (str hide-popover "@post('" data-url "?" action "')"))
+
 (defn render
   [{:keys [col-key col-label data-url table-id groupable? group-by]}]
   (let [col-name (name col-key)
@@ -88,5 +92,8 @@
            (assoc :aria-disabled "true" :class "opacity-50 pointer-events-none"))
          primitives/arrow-down-icon "Sort descending"]]
        [:li
-        [:a.flex.items-center.gap-2 {:data-on:click (str hide-popover "@post('" data-url "?ungroup=true')")}
-         "Remove grouping"]]]])))
+        [:a.flex.items-center.gap-2 {:data-on:click (group-action-handler hide-popover data-url "ungroup=true")}
+         "Ungroup"]]
+       [:li
+        [:a.flex.items-center.gap-2 {:data-on:click (group-action-handler hide-popover data-url "clearGroups=true")}
+         "Clear all groups"]]]])))

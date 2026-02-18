@@ -613,6 +613,21 @@
    {:id 4 :name "C1" :century 3 :school "Stoa" :region "Greece"}
    {:id 5 :name "C2" :century 5 :school "Stoa" :region "Greece"}])
 
+(def h2-multi-grouped-philosophers
+  [{:id 1 :name "A1" :century 1 :school "North" :region "Greece"}
+   {:id 2 :name "A2" :century 1 :school "North" :region "Greece"}
+   {:id 3 :name "B1" :century 2 :school "North" :region "Greece"}
+   {:id 4 :name "C1" :century 3 :school "Blue" :region "Greece"}
+   {:id 5 :name "C2" :century 3 :school "Blue" :region "Greece"}
+   {:id 6 :name "D1" :century 4 :school "Red" :region "Greece"}])
+
+(def h2-multi-group-sort-filter-philosophers
+  [{:id 1 :name "North-First" :century 4 :school "North" :region "Greece"}
+   {:id 2 :name "North-Second" :century 1 :school "North" :region "Greece"}
+   {:id 3 :name "Blue" :century 3 :school "Blue" :region "Greece"}
+   {:id 4 :name "Red" :century 2 :school "Red" :region "Greece"}
+   {:id 5 :name "Green" :century 5 :school "Green" :region "Greece"}])
+
 (defn setup-h2-db [ds]
   (jdbc/execute! ds ["CREATE TABLE IF NOT EXISTS philosophers (
                        id INT PRIMARY KEY,
@@ -790,8 +805,98 @@
                          :group-by [:school]
                          :page {:size 10 :current 0}}
                         nil)]
-        (is (= 1 (:total-rows result))
-            "Expected total-rows to equal group count after filtering")))))
+                           (is (= 1 (:total-rows result))
+                               "Expected total-rows to equal group count after filtering")))))
+
+(deftest query-fn-grouped-multi-column-pagination-leaf-slices-test
+  (testing "leaf-page size should slice multi-group rows by leaf rows"
+    (let [ds (jdbc/get-datasource h2-db)]
+      (setup-h2-db ds)
+      (seed-h2-data! ds h2-multi-grouped-philosophers)
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
+            qfn (sql/query-fn {:table-name "philosophers"} execute!)
+            first-page (qfn {:filters {}
+                             :sort []
+                             :group-by [:century :school]
+                             :page {:size 2 :current 0}}
+                            nil)
+            second-page (qfn {:filters {}
+                              :sort []
+                              :group-by [:century :school]
+                              :page {:size 2 :current 1}}
+                             nil)]
+        (is (= 2 (count (:rows first-page)))
+            "Expected first page to return exactly 2 leaf rows")
+        (is (= [1 2] (map :id (:rows first-page)))
+            "Expected first page to include first two filtered leaves")
+        (is (= 2 (count (:rows second-page)))
+            "Expected second page to return exactly 2 leaf rows")
+        (is (= [3 4] (map :id (:rows second-page)))
+            "Expected second page to continue with next two leaves")
+        (is (= 6 (:total-rows first-page))
+            "Expected total-rows to reflect leaf count in multi-group mode")))))
+
+(deftest query-fn-grouped-multi-column-pagination-filtered-total-rows-test
+  (testing "filtered total-rows should reflect leaf count for multi-group pagination"
+    (let [ds (jdbc/get-datasource h2-db)]
+      (setup-h2-db ds)
+      (seed-h2-data! ds h2-multi-grouped-philosophers)
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
+            qfn (sql/query-fn {:table-name "philosophers"} execute!)
+            result (qfn {:filters {:name [{:type "string"
+                                          :op "is-any-of"
+                                          :value ["A1" "A2" "B1" "C1"]}]}
+                         :sort []
+                         :group-by [:century :school]
+                         :page {:size 2 :current 0}}
+                        nil)]
+        (is (= 4 (:total-rows result))
+            "Expected total-rows to reflect filtered leaf count")
+        (is (= [1 2] (map :id (:rows result)))
+            "Expected first page to return first two filtered leaves")))))
+
+(deftest query-fn-grouped-multi-column-sort-test
+  (testing "first grouped column sorting is deterministic for multi-group results"
+    (let [ds (jdbc/get-datasource h2-db)]
+      (setup-h2-db ds)
+      (seed-h2-data! ds h2-multi-group-sort-filter-philosophers)
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
+            qfn (sql/query-fn {:table-name "philosophers"} execute!)
+            asc-result (qfn {:filters {}
+                             :sort [{:column "century" :direction "asc"}]
+                             :group-by [:century :school]
+                             :page {:size 10 :current 0}}
+                            nil)
+            desc-result (qfn {:filters {}
+                              :sort [{:column "century" :direction "desc"}]
+                              :group-by [:century :school]
+                              :page {:size 10 :current 0}}
+                             nil)]
+        (is (= [2 4 3 1 5] (map :id (:rows asc-result)))
+            "Expected rows sorted by first grouped key ascending")
+        (is (= [5 1 3 4 2] (map :id (:rows desc-result)))
+            "Expected rows sorted by first grouped key descending")
+        (is (= 5 (:total-rows asc-result))
+            "Expected multi-group total-rows to remain filtered leaf count")))))
+
+(deftest query-fn-grouped-multi-column-filter-removes-empty-groups-test
+  (testing "filtering removes non-matching first-group buckets in multi-group results"
+    (let [ds (jdbc/get-datasource h2-db)]
+      (setup-h2-db ds)
+      (seed-h2-data! ds h2-multi-group-sort-filter-philosophers)
+      (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
+            qfn (sql/query-fn {:table-name "philosophers"} execute!)
+            result (qfn {:filters {:school [{:type "enum" :op "is" :value "North"}]}
+                         :sort [{:column "century" :direction "asc"}]
+                         :group-by [:century :school]
+                         :page {:size 10 :current 0}}
+                        nil)]
+        (is (= [2 1] (map :id (:rows result)))
+            "Expected filtered rows to include only matching school values")
+        (is (= [1 4] (dedupe (map :century (:rows result))))
+            "Expected non-matching first-group values to be removed")
+        (is (= 2 (:total-rows result))
+            "Expected filtered leaf count in total-rows")))))
 
 ;; =============================================================================
 ;; Save Function

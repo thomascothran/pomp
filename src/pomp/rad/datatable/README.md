@@ -9,7 +9,7 @@ A server-rendered datatable component for Clojure web applications using Datasta
 - **Pagination**: Configurable page sizes with navigation
 - **Column reordering**: Drag-and-drop column headers
 - **Column visibility**: Show/hide columns via menu
-- **Row grouping**: Group rows by any column
+- **Row grouping**: Group rows by one or more columns (ordered)
 - **Row selection**: Optional checkbox selection
 - **Editable cells**: Inline editing with save on Enter/blur
 - **Skeleton loading**: Smooth loading states
@@ -108,7 +108,7 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 | `:filters` | `{keyword filter-spec}`     | Map of column-key to filter specification |
 | `:sort`    | `[{:column str :direction str}]` | Vector of sort specs (currently uses first only) |
 | `:page`    | `{:size int :current int}`  | Pagination state |
-| `:group-by`| `keyword` (optional)        | Column to group by |
+| `:group-by`| `[keyword ...]` (optional)  | Ordered columns to group by |
 
 #### Filter spec shape
 
@@ -139,6 +139,14 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 | `:rows`      | `[...]`| The rows for the current page after filtering/sorting |
 | `:total-rows`| `int`  | Total count of rows **after filtering** (for pagination) |
 | `:page`      | `map`  | `{:size int :current int}` - possibly clamped page state |
+
+### Grouping behavior
+
+- `:group-by` is ordered. For example, `[:century :school]` renders a group tree of `century -> school -> rows`.
+- In grouped mode, sorting is controlled by the first grouped column.
+- Pagination semantics depend on grouping depth:
+  - single grouped column: pagination is by top-level group count
+  - multiple grouped columns: pagination is by leaf row count (synthetic group rows are context)
 
 ### `save-fn`
 

@@ -167,40 +167,65 @@
     (when (= (keyword column) group-key)
       (or direction "asc"))))
 
+(defn- sort-rows-by-first-group
+  [rows group-by sort-spec]
+  (let [group-key (first group-by)
+        sort-direction (or (group-sort-direction group-key sort-spec) "asc")
+        comparator (if (= sort-direction "desc")
+                     #(compare %2 %1)
+                     compare)]
+    (sort-by #(get % group-key) comparator rows)))
+
 (defn- grouped-page
   [rows {:keys [group-by page] :as params}]
-  (let [group-key (first group-by)
-        sort-spec (:sort params)
-        group-dir (or (group-sort-direction group-key sort-spec) "asc")
-        comparator (if (= group-dir "desc")
-                     #(compare %2 %1)
-                     compare)
-        group-values (->> rows
-                          (map group-key)
-                          distinct
-                          (clojure.core/sort comparator)
-                          vec)
-        total-groups (count group-values)
-        size (:size page)
-        total-pgs (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
-        current (:current page)
-        clamped-current (cond
-                          (nil? current) (max 0 (dec total-pgs))
-                          (>= current total-pgs) (max 0 (dec total-pgs))
-                          :else current)
-        page-groups (->> group-values
-                         (drop (* clamped-current size))
-                         (take size)
-                         vec)
-        groups->rows (reduce (fn [m row]
-                               (let [group-value (get row group-key)]
-                                 (update m group-value (fnil conj []) row)))
-                             {}
-                             rows)
-        page-rows (mapcat #(get groups->rows %) page-groups)]
-    {:rows (vec page-rows)
-     :total-rows total-groups
-     :page {:size size :current clamped-current}}))
+  (if (= 1 (count group-by))
+    (let [group-key (first group-by)
+          sort-spec (:sort params)
+          group-dir (or (group-sort-direction group-key sort-spec) "asc")
+          comparator (if (= group-dir "desc")
+                       #(compare %2 %1)
+                       compare)
+          group-values (->> rows
+                            (map group-key)
+                            distinct
+                            (clojure.core/sort comparator)
+                            vec)
+          total-groups (count group-values)
+          size (:size page)
+          total-pgs (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
+          current (:current page)
+          clamped-current (cond
+                            (nil? current) (max 0 (dec total-pgs))
+                            (>= current total-pgs) (max 0 (dec total-pgs))
+                            :else current)
+          page-groups (->> group-values
+                           (drop (* clamped-current size))
+                           (take size)
+                           vec)
+          groups->rows (reduce (fn [m row]
+                                 (let [group-value (get row group-key)]
+                                   (update m group-value (fnil conj []) row)))
+                               {}
+                               rows)
+          page-rows (mapcat #(get groups->rows %) page-groups)]
+      {:rows (vec page-rows)
+       :total-rows total-groups
+       :page {:size size :current clamped-current}})
+    (let [size (:size page)
+          sorted-rows (sort-rows-by-first-group rows group-by (:sort params))
+          total-rows (count sorted-rows)
+          total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
+          current (:current page)
+          clamped-current (cond
+                            (nil? current) (max 0 (dec total-pgs))
+                            (>= current total-pgs) (max 0 (dec total-pgs))
+                            :else current)]
+      {:rows (->> sorted-rows
+                  (drop (* clamped-current size))
+                  (take size)
+                  vec)
+       :total-rows total-rows
+       :page {:size size :current clamped-current}})))
 
 (defn- filtered-rows
   [rows {:keys [columns filters search-string]}]
@@ -215,35 +240,50 @@
           size (:size page 10)
           requested-current (:current page)]
       (if (seq group-by)
-        (let [group-key (first group-by)
-              sort-spec (:sort params)
-              group-dir (or (group-sort-direction group-key sort-spec) "asc")
-              comparator (if (= group-dir "desc")
-                           #(compare %2 %1)
-                           compare)
-              total-groups (->> filtered
-                                (map group-key)
-                                distinct
-                                count)
-              total-pgs (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
-              current (if (nil? requested-current)
-                        (max 0 (dec total-pgs))
-                        requested-current)
-              group-values (->> filtered
-                                (map group-key)
-                                distinct
-                                (clojure.core/sort comparator)
-                                (drop (* current size))
-                                (take size)
-                                vec)
-              groups->rows (reduce (fn [m row]
-                                     (let [group-value (get row group-key)]
-                                       (update m group-value (fnil conj []) row)))
-                                   {}
-                                   filtered)
-              page-rows (mapcat #(get groups->rows %) group-values)]
-          {:rows (vec page-rows)
-           :page {:size size :current current}})
+        (if (= 1 (count group-by))
+          (let [group-key (first group-by)
+                sort-spec (:sort params)
+                group-dir (or (group-sort-direction group-key sort-spec) "asc")
+                comparator (if (= group-dir "desc")
+                             #(compare %2 %1)
+                             compare)
+                total-groups (->> filtered
+                                  (map group-key)
+                                  distinct
+                                  count)
+                total-pgs (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
+                current (if (nil? requested-current)
+                          (max 0 (dec total-pgs))
+                          requested-current)
+                group-values (->> filtered
+                                 (map group-key)
+                                 distinct
+                                 (clojure.core/sort comparator)
+                                 (drop (* current size))
+                                 (take size)
+                                 vec)
+                groups->rows (reduce (fn [m row]
+                                       (let [group-value (get row group-key)]
+                                         (update m group-value (fnil conj []) row)))
+                                     {}
+                                     filtered)
+                page-rows (mapcat #(get groups->rows %) group-values)]
+            {:rows (vec page-rows)
+             :page {:size size :current current}})
+           (let [sorted-rows (sort-rows-by-first-group filtered group-by (:sort params))
+                 total-rows (count sorted-rows)
+                 total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
+                 current (if (nil? requested-current)
+                           (max 0 (dec total-pgs))
+                           requested-current)
+                 clamped-current (if (>= current total-pgs)
+                                   (max 0 (dec total-pgs))
+                                   current)]
+             {:rows (->> sorted-rows
+                        (drop (* clamped-current size))
+                        (take size)
+                        vec)
+              :page {:size size :current clamped-current}}))
         (let [total-rows (count filtered)
               total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
               current (if (nil? requested-current)
@@ -261,10 +301,12 @@
   (fn [{:keys [group-by] :as params} _request]
     (let [filtered (filtered-rows rows params)]
       {:total-rows (if (seq group-by)
-                     (->> filtered
-                          (map (first group-by))
-                          distinct
-                          count)
+                     (if (= 1 (count group-by))
+                       (->> filtered
+                            (map (first group-by))
+                            distinct
+                            count)
+                       (count filtered))
                      (count filtered))})))
 
 (defn query-fn

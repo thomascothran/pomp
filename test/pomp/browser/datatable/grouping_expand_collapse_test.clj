@@ -22,6 +22,12 @@
 (def group-by-school-item
   {:xpath "//div[@id='col-menu-school']//a[contains(normalize-space(.), 'Group by')]"})
 
+(def region-menu-button
+  {:css "button[popovertarget='col-menu-region']"})
+
+(def group-by-region-item
+  {:xpath "//div[@id='col-menu-region']//a[contains(normalize-space(.), 'Group by')]"})
+
 (def group-row-selector
   {:css "#datatable tr.bg-base-200"})
 
@@ -47,6 +53,14 @@
   (e/wait-visible browser/*driver* group-by-school-item)
   (e/click browser/*driver* group-by-school-item)
   (e/wait-visible browser/*driver* first-group-toggle))
+
+(defn- group-by-school-and-region!
+  []
+  (group-by-school!)
+  (e/click browser/*driver* region-menu-button)
+  (e/wait-visible browser/*driver* group-by-region-item)
+  (e/click browser/*driver* group-by-region-item)
+  (e/wait-visible browser/*driver* group-row-selector))
 
 (defn- group-row-texts
   []
@@ -100,3 +114,22 @@
       (e/wait-predicate #(= other-visible (e/visible? browser/*driver* other-row)))
       (is (= other-visible (e/visible? browser/*driver* other-row))
           "Expected other group visibility unchanged"))))
+
+(deftest group-outer-collapse-hides-nested-groups-and-rows-test
+  (testing "collapsing an outer group hides nested grouped rows"
+    (open-datatable!)
+    (group-by-school-and-region!)
+    (let [outer-toggle first-group-toggle
+          first-nested-group-row {:xpath "(//tr[contains(@class,'bg-base-200') and @data-group-level='2'])[1]"}]
+      (is (e/visible? browser/*driver* outer-toggle)
+          "Expected a top-level grouped section toggle")
+      (is (not (e/visible? browser/*driver* first-nested-group-row))
+          "Expected nested rows hidden before outer group is expanded")
+      (e/click browser/*driver* outer-toggle)
+      (e/wait-predicate #(e/visible? browser/*driver* first-nested-group-row))
+      (is (e/visible? browser/*driver* first-nested-group-row)
+          "Expected nested rows visible when outer group expanded")
+      (e/click browser/*driver* outer-toggle)
+      (e/wait-predicate #(not (e/visible? browser/*driver* first-nested-group-row)))
+      (is (not (e/visible? browser/*driver* first-nested-group-row))
+          "Expected nested rows hidden again after outer group collapse"))))

@@ -604,9 +604,97 @@
           "Expected page size to limit group count")
       (is (= (set expected-groups) (set (map :group-value groups)))
           "Expected page to include only the first group values")
-      (doseq [{:keys [group-value count]} groups]
-        (is (= (get original-counts group-value) count)
-            "Expected full group row counts on the page")))))
+       (doseq [{:keys [group-value count]} groups]
+         (is (= (get original-counts group-value) count)
+             "Expected full group row counts on the page")))))
+
+(def multi-group-pagination-rows
+  [{:id 1 :name "A1" :century "A" :school "North"}
+   {:id 2 :name "A2" :century "A" :school "North"}
+   {:id 3 :name "A3" :century "A" :school "Blue"}
+   {:id 4 :name "B1" :century "B" :school "Blue"}
+   {:id 5 :name "B2" :century "B" :school "Green"}
+   {:id 6 :name "C1" :century "C" :school "Red"}])
+
+(def multi-group-sort-filter-rows
+  [{:id 1 :name "North-First" :century 4 :school "North"}
+   {:id 2 :name "North-Second" :century 1 :school "North"}
+   {:id 3 :name "Blue" :century 3 :school "Blue"}
+   {:id 4 :name "Red" :century 2 :school "Red"}
+   {:id 5 :name "Green" :century 5 :school "Green"}])
+
+(deftest grouped-multi-column-pagination-counts-leaf-rows-test
+  (testing "leaf-row pagination in multi-column grouped mode"
+    (let [qfn (query/query-fn multi-group-pagination-rows)
+          page-size 2
+          first-page (qfn {:filters {}
+                           :sort []
+                           :group-by [:century :school]
+                           :page {:size page-size :current 0}}
+                          nil)
+          second-page (qfn {:filters {}
+                           :sort []
+                           :group-by [:century :school]
+                           :page {:size page-size :current 1}}
+                           nil)]
+      (is (= 2 (count (:rows first-page)))
+          "Expected first page to return exactly page-size leaf rows")
+      (is (= [1 2] (map :id (:rows first-page)))
+          "Expected first page to include the first two leaves")
+      (is (= 2 (count (:rows second-page)))
+          "Expected second page to return exactly page-size leaf rows")
+      (is (= [3 4] (map :id (:rows second-page)))
+          "Expected second page to continue with leaf row slicing")
+       (is (= 6 (:total-rows first-page))
+           "Expected total-rows to reflect leaf-row count in multi-group mode"))))
+
+(deftest grouped-multi-column-first-group-sort-test
+  (testing "first grouped column asc/desc ordering is deterministic"
+    (let [qfn (query/query-fn multi-group-sort-filter-rows)
+          asc-result (qfn {:filters {}
+                           :sort [{:column "century" :direction "asc"}]
+                           :group-by [:century :school]
+                           :page {:size 10 :current 0}}
+                          nil)
+          desc-result (qfn {:filters {}
+                            :sort [{:column "century" :direction "desc"}]
+                            :group-by [:century :school]
+                            :page {:size 10 :current 0}}
+                           nil)]
+      (is (= [2 4 3 1 5] (map :id (:rows asc-result)))
+          "Expected asc sort to order groups by first grouped key")
+      (is (= [5 1 3 4 2] (map :id (:rows desc-result)))
+          "Expected desc sort to reverse first grouped key order")
+      (is (= 5 (:total-rows asc-result))
+          "Expected total-rows to remain at leaf count for multi-group"))))
+
+(deftest grouped-multi-column-filter-removes-empty-groups-test
+  (testing "filtering removes non-matching grouped rows and keeps only matching first-group buckets"
+    (let [qfn (query/query-fn multi-group-sort-filter-rows)
+          result (qfn {:filters {:school [{:type "enum" :op "is" :value "North"}]}
+                        :sort [{:column "century" :direction "asc"}]
+                        :group-by [:century :school]
+                        :page {:size 10 :current 0}}
+                       nil)]
+      (is (= [2 1] (map :id (:rows result)))
+          "Expected filtered rows to include only matching school values")
+      (is (= ["1" "4"] (dedupe (map str (map :century (:rows result)))))
+          "Expected non-matching first-group values to be removed")
+      (is (= 2 (:total-rows result))
+          "Expected total-rows to equal filtered leaf count"))))
+
+(deftest grouped-multi-column-pagination-total-rows-follows-filtered-leaves-test
+  (testing "grouped multi-column total rows reflects filtered leaf count"
+    (let [qfn (query/query-fn multi-group-pagination-rows)
+          result (qfn {:filters {:name [{:type "string" :op "is-any-of" :value ["A1" "A2" "A3" "B1"]}]}
+                       :sort []
+                       :group-by [:century :school]
+                       :page {:size 2 :current 0}}
+                       nil)]
+      (is (= 4 (:total-rows result))
+          "Expected total-rows to count filtered leaf rows, not grouped headers")
+      (is (= [1 2] (map :id (:rows result)))
+          "Expected page to contain first two filtered leaves"))))
 
 (deftest grouped-sort-and-filter-test
   (testing "non-grouped sorting does not reorder groups"

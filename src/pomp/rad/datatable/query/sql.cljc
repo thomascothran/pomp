@@ -234,6 +234,13 @@
     (when (= (keyword column) group-key)
       (or direction "asc"))))
 
+(defn- first-group-order-sort
+  [group-by sort-spec]
+  (when (seq sort-spec)
+    (let [group-key (first group-by)
+          direction (or (group-sort-direction group-key sort-spec) "asc")]
+      [{:column (name group-key) :direction direction}])))
+
 (defn generate-limit-clause
   "Generates a LIMIT/OFFSET clause from page spec.
    Returns [sql-string limit offset] or nil if no pagination."
@@ -362,38 +369,59 @@
     (let [size (:size page 10)
           requested-current (:current page)]
       (if (seq group-by)
-        (let [sort-spec (:sort params)
-              current (if (nil? requested-current)
-                        (let [count-sql (generate-group-count-sql config {:columns columns
-                                                                          :filters filters
-                                                                          :group-by group-by
-                                                                          :search-string search-string})
-                              total-groups (-> (execute! count-sql) first :total)
-                              total-pgs (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))]
-                          (max 0 (dec total-pgs)))
-                        requested-current)
-              group-values-sql (generate-group-values-sql config {:columns columns
-                                                                  :filters filters
-                                                                  :group-by group-by
-                                                                  :search-string search-string
-                                                                  :sort sort-spec
-                                                                  :page {:size size :current current}})
-              group-key (first group-by)
-              group-col-key (keyword (col-name config group-key))
-              group-values (->> (execute! group-values-sql)
-                                (map group-col-key)
-                                vec)
-              rows (if (seq group-values)
-                     (let [grouped-query-sql (generate-grouped-query-sql config {:columns columns
-                                                                                 :filters filters
-                                                                                 :group-by group-by
-                                                                                 :search-string search-string
-                                                                                 :sort sort-spec
-                                                                                 :group-values group-values})]
-                       (execute! grouped-query-sql))
-                     [])]
-          {:rows rows
-           :page {:size size :current current}})
+        (if (= 1 (count group-by))
+          (let [sort-spec (:sort params)
+                current (if (nil? requested-current)
+                          (let [count-sql (generate-group-count-sql config {:columns columns
+                                                                            :filters filters
+                                                                            :group-by group-by
+                                                                            :search-string search-string})
+                                total-groups (-> (execute! count-sql) first :total)
+                                total-pgs (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))]
+                            (max 0 (dec total-pgs)))
+                          requested-current)
+                group-values-sql (generate-group-values-sql config {:columns columns
+                                                                    :filters filters
+                                                                    :group-by group-by
+                                                                    :search-string search-string
+                                                                    :sort sort-spec
+                                                                    :page {:size size :current current}})
+                group-key (first group-by)
+                group-col-key (keyword (col-name config group-key))
+                group-values (->> (execute! group-values-sql)
+                                  (map group-col-key)
+                                  vec)
+                rows (if (seq group-values)
+                       (let [grouped-query-sql (generate-grouped-query-sql config {:columns columns
+                                                                                   :filters filters
+                                                                                   :group-by group-by
+                                                                                   :search-string search-string
+                                                                                   :sort sort-spec
+                                                                                   :group-values group-values})]
+                         (execute! grouped-query-sql))
+                       [])]
+            {:rows rows
+             :page {:size size :current current}})
+          (let [group-sort (first-group-order-sort group-by (:sort params))
+                count-sql (generate-count-sql config {:columns columns
+                                                      :filters filters
+                                                      :search-string search-string})
+                total-rows (-> (execute! count-sql) first :total)
+                total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
+                current (if (nil? requested-current)
+                          (max 0 (dec total-pgs))
+                          requested-current)
+                clamped-current (if (>= current total-pgs)
+                                  (max 0 (dec total-pgs))
+                                  current)
+                query-sql (generate-query-sql config {:columns columns
+                                                      :filters filters
+                                                      :search-string search-string
+                                                      :sort group-sort
+                                                      :page {:size size :current clamped-current}})
+                rows (execute! query-sql)]
+            {:rows rows
+             :page {:size size :current clamped-current}}))
         (let [current (if (nil? requested-current)
                         (let [count-sql (generate-count-sql config {:columns columns
                                                                     :filters filters
@@ -414,7 +442,7 @@
 (defn count-fn
   [config execute!]
   (fn [{:keys [columns filters group-by search-string]} _request]
-    (if (seq group-by)
+    (if (= 1 (count group-by))
       (let [count-sql (generate-group-count-sql config {:columns columns
                                                         :filters filters
                                                         :group-by group-by
@@ -438,42 +466,64 @@
   [config execute!]
   (fn [{:keys [columns filters page group-by search-string] :as params} _request]
     (if (seq group-by)
-      (let [sort-spec (:sort params)
-            count-sql (generate-group-count-sql config {:columns columns
-                                                        :filters filters
-                                                        :group-by group-by
-                                                        :search-string search-string})
-            total-groups (-> (execute! count-sql) first :total)
-            size (:size page 10)
-            total-pages (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
-            current (:current page)
-            clamped-current (cond
-                              (nil? current) (max 0 (dec total-pages))
-                              (>= current total-pages) (max 0 (dec total-pages))
-                              :else current)
-            group-values-sql (generate-group-values-sql config {:columns columns
-                                                                :filters filters
-                                                                :group-by group-by
-                                                                :search-string search-string
-                                                                :sort sort-spec
-                                                                :page {:size size :current clamped-current}})
-            group-key (first group-by)
-            group-col-key (keyword (col-name config group-key))
-            group-values (->> (execute! group-values-sql)
-                              (map group-col-key)
-                              vec)
-            rows (if (seq group-values)
-                   (let [grouped-query-sql (generate-grouped-query-sql config {:columns columns
-                                                                               :filters filters
-                                                                               :group-by group-by
-                                                                               :search-string search-string
-                                                                               :sort sort-spec
-                                                                               :group-values group-values})]
-                     (execute! grouped-query-sql))
-                   [])]
-        {:rows rows
-         :total-rows total-groups
-         :page {:size size :current clamped-current}})
+      (if (= 1 (count group-by))
+        (let [sort-spec (:sort params)
+              count-sql (generate-group-count-sql config {:columns columns
+                                                          :filters filters
+                                                          :group-by group-by
+                                                          :search-string search-string})
+              total-groups (-> (execute! count-sql) first :total)
+              size (:size page 10)
+              total-pages (if (zero? total-groups) 1 (int (Math/ceil (/ total-groups size))))
+              current (:current page)
+              clamped-current (cond
+                                (nil? current) (max 0 (dec total-pages))
+                                (>= current total-pages) (max 0 (dec total-pages))
+                                :else current)
+              group-values-sql (generate-group-values-sql config {:columns columns
+                                                                  :filters filters
+                                                                  :group-by group-by
+                                                                  :search-string search-string
+                                                                  :sort sort-spec
+                                                                  :page {:size size :current clamped-current}})
+              group-key (first group-by)
+              group-col-key (keyword (col-name config group-key))
+              group-values (->> (execute! group-values-sql)
+                                (map group-col-key)
+                                vec)
+              rows (if (seq group-values)
+                     (let [grouped-query-sql (generate-grouped-query-sql config {:columns columns
+                                                                                 :filters filters
+                                                                                 :group-by group-by
+                                                                                 :search-string search-string
+                                                                                 :sort sort-spec
+                                                                                 :group-values group-values})]
+                       (execute! grouped-query-sql))
+                     [])]
+          {:rows rows
+           :total-rows total-groups
+           :page {:size size :current clamped-current}})
+        (let [size (:size page 10)
+              group-sort (first-group-order-sort group-by (:sort params))
+              count-sql (generate-count-sql config {:columns columns
+                                                    :filters filters
+                                                    :search-string search-string})
+              total-rows (-> (execute! count-sql) first :total)
+              total-pages (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
+              requested-current (:current page)
+              clamped-current (cond
+                                (nil? requested-current) (max 0 (dec total-pages))
+                                (>= requested-current total-pages) (max 0 (dec total-pages))
+                                :else requested-current)
+              query-sql (generate-query-sql config {:columns columns
+                                                    :filters filters
+                                                    :search-string search-string
+                                                    :sort group-sort
+                                                    :page {:size size :current clamped-current}})
+              rows (execute! query-sql)]
+          {:rows rows
+           :total-rows total-rows
+           :page {:size size :current clamped-current}}))
       (let [sort-spec (:sort params)
             ;; Get total count first
             count-sql (generate-count-sql config {:columns columns

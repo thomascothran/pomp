@@ -1,23 +1,32 @@
 (ns pomp.rad.datatable.ui.column-menu-test
-  (:require [clojure.test :refer [deftest is testing]]
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
             [pomp.rad.datatable.ui.column-menu :as column-menu]))
 
 (defn- find-menu-items
-  "Extracts the menu item labels from a column-menu render result.
-   Returns a set of strings like #{\"Sort ascending\" \"Group by School\" ...}"
+  "Extracts menu item labels from a rendered column menu.
+  Returns a set of strings like #{\"Sort ascending\" \"Group by School\" ...}."
   [rendered]
-  (let [dropdown (second rendered) ; The dropdown div is the second element
-        ul (last dropdown) ; The ul is the last child of dropdown
-        lis (rest ul)] ; Skip the :ul.menu... tag
-    (->> lis
-         (map (fn [li]
-                (let [a (second li) ; [:li [:a ...]]
-                      contents (drop 2 a)] ; Skip tag and attrs
-                  ;; Join all string content (icons are vectors, text is strings)
-                  (->> contents
-                       (filter string?)
-                       (apply str)))))
-         set)))
+  (let [dropdown (second rendered)
+        ul (last dropdown)
+        lis (rest ul)]
+    (set
+     (map (fn [li]
+            (let [link (second li)
+                  contents (drop 2 link)]
+              (->> contents
+                   (filter string?)
+                   (apply str))))
+          lis))))
+
+(defn- find-group-menu-handlers
+  "Extracts data-on:click handlers from a rendered column menu."
+  [rendered]
+  (let [dropdown (second rendered)
+        ul (last dropdown)
+        lis (rest ul)]
+    (set
+     (keep (comp :data-on:click second second) lis))))
 
 (def base-input
   {:col-key :school
@@ -44,3 +53,18 @@
           menu-items (find-menu-items rendered)]
       (is (not (contains? menu-items "Group by School"))
           "Expected 'Group by School' to NOT be present in menu when :groupable? is omitted"))))
+
+(deftest grouped-column-menu-shows-remove-and-clear-actions
+  (testing "Grouped column menu shows ungroup and clear all groups actions"
+    (let [rendered (column-menu/render-group-column {:data-url "/demo/datatable/data"
+                                                     :group-col-key :school})
+          menu-items (find-menu-items rendered)
+          menu-handlers (find-group-menu-handlers rendered)]
+      (is (some #(str/includes? % "Ungroup") menu-items)
+          "Expected label to indicate removing a single grouped level")
+      (is (some #(str/includes? % "Clear") menu-items)
+          "Expected label to indicate clearing all group levels")
+      (is (some #(str/includes? % "@post('/demo/datatable/data?ungroup=true") menu-handlers)
+          "Expected one affordance to use an ungroup action")
+      (is (some #(str/includes? % "@post('/demo/datatable/data?clearGroups=true") menu-handlers)
+          "Expected one affordance to clear all grouped levels"))))

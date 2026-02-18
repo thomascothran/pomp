@@ -284,8 +284,24 @@
                                           :table-id "test"
                                           :group-by [:school]})
            grouped-label (find-grouped-header-label result)]
-      (is (= "School" grouped-label)
-          "Grouped header should show grouped column label, not a generic label"))))
+       (is (= "School" grouped-label)
+           "Grouped header should show grouped column label, not a generic label"))))
+
+(deftest render-sortable-grouped-header-shows-group-sequence-label-test
+  (testing "grouped synthetic header shows ordered multi-group label"
+    (let [cols [{:key :century :label "Century" :type :string}
+                {:key :school :label "School" :type :string}
+                {:key :name :label "Name" :type :string}]
+          result (header/render-sortable {:cols cols
+                                          :sort-state []
+                                          :filters {}
+                                          :data-url "/data"
+                                          :table-id "test"
+                                          :group-by [:century :school]})
+          grouped-label (find-grouped-header-label result)]
+      (is (= "Grouped by: Century > School"
+             grouped-label)
+          "Grouped header should show ordered grouping sequence"))))
 
 (deftest render-sortable-grouped-header-includes-grouped-column-filter-test
   (testing "grouped synthetic header includes filter control for grouped column"

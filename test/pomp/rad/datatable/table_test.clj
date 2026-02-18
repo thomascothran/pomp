@@ -81,13 +81,129 @@
     (let [attrs (second hiccup)
           children (if (map? attrs) (drop 2 hiccup) (rest hiccup))
           current (when (and (map? attrs) (contains? attrs :data-show))
-                    [(:data-show attrs)])]
+                   [(:data-show attrs)])]
       (concat current (mapcat find-data-show-values children)))
 
     (seq? hiccup)
     (mapcat find-data-show-values hiccup)
 
     :else []))
+
+(defn- find-elements
+  "Collects all nodes matching pred in a hiccup tree."
+  [pred hiccup]
+  (cond
+    (pred hiccup) [hiccup]
+
+    (vector? hiccup)
+    (mapcat #(find-elements pred %) hiccup)
+
+    (seq? hiccup)
+    (mapcat #(find-elements pred %) hiccup)
+
+    :else
+    []))
+
+(defn- find-group-row-toggle-handler
+  "Finds the data-on:click handler used for a synthetic group row toggle."
+  [group-row]
+  (or (:data-on:click (second group-row))
+      (some #(-> % second :data-on:click)
+            (find-elements
+             #(and (vector? %)
+                   (keyword? (first %))
+                   (string/starts-with? (name (first %)) "button")
+                   (map? (second %))
+                   (string/includes? (or (:data-on:click (second %)) "") "expanded"))
+             group-row))))
+
+(defn- find-group-toggle-handlers
+  "Finds all data-on:click handlers for group toggle buttons."
+  [hiccup]
+  (let [toggle-button?
+        #(and (vector? %)
+               (keyword? (first %))
+               (string/starts-with? (name (first %)) "button")
+               (map? (second %))
+               (string/includes? (or (:data-on:click (second %)) "") "expanded"))]
+    (keep #(-> % second :data-on:click)
+          (find-elements toggle-button? hiccup))))
+
+(defn- find-group-rows
+  "Finds synthetic group rows in rendered table body."
+  [hiccup]
+  (find-elements #(and (vector? %) (= :tr.bg-base-200 (first %))) hiccup))
+
+(defn- find-group-row-levels
+  "Collects group hierarchy levels from synthetic rows."
+  [hiccup]
+  (map #(-> % second :data-group-level)
+       (find-group-rows hiccup)))
+
+(defn- find-row-data-show-values
+  "Collects data-show expressions from body rows that represent data rows."
+  [hiccup]
+  (keep #(-> % second :data-show)
+        (find-elements
+         (fn [node]
+           (and (vector? node)
+                (= :tr (first node))
+                (map? (second node))
+                (contains? (second node) :data-show)))
+         hiccup)))
+
+(defn- find-leaf-rows
+  "Finds rendered leaf rows (data rows) in table body."
+  [hiccup]
+  (find-elements
+   (fn [node]
+     (and (vector? node)
+          (= :tr (first node))
+          (map? (second node))
+          (contains? (second node) :data-show)))
+   hiccup))
+
+(defn- count-tds
+  [row]
+  (count (find-elements #(and (vector? %) (= :td (first %))) row)))
+
+(defn- group-row-metadata
+  "Extracts synthetic group label and count from a group row."
+  [group-row]
+  (let [label (->> (find-elements
+                    #(and (vector? %)
+                          (= :span.font-medium (first %))
+                          (string? (last %)))
+                    group-row)
+                    first
+                    last
+                    str)
+        count-text (->> (find-elements
+                        #(and (vector? %)
+                              (= :span.text-base-content.opacity-50 (first %))
+                              (string? (last %)))
+                        group-row)
+                       first
+                       last
+                       str)
+        count-match (re-find #"\((\d+)\)" count-text)]
+    {:group-value label
+     :count (when count-match (Long/parseLong (second count-match)))}))
+
+(defn- group-expand-state-key
+  [toggle-handler]
+  (second (re-find #"\['([^']+)'\]" toggle-handler)))
+
+(defn- group-expand-key-map
+  "Returns a map of synthetic row labels to expand-state keys for deterministic
+   key-stability assertions."
+  [hiccup]
+  (into {}
+        (map (fn [group-row]
+               (let [label (:group-value (group-row-metadata group-row))
+                      key (group-expand-state-key (find-group-row-toggle-handler group-row))]
+                  [label key]))
+               (find-group-rows hiccup))))
 
 (defn- find-header-select-all-click-handler
   "Finds the header select-all checkbox click handler in rendered table hiccup."
@@ -375,7 +491,172 @@
       (is (seq expanded-shows))
       (is (every? #(string/includes? % "expanded['0']") expanded-shows))
       (is (not-any? #(string/includes? % ".expanded.0") expanded-shows)
-          "data-show should not use dot access for numeric keys"))))
+           "data-show should not use dot access for numeric keys"))))
+
+(deftest table-group-expand-state-keys-stable-by-group-identity-test
+  (let [groups-a [{:group-key :century
+                   :group-value "4th BC"
+                   :rows [{:group-key :school
+                          :group-value "Academy"
+                          :rows [{:id 1 :name "Socrates" :school "Academy"}
+                                 {:id 2 :name "Plato" :school "Academy"}]
+                          :row-ids #{1 2}
+                          :count 2}
+                         {:group-key :school
+                          :group-value "Platonism"
+                          :rows [{:id 3 :name "Aristotle" :school "Platonism"}]
+                          :row-ids #{3}
+                          :count 1}]
+                   :row-ids #{1 2 3}
+                   :count 3}
+                  {:group-key :century
+                   :group-value "3rd BC"
+                   :rows [{:group-key :school
+                          :group-value "Stoicism"
+                          :rows [{:id 4 :name "Zeno" :school "Stoicism"}]
+                          :row-ids #{4}
+                          :count 1}]
+                   :row-ids #{4}
+                   :count 1}]
+        groups-b [{:group-key :century
+                   :group-value "3rd BC"
+                   :rows [{:group-key :school
+                          :group-value "Stoicism"
+                          :rows [{:id 4 :name "Zeno" :school "Stoicism"}]
+                          :row-ids #{4}
+                          :count 1}]
+                   :row-ids #{4}
+                   :count 1}
+                  {:group-key :century
+                   :group-value "4th BC"
+                   :rows [{:group-key :school
+                          :group-value "Academy"
+                          :rows [{:id 1 :name "Socrates" :school "Academy"}
+                                 {:id 2 :name "Plato" :school "Academy"}]
+                          :row-ids #{1 2}
+                          :count 2}
+                         {:group-key :school
+                          :group-value "Platonism"
+                          :rows [{:id 3 :name "Aristotle" :school "Platonism"}]
+                          :row-ids #{3}
+                          :count 1}]
+                   :row-ids #{1 2 3}
+                   :count 3}]
+        render-groups (fn [groups]
+                        (table/render {:id "multi-group-table"
+                                      :cols [{:key :name :label "Name" :type :string}
+                                             {:key :school :label "School" :type :enum}]
+                                      :rows []
+                                      :groups groups
+                                      :group-by [:century :school]
+                                      :sort-state []
+                                      :filters {}
+                                      :total-rows 4
+                                      :page-size 10
+                                      :page-current 0
+                                      :page-sizes [10 25]
+                                      :data-url "/data"}))
+        keys-a (group-expand-key-map (render-groups groups-a))
+        keys-b (group-expand-key-map (render-groups groups-b))]
+    (testing "stable expand keys must follow group identity/path, not render index"
+      (is (= (set (keys keys-a))
+             (set (keys keys-b))
+             #{"4th BC" "3rd BC" "Academy" "Platonism" "Stoicism"}))
+      (is (= (get keys-a "4th BC") (get keys-b "4th BC"))
+          "Top-level group key should stay stable across reorder")
+      (is (= (get keys-a "3rd BC") (get keys-b "3rd BC"))
+          "Top-level group key should stay stable across reorder")
+      (is (= (get keys-a "Academy") (get keys-b "Academy"))
+          "Nested group key should stay stable across reorder")
+      (is (= (get keys-a "Platonism") (get keys-b "Platonism"))
+          "Nested group key should stay stable across reorder")
+      (is (= (get keys-a "Stoicism") (get keys-b "Stoicism"))
+          "Nested group key should stay stable across reorder")
+      (is (= 5 (count keys-a))
+          "All synthetic groups should produce one stable key each")
+      (is (= keys-a keys-b)
+          "Complete state key map should be identical despite reorder"))))
+
+(deftest table-group-nested-render-test
+  (let [groups [{:group-key :century
+                 :group-value "4th BC"
+                 :rows [{:group-key :school
+                         :group-value "Academy"
+                         :rows [{:id 1 :name "Socrates" :school "Academy"}
+                                {:id 2 :name "Plato" :school "Academy"}]
+                         :row-ids #{1 2}
+                         :count 2}
+                        {:group-key :school
+                         :group-value "Platonism"
+                         :rows [{:id 3 :name "Aristotle" :school "Platonism"}]
+                         :row-ids #{3}
+                         :count 1}]
+                 :row-ids #{1 2 3}
+                 :count 3}
+                {:group-key :century
+                 :group-value "3rd BC"
+                 :rows [{:group-key :school
+                         :group-value "Stoicism"
+                         :rows [{:id 4 :name "Zeno" :school "Stoicism"}]
+                         :row-ids #{4}
+                         :count 1}]
+                 :row-ids #{4}
+                 :count 1}]
+        result (table/render {:id "multi-group-table"
+                             :cols [{:key :name :label "Name" :type :string}
+                                    {:key :school :label "School" :type :enum}]
+                             :rows []
+                             :groups groups
+                             :group-by [:century :school]
+                             :sort-state []
+                             :filters {}
+                             :total-rows 4
+                             :page-size 10
+                             :page-current 0
+                             :page-sizes [10 25]
+                             :data-url "/data"})
+         group-rows (find-group-rows result)
+         group-metadata (map group-row-metadata group-rows)
+         group-levels (find-group-row-levels result)
+         group-toggle-handlers (find-group-toggle-handlers result)
+         leaf-row-shows (find-row-data-show-values result)]
+
+    (testing "nested groups render synthetic rows for each grouping level"
+      (is (= [1 2 2 1 2] group-levels)
+          "Nested groups should expose explicit hierarchy depth")
+      (is (= ["4th BC" "Academy" "Platonism" "3rd BC" "Stoicism"]
+              (map :group-value group-metadata))
+          "Expected century and school synthetic rows in tree order")
+      (is (= [3 2 1 1 1]
+              (map :count group-metadata))
+          "Synthetic row counts should include all matching leaf rows")
+      (is (nil? (-> group-rows first second :data-show))
+          "Top-level group rows should not be hidden by ancestor checks")
+      (is (string/includes? (-> group-rows second second :data-show)
+                            "expanded['century=4th BC']")
+          "Nested group rows should be scoped by ancestor expansion state")
+      (is (string/includes? (-> group-rows (nth 4) second :data-show)
+                            "expanded['century=3rd BC']")
+          "Nested group rows should be scoped by ancestor expansion state")
+      (is (= 5 (count group-rows))
+          "Nested result should render two grouping levels of rows")
+      (is (= 5 (count group-toggle-handlers))
+          "One toggle handler should exist for each synthetic row")
+      (is (> (count (set group-toggle-handlers)) 1)
+          "Sibling groups should not share a single toggle state"))
+
+    (testing "leaf rows are scoped to descendant groups"
+      (is (= 4 (count leaf-row-shows))
+          "Each leaf row should still render with a visibility guard")
+      (is (> (count (set leaf-row-shows)) 1)
+          "Nested visibility should vary by school descendant state"))
+
+    (testing "grouped columns are removed from leaf row cells"
+      (let [leaf-rows (find-leaf-rows result)]
+        (is (= 4 (count leaf-rows))
+            "Expected one rendered leaf row per backing row")
+        (is (every? #(= 2 (count-tds %)) leaf-rows)
+            "Expected only group spacer + non-grouped visible columns in leaf rows")))))
 
 (deftest table-cell-selection-handlers-test
   (let [result (table/render {:id "test-table"
