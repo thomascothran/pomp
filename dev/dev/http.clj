@@ -16,6 +16,7 @@
             [scratch.app-skeleton :as scratch.app-skeleton]
             [scratch.cytoscape :as scratch.cytoscape]
             [scratch.detail :as scratch.detail]
+            [scratch.node-based-ui :as scratch.node-based-ui]
             [scratch.navbar :as scratch.navbar]
             [starfederation.datastar.clojure.api :as d*]))
 
@@ -34,6 +35,9 @@
    ["/scratch/cytoscape" scratch.cytoscape/handler]
    ["/scratch/cytoscape/init" scratch.cytoscape/init-handler]
    ["/scratch/cytoscape/expand" scratch.cytoscape/expand-handler]
+   ["/scratch/node-based-ui" scratch.node-based-ui/handler]
+   ["/scratch/node-based-ui/init" scratch.node-based-ui/init-handler]
+   ["/scratch/node-based-ui/open" scratch.node-based-ui/open-handler]
    ["/scratch/navbar" scratch.navbar/handler]
    ["/scratch/app-skeleton" scratch.app-skeleton/handler]
    ["/scratch/detail" scratch.detail/handler]
