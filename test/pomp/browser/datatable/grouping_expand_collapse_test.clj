@@ -38,6 +38,10 @@
   [group-name]
   {:xpath (str "//tr[contains(@class,'bg-base-200')][.//span[contains(normalize-space(.), '" group-name "')]]//button")})
 
+(defn- group-row
+  [group-name]
+  {:xpath (str "//tr[contains(@class,'bg-base-200')][.//span[contains(normalize-space(.), '" group-name "')]]")})
+
 (defn- philosopher-row
   [philosopher-name]
   {:xpath (str "//tr[.//td[contains(normalize-space(.), '" philosopher-name "')]]")})
@@ -103,16 +107,16 @@
     (open-datatable!)
     (group-by-school!)
     (let [group-names (->> (group-row-texts) (map parse-group-name) (remove nil?) vec)
-          toggled-group (first group-names)
-          other-group (second group-names)
-          toggled-toggle (group-toggle toggled-group)
-          other-row (philosopher-row (school->first-philosopher other-group))
-          other-visible (e/visible? browser/*driver* other-row)]
+           toggled-group (first group-names)
+           other-group (second group-names)
+           toggled-toggle (group-toggle toggled-group)
+           other-group-row (group-row other-group)]
       (is toggled-group "Expected one visible group to toggle")
       (is other-group "Expected at least two visible groups")
+      (is (e/visible? browser/*driver* other-group-row)
+          "Expected other group to be visible before toggling")
       (e/click browser/*driver* toggled-toggle)
-      (e/wait-predicate #(= other-visible (e/visible? browser/*driver* other-row)))
-      (is (= other-visible (e/visible? browser/*driver* other-row))
+      (is (e/visible? browser/*driver* other-group-row)
           "Expected other group visibility unchanged"))))
 
 (deftest group-outer-collapse-hides-nested-groups-and-rows-test

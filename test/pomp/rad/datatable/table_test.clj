@@ -651,12 +651,44 @@
       (is (> (count (set leaf-row-shows)) 1)
           "Nested visibility should vary by school descendant state"))
 
-    (testing "grouped columns are removed from leaf row cells"
+    (testing "grouped columns remain visible in leaf row cells"
       (let [leaf-rows (find-leaf-rows result)]
         (is (= 4 (count leaf-rows))
             "Expected one rendered leaf row per backing row")
-        (is (every? #(= 2 (count-tds %)) leaf-rows)
-            "Expected only group spacer + non-grouped visible columns in leaf rows")))))
+        (is (every? #(= 3 (count-tds %)) leaf-rows)
+            "Expected group spacer + all visible data columns in grouped leaf rows")))))
+
+(deftest table-grouped-multi-column-leaf-rows-keep-grouped-columns-test
+  (let [groups [{:group-key :school
+                 :group-value "Academy"
+                 :rows [{:group-key :region
+                         :group-value "Greece"
+                         :rows [{:id 1 :name "Plato" :school "Academy" :region "Greece"}
+                                {:id 2 :name "Speusippus" :school "Academy" :region "Greece"}]
+                         :row-ids #{1 2}
+                         :count 2}]
+                 :row-ids #{1 2}
+                 :count 2}]
+        result (table/render {:id "grouped-table"
+                              :cols [{:key :name :label "Name" :type :string}
+                                     {:key :school :label "School" :type :enum}
+                                     {:key :region :label "Region" :type :enum}]
+                              :rows []
+                              :groups groups
+                              :group-by [:school :region]
+                              :sort-state []
+                              :filters {}
+                              :total-rows 2
+                              :page-size 10
+                              :page-current 0
+                              :page-sizes [10 25]
+                              :data-url "/data"})
+        leaf-rows (find-leaf-rows result)]
+    (testing "multi-group leaf rows keep grouped data columns instead of hiding them"
+      (is (= 2 (count leaf-rows))
+          "Expected one rendered leaf row per backing row")
+      (is (every? #(= 4 (count-tds %)) leaf-rows)
+          "Expected group spacer + name + school + region cells in grouped leaf rows"))))
 
 (deftest table-cell-selection-handlers-test
   (let [result (table/render {:id "test-table"

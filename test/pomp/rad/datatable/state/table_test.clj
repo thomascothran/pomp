@@ -35,5 +35,32 @@
           "Search shorter than 2 chars should be normalized to empty")
       (is (= (:filters signals) (:filters @captured-signals))
           "Global search should not clear existing filters")
-      (is (= (:sort signals) (:sort @captured-signals))
-          "Global search should not clear existing sort state"))))
+       (is (= (:sort signals) (:sort @captured-signals))
+           "Global search should not clear existing sort state"))))
+
+(deftest next-state-grouping-transition-preserves-filters-test
+  (testing "adding a grouped column preserves existing filters"
+    (let [signals {:filters {:school [{:type "enum" :op "is" :value "Academy"}]
+                             :region [{:type "enum" :op "is" :value "Greece"}]}
+                   :sort []
+                   :page {:size 10 :current 2}
+                   :group-by [:school]
+                   :globalTableSearch ""}
+          next-signals (table-state/next-state signals {"groupBy" "region"})]
+      (is (= [:school :region] (:group-by next-signals))
+          "Grouping transition should append new grouped column")
+      (is (= (:filters signals) (:filters next-signals))
+          "Grouping transition should preserve active column filters")))
+
+  (testing "ungrouping preserves remaining active filters"
+    (let [signals {:filters {:school [{:type "enum" :op "is" :value "Academy"}]
+                             :region [{:type "enum" :op "is" :value "Greece"}]}
+                   :sort []
+                   :page {:size 10 :current 2}
+                   :group-by [:school :region]
+                   :globalTableSearch ""}
+          next-signals (table-state/next-state signals {"ungroup" "true"})]
+      (is (= [:school] (:group-by next-signals))
+          "Ungroup should remove only the deepest grouped column")
+      (is (= (:filters signals) (:filters next-signals))
+          "Ungroup transition should not wipe active filters"))))

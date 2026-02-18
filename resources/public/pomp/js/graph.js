@@ -3,6 +3,7 @@
   const NODE_EXPAND_EVENT = 'pomp-graph-node-expand';
   const DEFAULT_RELATION = 'graph/neighbors';
   const LISTENER_STATE_KEY = '__pompGraphListenerState';
+  const RESIZE_STATE_KEY = '__pompGraphResizeState';
   const EXPAND_DEDUPE_WINDOW_MS = 250;
 
   function ensureRegistry() {
@@ -714,6 +715,58 @@
     cy.on('dblclick', 'node', emitExpand);
   }
 
+  function registerResizeSync(cy, hostEl, canvasEl) {
+    if (!cy || typeof cy.resize !== 'function') {
+      return;
+    }
+
+    const existingState = cy.scratch(RESIZE_STATE_KEY);
+    if (existingState && existingState.registered) {
+      return;
+    }
+
+    const resizeNow = function() {
+      try {
+        cy.resize();
+      } catch (_e) {
+        // no-op
+      }
+    };
+
+    const state = {
+      registered: true,
+      observer: null
+    };
+
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      const onWindowResize = function() {
+        resizeNow();
+      };
+
+      window.addEventListener('resize', onWindowResize, { passive: true });
+      state.onWindowResize = onWindowResize;
+    }
+
+    if (typeof window !== 'undefined' && typeof window.ResizeObserver === 'function') {
+      const targetEl = hostEl || canvasEl || (typeof cy.container === 'function' ? cy.container() : null);
+      if (targetEl) {
+        const observer = new window.ResizeObserver(function() {
+          resizeNow();
+        });
+        observer.observe(targetEl);
+        state.observer = observer;
+      }
+    }
+
+    cy.scratch(RESIZE_STATE_KEY, state);
+
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(resizeNow);
+    } else {
+      window.setTimeout(resizeNow, 0);
+    }
+  }
+
   function initGraph(payload) {
     ensureRegistry();
 
@@ -750,6 +803,7 @@
     }
 
     registerGraphBridge(cy, graphId, hostEl, payload || {});
+    registerResizeSync(cy, hostEl, canvasEl);
 
     const initPatchResult = applyPatchDedup(cy, {
       nodes: payload && payload.nodes,

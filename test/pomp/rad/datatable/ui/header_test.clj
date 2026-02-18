@@ -303,8 +303,8 @@
              grouped-label)
           "Grouped header should show ordered grouping sequence"))))
 
-(deftest render-sortable-grouped-header-includes-grouped-column-filter-test
-  (testing "grouped synthetic header includes filter control for grouped column"
+(deftest render-sortable-grouped-header-excludes-grouped-column-filter-test
+  (testing "grouped synthetic header does not include filter control"
     (let [cols [{:key :school :label "School" :type :string}
                 {:key :name :label "Name" :type :string}]
           result (header/render-sortable {:cols cols
@@ -321,11 +321,11 @@
           grouped-popovertargets (set (popovertargets-in-node grouped-header-th))]
       (is (some? grouped-header-th)
           "Expected grouped synthetic header cell to be present")
-      (is (contains? grouped-popovertargets "filter-school")
-          "Grouped synthetic header should expose filter popover for grouped column"))))
+      (is (not (contains? grouped-popovertargets "filter-school"))
+          "Grouped synthetic header should not expose grouped column filter popover"))))
 
-(deftest render-sortable-grouped-header-dedups-grouped-column-test
-  (testing "grouped mode keeps synthetic grouped menu and removes regular grouped column menu"
+(deftest render-sortable-grouped-header-keeps-grouped-column-menu-test
+  (testing "grouped mode keeps grouped column as a regular visible/filterable header"
     (let [cols [{:key :school :label "School" :type :string}
                 {:key :name :label "Name" :type :string}]
           result (header/render-sortable {:cols cols
@@ -337,8 +337,31 @@
           popovertargets (set (popovertargets-in-node result))]
       (is (contains? popovertargets "col-menu-group")
           "Expected grouped mode to render synthetic grouped column menu")
-      (is (not (contains? popovertargets "col-menu-school"))
-          "Expected grouped mode to hide regular grouped column menu to avoid duplicate grouped dimension"))))
+      (is (contains? popovertargets "col-menu-school")
+          "Expected grouped mode to keep grouped column menu visible")
+      (is (contains? popovertargets "filter-school")
+          "Expected grouped mode to keep grouped column filter visible"))))
+
+(deftest render-sortable-multi-group-shows-independent-grouped-column-filters-test
+  (testing "multi-group mode keeps each grouped column visible with independent filter affordances"
+    (let [cols [{:key :school :label "School" :type :string}
+                {:key :region :label "Region" :type :string}
+                {:key :name :label "Name" :type :string}]
+          result (header/render-sortable {:cols cols
+                                          :sort-state []
+                                          :filters {}
+                                          :data-url "/data"
+                                          :table-id "test"
+                                          :group-by [:school :region]})
+          popovertargets (set (popovertargets-in-node result))]
+      (is (contains? popovertargets "col-menu-school")
+          "Expected School grouped column menu to remain visible")
+      (is (contains? popovertargets "col-menu-region")
+          "Expected Region grouped column menu to remain visible")
+      (is (contains? popovertargets "filter-school")
+          "Expected School grouped column filter to remain visible")
+      (is (contains? popovertargets "filter-region")
+          "Expected Region grouped column filter to remain visible"))))
 
 (deftest render-sortable-select-all-handler-is-signal-driven-test
   (testing "header select-all writes known row selection signals without DOM querying"

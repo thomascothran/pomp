@@ -21,6 +21,15 @@
 (def group-by-school-item
   {:xpath "//div[@id='col-menu-school']//a[contains(normalize-space(.), 'Group by')]"})
 
+(def region-menu-button
+  {:css "button[popovertarget='col-menu-region']"})
+
+(def group-by-region-item
+  {:xpath "//div[@id='col-menu-region']//a[contains(normalize-space(.), 'Group by')]"})
+
+(def ungroup-group-item
+  {:xpath "//div[@id='col-menu-group']//a[contains(normalize-space(.), 'Ungroup')]"})
+
 (def school-header-button
   {:xpath "//th//button[.//span[contains(@class,'font-semibold') and normalize-space(text())='School']]"})
 
@@ -46,13 +55,13 @@
   {:xpath "//div[@id='filter-region']//button[normalize-space(text())='Apply']"})
 
 (def group-row-selector
-  {:css "#datatable tr.bg-base-200"})
+  {:css "#datatable tr[data-group-level]"})
 
 (def group-menu-button
   {:css "button[popovertarget='col-menu-group']"})
 
-(def grouped-school-header-filter-button
-  {:xpath "//th[.//button[@popovertarget='col-menu-group'] and .//span[contains(@class,'font-semibold') and normalize-space(text())='School']]//button[@popovertarget='filter-school']"})
+(def top-level-group-row-selector
+  {:css "#datatable tr[data-group-level='1']"})
 
 (def group-sort-asc-item
   {:xpath "//div[@id='col-menu-group']//a[contains(normalize-space(.), 'Sort ascending')]"})
@@ -76,6 +85,14 @@
   (e/click browser/*driver* school-menu-button)
   (e/wait-visible browser/*driver* group-by-school-item)
   (e/click browser/*driver* group-by-school-item)
+  (e/wait-visible browser/*driver* group-row-selector))
+
+(defn- group-by-school-and-region!
+  []
+  (group-by-school!)
+  (e/click browser/*driver* region-menu-button)
+  (e/wait-visible browser/*driver* group-by-region-item)
+  (e/click browser/*driver* group-by-region-item)
   (e/wait-visible browser/*driver* group-row-selector))
 
 (defn- group-row-texts
@@ -104,6 +121,34 @@
 (defn- group-row-count
   []
   (count (e/query-all browser/*driver* group-row-selector)))
+
+(defn- top-level-group-row-count
+  []
+  (count (e/query-all browser/*driver* top-level-group-row-selector)))
+
+(defn- expected-top-level-group-count
+  [rows]
+  (->> rows (map :school) distinct count))
+
+(defn- expected-grouped-row-count
+  [rows]
+  (let [school-count (expected-top-level-group-count rows)
+        school-region-count (->> rows (map (juxt :school :region)) distinct count)]
+    (+ school-count school-region-count)))
+
+(defn- apply-school-filter!
+  [value]
+  (e/click browser/*driver* school-filter-button)
+  (e/wait-visible browser/*driver* school-filter-input)
+  (e/fill browser/*driver* school-filter-input value)
+  (e/click browser/*driver* school-filter-apply))
+
+(defn- apply-region-filter!
+  [value]
+  (e/click browser/*driver* region-filter-button)
+  (e/wait-visible browser/*driver* region-filter-input)
+  (e/fill browser/*driver* region-filter-input value)
+  (e/click browser/*driver* region-filter-apply))
 
 (defn- parse-pagination-label
   [text]
@@ -173,25 +218,37 @@
         (is (= #{"Confucianism" "Taoism"} schools)
             "Expected only Confucianism/Taoism groups after region filter")))))
 
-(deftest grouped-pagination-uses-group-count-in-memory-test
-  (testing "grouped pagination pages by group count"
+(deftest grouped-pagination-uses-real-row-count-in-memory-test
+  (testing "grouped pagination totals and ranges are based on real rows"
     (open-datatable!)
     (group-by-school!)
-    (let [group-count (count (expected-school-order))
+    (let [row-count (count (:rows datatable/*state*))
           page-size 10
-          expected-first-page (min page-size group-count)
-          expected-second-page (- group-count expected-first-page)]
-      (is (= expected-first-page (group-row-count))
-          "Expected first page to show only page-size groups")
+          expected-first-page-end (min page-size row-count)
+          expected-second-page-start (inc expected-first-page-end)
+          expected-second-page-end (min row-count (+ expected-first-page-end page-size))]
       (let [{:keys [start end total]} (parse-pagination-label
                                        (e/get-element-text browser/*driver* pagination-label))]
         (is (= 1 start) "Expected pagination label to start at 1")
-        (is (= expected-first-page end) "Expected pagination label end to match group count")
-        (is (= group-count total) "Expected pagination label total to match group count"))
+        (is (= expected-first-page-end end)
+            "Expected first page label range to use real-row page size")
+        (is (= row-count total)
+            "Expected pagination label total to match real row count"))
       (e/click browser/*driver* next-page-button)
-      (e/wait-predicate #(= expected-second-page (group-row-count)))
-      (is (= expected-second-page (group-row-count))
-          "Expected second page to show remaining groups"))))
+      (e/wait-predicate
+       #(let [{:keys [start end total]} (parse-pagination-label
+                                         (e/get-element-text browser/*driver* pagination-label))]
+          (and (= expected-second-page-start start)
+               (= expected-second-page-end end)
+               (= row-count total))))
+      (let [{:keys [start end total]} (parse-pagination-label
+                                       (e/get-element-text browser/*driver* pagination-label))]
+        (is (= expected-second-page-start start)
+            "Expected second page label start to advance by page size")
+        (is (= expected-second-page-end end)
+            "Expected second page label end to cap at real row count")
+        (is (= row-count total)
+            "Expected second page total to remain the real row count")))))
 
 (deftest grouped-school-sort-available-on-group-column-in-memory-test
   (testing "group column menu exposes sorting and updates group order"
@@ -218,20 +275,78 @@
           (is (str/includes? (first-group-text) last-school)
               "Expected group column sort descending to order groups"))))))
 
-(deftest grouped-school-filter-available-from-synthetic-header-in-memory-test
-  (testing "grouped synthetic school header exposes school filter control"
+(deftest grouped-school-and-region-filter-by-school-only-in-memory-test
+  (testing "grouping by school and region supports school-only filtering"
     (open-datatable!)
-    (group-by-school!)
-    (is (not (e/exists? browser/*driver* school-menu-button))
-        "Expected grouped mode to remove regular School column menu button")
-    (let [filter-in-grouped-header? (e/exists? browser/*driver* grouped-school-header-filter-button)]
-      (is filter-in-grouped-header?
-          "Expected grouped synthetic School header to expose School filter control")
-      (when filter-in-grouped-header?
-        (e/click browser/*driver* grouped-school-header-filter-button)
-        (e/wait-visible browser/*driver* school-filter-input)
-        (e/fill browser/*driver* school-filter-input "Stoicism")
-        (e/click browser/*driver* school-filter-apply)
-        (e/wait-predicate #(= 1 (group-row-count)))
-        (is (= 1 (group-row-count))
-            "Expected grouped-header School filter path to reduce groups")))))
+    (group-by-school-and-region!)
+    (apply-school-filter! "Stoicism")
+    (let [filtered-rows (filter #(= "Stoicism" (:school %)) (:rows datatable/*state*))
+          expected-top-level (expected-top-level-group-count filtered-rows)
+          expected-total (expected-grouped-row-count filtered-rows)]
+      (e/wait-predicate #(= expected-total (group-row-count)))
+      (is (= expected-top-level (top-level-group-row-count))
+          "Expected school-only filter to keep only matching school groups")
+      (is (= expected-total (group-row-count))
+          "Expected school-only filter to keep nested region groups for that school"))
+
+    (testing "school filter remains applied after ungroup/regroup"
+      (let [filtered-rows (filter #(= "Stoicism" (:school %)) (:rows datatable/*state*))
+            expected-top-level (expected-top-level-group-count filtered-rows)
+            expected-total (expected-grouped-row-count filtered-rows)]
+        (e/click browser/*driver* group-menu-button)
+        (e/wait-visible browser/*driver* ungroup-group-item)
+        (e/click browser/*driver* ungroup-group-item)
+        (e/wait-predicate #(= expected-top-level (top-level-group-row-count)))
+        (is (= expected-top-level (top-level-group-row-count))
+            "Expected ungrouping to keep the active school filter")
+
+        (e/click browser/*driver* region-menu-button)
+        (e/wait-visible browser/*driver* group-by-region-item)
+        (e/click browser/*driver* group-by-region-item)
+        (e/wait-predicate #(= expected-total (group-row-count)))
+        (is (= expected-top-level (top-level-group-row-count))
+            "Expected regrouping to keep the active school filter")
+        (is (= expected-total (group-row-count))
+            "Expected regrouping to restore nested groups from filtered rows")))))
+
+(deftest grouped-school-and-region-filter-by-region-only-in-memory-test
+  (testing "grouping by school and region supports region-only filtering"
+    (open-datatable!)
+    (group-by-school-and-region!)
+    (apply-region-filter! "China")
+    (let [filtered-rows (filter #(= "China" (:region %)) (:rows datatable/*state*))
+          expected-top-level (expected-top-level-group-count filtered-rows)
+          expected-total (expected-grouped-row-count filtered-rows)
+          expected-schools (->> filtered-rows (map :school) set)]
+      (e/wait-predicate #(= expected-total (group-row-count)))
+      (let [group-texts (group-row-texts)]
+      (is (= expected-top-level (top-level-group-row-count))
+          "Expected region-only filter to keep only schools in that region")
+      (is (= expected-total (group-row-count))
+          "Expected region-only filter to keep nested groups for matching school/region pairs")
+      (is (every? (fn [school]
+                    (some #(str/includes? % school) group-texts))
+                  expected-schools)
+          "Expected group rows to include each school represented in the region")))))
+
+(deftest grouped-school-and-region-filter-by-school-and-region-in-memory-test
+  (testing "grouping by school and region supports combined filtering"
+    (open-datatable!)
+    (group-by-school-and-region!)
+    (apply-school-filter! "Stoicism")
+    (apply-region-filter! "Greece")
+    (let [filtered-rows (filter #(and (= "Stoicism" (:school %))
+                                      (= "Greece" (:region %)))
+                                (:rows datatable/*state*))
+          expected-top-level (expected-top-level-group-count filtered-rows)
+          expected-total (expected-grouped-row-count filtered-rows)]
+      (e/wait-predicate #(= expected-total (group-row-count)))
+      (let [group-texts (group-row-texts)]
+      (is (= expected-top-level (top-level-group-row-count))
+          "Expected combined filters to keep only the matching school group")
+      (is (= expected-total (group-row-count))
+          "Expected combined filters to keep only matching school-region groups")
+      (is (some #(str/includes? % "Stoicism") group-texts)
+          "Expected grouped rows to include the selected school")
+      (is (not-any? #(str/includes? % "Rome") group-texts)
+          "Expected combined filters to exclude non-matching regions")))))

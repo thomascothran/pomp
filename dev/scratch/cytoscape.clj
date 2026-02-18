@@ -1,5 +1,6 @@
 (ns scratch.cytoscape
-  (:require [dev.onionpancakes.chassis.core :as c]
+  (:require [clojure.string :as str]
+            [dev.onionpancakes.chassis.core :as c]
             [pomp.graph :as graph]))
 
 (def graph-id "scratch-cytoscape")
@@ -30,6 +31,36 @@
 (def expand-handler
   (:expand graph-handlers))
 
+(def ^:private on-node-select-script
+  (str/join
+   " "
+   ["const _detail = (evt && evt.detail) || {};"
+    "const _node = _detail.node || null;"
+    "const _graphId = ($graph && $graph.graphId) || 'scratch-cytoscape';"
+    "const _container = document.querySelector('#cy-selected-node-properties');"
+    "if (!_container) return;"
+    "const _escapeHtml = (value) => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');"
+    "const _escapeAttr = (value) => String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;');"
+    "const _labelClass = 'text-xs uppercase tracking-wide text-base-content/60';"
+    "const _valueClass = 'font-mono text-sm';"
+    "const _parseObject = (value) => { if (!value) return null; if (typeof value === 'string') { try { const parsed = JSON.parse(value); return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : null; } catch (_e) { return null; } } if (typeof value === 'object' && !Array.isArray(value)) return value; return null; };"
+    "const _propertiesFromText = (text) => { if (typeof text !== 'string') return null; const result = {}; const lines = text.split('\\n'); for (let i = 0; i < lines.length; i += 1) { const line = lines[i].trim(); if (!line) continue; const idx = line.indexOf('->'); if (idx < 0) continue; const key = line.slice(0, idx).trim(); if (!key) continue; result[key] = line.slice(idx + 2).trim(); } return Object.keys(result).length ? result : null; };"
+    "let _properties = _parseObject(_node && _node.properties);"
+    "if (!_properties) _properties = _propertiesFromText(_detail.nodePropertiesText);"
+    "if (!_properties) _properties = {};"
+    "_container.__cySelectedNodeId = _detail.nodeId || null;"
+    "_container.__cyProperties = Object.assign({}, _properties);"
+    "_container.__cyRender = function() { const props = _container.__cyProperties || {}; const keys = Object.keys(props).sort(); const rows = []; for (let i = 0; i < keys.length; i += 1) { const key = keys[i]; rows.push(\"<div class='group space-y-0.5' data-cy-prop-key='\" + _escapeAttr(key) + \"'><div class='\" + _labelClass + \"'>\" + _escapeHtml(key) + \"</div><div class='flex items-center gap-1'><div class='\" + _valueClass + \"' data-cy-prop-value='true'>\" + _escapeHtml(props[key]) + \"</div><button type='button' tabindex='-1' class='btn btn-ghost btn-xs h-5 min-h-0 px-1 text-base-content/55 pointer-events-none opacity-0 transition-opacity group-hover:opacity-100' data-cy-prop-edit='true' aria-hidden='true'>&#9998;</button></div></div>\"); } if (!rows.length) { rows.push(\"<div class='space-y-0.5'><div class='text-xs uppercase tracking-wide text-base-content/60'>No properties</div><div class='font-mono text-sm'>none</div></div>\"); } _container.innerHTML = rows.join(''); $graph.selectedNodePropertiesText = (_container.textContent || '').trim() || 'none'; };"
+    "_container.__cyCommit = function(key, nextValue) { const nodeId = _container.__cySelectedNodeId; if (!nodeId) return; const props = _container.__cyProperties || {}; props[key] = nextValue; _container.__cyProperties = props; const g = window.pompGraphs && window.pompGraphs[_graphId]; const cy = g && (g.cy || g); const selected = cy && cy.getElementById ? cy.getElementById(nodeId) : null; if (selected && !selected.empty()) { let selectedProps = _parseObject(selected.data('properties')); if (!selectedProps) selectedProps = {}; selectedProps[key] = nextValue; selected.data('properties', selectedProps); } _container.__cyRender(); };"
+    "_container.__cyStartEdit = function(row) { if (!row || row.getAttribute('data-cy-editing') === 'true') return; const key = row.getAttribute('data-cy-prop-key'); if (!key) return; const props = _container.__cyProperties || {}; const current = Object.prototype.hasOwnProperty.call(props, key) ? props[key] : ''; const valueWrap = row.querySelector('[data-cy-prop-value]'); if (!valueWrap) return; row.setAttribute('data-cy-editing', 'true'); valueWrap.innerHTML = \"<input type='text' data-cy-prop-input='true' class='input input-bordered input-xs w-full font-mono text-sm' />\"; const input = valueWrap.querySelector('input[data-cy-prop-input]'); if (!input) { row.removeAttribute('data-cy-editing'); return; } input.value = String(current == null ? '' : current); input.focus(); input.select(); let finished = false; const finish = (cancelled) => { if (finished) return; finished = true; row.removeAttribute('data-cy-editing'); if (cancelled) { _container.__cyRender(); return; } _container.__cyCommit(key, input.value); }; input.addEventListener('keydown', (event) => { if (event.key === 'Enter') { event.preventDefault(); finish(false); } else if (event.key === 'Escape') { event.preventDefault(); finish(true); } }); input.addEventListener('blur', () => finish(false)); };"
+    "if (!_container.dataset.cyPropEditingBound) { _container.dataset.cyPropEditingBound = 'true'; _container.addEventListener('dblclick', (event) => { const value = event.target && event.target.closest('[data-cy-prop-value]'); if (!value) return; const row = value.closest('[data-cy-prop-key]'); _container.__cyStartEdit(row); }); }"
+    "_container.__cyRender();"
+    "$graph.selectedNodeId = _detail.nodeId || null;"
+    "$graph.selectedNode = _node || null;"]))
+
+(def ^:private on-node-expand-script
+  "const _detail = (evt && evt.detail) || {}; const _graphId = _detail.graphId || $graph.graphId; const _relation = _detail.relation || $graph.relation || 'graph/neighbors'; $graph.expandRequest = { graphId: _graphId, nodeId: _detail.nodeId || null, relation: _relation }; @post('/scratch/cytoscape/expand', { requestCancellation: 'auto' })")
+
 (defn page
   [& children]
   [:html {:data-theme "light"}
@@ -48,49 +79,45 @@
    :headers {"Content-Type" "text/html"}
    :body
    (c/html
-     (page
-      [:main {:class "mx-auto flex min-h-screen w-full min-w-[1100px] max-w-[1440px] flex-col gap-4 p-6"}
-       [:header {:class "space-y-2"}
-        [:h1 {:class "text-3xl font-semibold tracking-tight"} "Cytoscape Scratch Demo"]
-        [:p {:class "text-sm text-base-content/70"}
-         "Server-driven Cytoscape exploration with Datastar event wiring."]]
-       [:section {:class "grid flex-1 grid-cols-[1fr_360px] gap-4"}
+    (page
+     [:main {:class "mx-auto flex min-h-screen w-full min-w-[1100px] max-w-[1440px] flex-col gap-4 p-6"}
+      [:header {:class "space-y-2"}
+       [:h1 {:class "text-3xl font-semibold tracking-tight"} "Cytoscape Scratch Demo"]
+       [:p {:class "text-sm text-base-content/70"}
+        "Server-driven Cytoscape exploration with Datastar event wiring."]]
+      [:section {:class "grid h-full flex-1 grid-cols-[1fr_360px] gap-4"
+                 :style "min-height: 640px;"}
+       [:section {:class "card h-full border border-base-300 bg-base-100 shadow-sm"}
+        [:div {:class "card-body h-full p-4"}
+         [:div {:id "scratch-cytoscape-host"
+                :class "relative h-full rounded-box border border-base-300 bg-base-200"
+                :style "height: 100%; min-height: 640px;"
+                :data-pomp-graph-id graph-id
+                :data-signals (str "{graph: {graphId: '" graph-id
+                                   "', seedNodeId: '" seed-node-id
+                                   "', relation: 'graph/neighbors', selectedNode: null, selectedNodePropertiesText: 'none', expandRequest: null, errorByNodeId: {}}}")
+                :data-init "@post('/scratch/cytoscape/init')"
+                :data-on:pomp-graph-node-select on-node-select-script
+                :data-on:pomp-graph-node-expand on-node-expand-script}
+          [:div {:id "scratch-cytoscape-canvas"
+                 :class "h-full w-full rounded-box"
+                 :data-pomp-graph-canvas "true"}]]]]
+       [:aside {:class "space-y-4"}
         [:section {:class "card border border-base-300 bg-base-100 shadow-sm"}
-         [:div {:class "card-body p-4"}
-          [:div {:id "scratch-cytoscape-host"
-                 :class "relative h-[640px] rounded-box border border-base-300 bg-base-200"
-                 :style "height: 640px;"
-                 :data-pomp-graph-id graph-id
-                   :data-signals (str "{graph: {graphId: '" graph-id
-                                      "', seedNodeId: '" seed-node-id
-                                      "', relation: 'graph/neighbors', selectedNode: null, selectedNodePropertiesText: 'none', expandRequest: null, pendingByNodeId: {}, errorByNodeId: {}}}")
-                  :data-init "@post('/scratch/cytoscape/init')"
-                  :data-on:pomp-graph-node-select "const _detail = (evt && evt.detail) || {}; const _node = _detail.node || null; const _rawProperties = _node && _node.properties; let _properties = null; if (_rawProperties && typeof _rawProperties === 'string') { try { const _parsed = JSON.parse(_rawProperties); if (_parsed && typeof _parsed === 'object' && !Array.isArray(_parsed)) { _properties = _parsed; } } catch (_e) {} } else if (_rawProperties && typeof _rawProperties === 'object' && !Array.isArray(_rawProperties)) { _properties = _rawProperties; } const _escapeHtml = (value) => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\"/g, '&quot;').replace(/'/g, '&#39;'); const _labelClass = 'text-xs uppercase tracking-wide text-base-content/60'; const _valueClass = 'font-mono text-sm'; let _rows = ''; if (_properties) { const _keys = Object.keys(_properties).sort(); for (let i = 0; i < _keys.length; i += 1) { const _key = _keys[i]; _rows += \"<div class='space-y-0.5'><div class='\" + _labelClass + \"'>\" + _escapeHtml(_key) + \"</div><div class='\" + _valueClass + \"'>\" + _escapeHtml(_properties[_key]) + \"</div></div>\"; } } if (!_rows && typeof _detail.nodePropertiesText === 'string') { const _lines = _detail.nodePropertiesText.split('\\n'); for (let i = 0; i < _lines.length; i += 1) { const _line = _lines[i].trim(); if (!_line) continue; const _idx = _line.indexOf('->'); if (_idx < 0) continue; const _key = _line.slice(0, _idx).trim(); if (!_key) continue; const _value = _line.slice(_idx + 2).trim(); _rows += \"<div class='space-y-0.5'><div class='\" + _labelClass + \"'>\" + _escapeHtml(_key) + \"</div><div class='\" + _valueClass + \"'>\" + _escapeHtml(_value) + \"</div></div>\"; } } if (!_rows) { _rows = \"<div class='space-y-0.5'><div class='text-xs uppercase tracking-wide text-base-content/60'>No properties</div><div class='font-mono text-sm'>none</div></div>\"; } $graph.selectedNodeId = _detail.nodeId || null; $graph.selectedNode = _node; const _el = document.getElementById('cy-selected-node-properties'); if (_el) { _el.innerHTML = _rows; }"
-                  :data-on:pomp-graph-node-expand "const _detail = (evt && evt.detail) || {}; const _graphId = _detail.graphId || $graph.graphId; const _relation = _detail.relation || $graph.relation || 'graph/neighbors'; $graph.expandRequest = { graphId: _graphId, nodeId: _detail.nodeId || null, relation: _relation }; @post('/scratch/cytoscape/expand', { requestCancellation: 'auto' })"}
-           [:div {:id "scratch-cytoscape-canvas"
-                  :class "h-full w-full rounded-box"
-                  :data-pomp-graph-canvas "true"}]]]]
-        [:aside {:class "space-y-4"}
-         [:section {:class "card border border-base-300 bg-base-100 shadow-sm"}
-           [:div {:class "card-body gap-2 p-4"}
-            [:h2 {:class "card-title text-base"} "Details"]
-             [:div {:class "mt-2 max-h-48 space-y-2 overflow-auto"
-                    :id "cy-selected-node-properties"}
-              [:div {:class "space-y-0.5"}
-               [:div {:class "text-xs uppercase tracking-wide text-base-content/60"} "No properties"]
-               [:div {:class "font-mono text-sm"} "none"]]]]]
-         [:section {:class "card border border-base-300 bg-base-100 shadow-sm"}
-          [:div {:class "card-body gap-3 p-4"}
-           [:h2 {:class "card-title text-base"} "Node Type Legend + Status"]
-           [:div {:class "grid grid-cols-2 gap-x-4 gap-y-2 text-sm"}
-            (for [{:keys [type marker-style]} node-type-legend]
-              [:div {:class "flex items-center gap-2"
-                     :key type}
-               [:span {:class "inline-block h-4 w-4 border border-base-content/35"
-                       :style marker-style}]
-               [:span {:data-cy-node-type-label "true"} type]])]
-           [:div {:class "rounded-box border border-base-300 bg-base-200/70 p-3 text-sm"}
-            [:span {:class "text-base-content/70"} "Pending nodes: "]
-            [:span {:class "font-semibold"
-                    :id "cy-pending-count"
-                    :data-text "Object.keys($graph.pendingByNodeId || {}).length"}]]]]]]]))})
+         [:div {:class "card-body gap-2 p-4"}
+          [:h2 {:class "card-title text-base"} "Details"]
+          [:div {:class "mt-2 max-h-48 space-y-2 overflow-auto"
+                 :id "cy-selected-node-properties"}
+           [:div {:class "space-y-0.5"}
+            [:div {:class "text-xs uppercase tracking-wide text-base-content/60"} "No properties"]
+            [:div {:class "font-mono text-sm"} "none"]]]]]
+        [:section {:class "card border border-base-300 bg-base-100 shadow-sm"}
+         [:div {:class "card-body gap-3 p-4"}
+          [:h2 {:class "card-title text-base"} "Node Type Legend"]
+          [:div {:class "grid grid-cols-2 gap-x-4 gap-y-2 text-sm"}
+           (for [{:keys [type marker-style]} node-type-legend]
+             [:div {:class "flex items-center gap-2"
+                    :key type}
+              [:span {:class "inline-block h-4 w-4 border border-base-content/35"
+                      :style marker-style}]
+              [:span {:data-cy-node-type-label "true"} type]])]]]]]]))})

@@ -16,10 +16,7 @@
 (defn next-state
   [signals query-params]
   (let [new-group-by (group-state/next-state (:group-by signals) query-params)
-        grouping-changed? (not= new-group-by (:group-by signals))
-        new-filters (if grouping-changed?
-                      {}
-                      (or (filter-state/next-state (:filters signals) query-params) {}))
+        new-filters (or (filter-state/next-state (:filters signals) query-params) {})
         new-sort (or (sort-state/next-state (:sort signals) query-params new-group-by) [])
         new-page (page-state/next-state (:page signals) query-params)
         new-search-string (normalize-search-string (:globalTableSearch signals))]

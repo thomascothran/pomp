@@ -14,6 +14,7 @@
             [dev.logger :as log]
             [scratch.autocomplete :as scratch.autocomplete]
             [scratch.app-skeleton :as scratch.app-skeleton]
+            [scratch.cytoscape :as scratch.cytoscape]
             [scratch.detail :as scratch.detail]
             [scratch.navbar :as scratch.navbar]
             [starfederation.datastar.clojure.api :as d*]))
@@ -30,6 +31,9 @@
     (ddt/make-routes config)]
    ["/scratch/autocomplete" scratch.autocomplete/handler]
    ["/scratch/autocomplete/options" scratch.autocomplete/options-handler]
+   ["/scratch/cytoscape" scratch.cytoscape/handler]
+   ["/scratch/cytoscape/init" scratch.cytoscape/init-handler]
+   ["/scratch/cytoscape/expand" scratch.cytoscape/expand-handler]
    ["/scratch/navbar" scratch.navbar/handler]
    ["/scratch/app-skeleton" scratch.app-skeleton/handler]
    ["/scratch/detail" scratch.detail/handler]

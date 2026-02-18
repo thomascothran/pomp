@@ -29,34 +29,25 @@
 
 (defn render-sortable
   [{:keys [cols sort-state filters data-url selectable? table-id group-by filter-operations visible-row-ids]}]
-  (let [table-filter-ops filter-operations
-        grouped? (seq group-by)
-        group-col-key (first group-by)
-        group-col-keys (set group-by)
-        grouped-cols (map (fn [group-key]
-                           (or (first
-                                (filter #(= (:key %) group-key) cols))
-                               {:key group-key :label (name group-key)}))
-                         group-by)
-        grouped-label (string/join " > " (map :label grouped-cols))
-        visible-cols (if grouped?
-                        (remove #(contains? group-col-keys (:key %)) cols)
-                        cols)
-        total-cols (count visible-cols)
+   (let [table-filter-ops filter-operations
+         grouped? (seq group-by)
+         group-col-key (first group-by)
+         grouped-cols (map (fn [group-key]
+                            (or (first
+                                 (filter #(= (:key %) group-key) cols))
+                                {:key group-key :label (name group-key)}))
+                          group-by)
+         grouped-label (string/join " > " (map :label grouped-cols))
+         visible-cols cols
+         total-cols (count visible-cols)
         group-col (some #(when (= (:key %) group-col-key) %) cols)
         current-sort (first sort-state)
         group-col-name (when group-col-key (name group-col-key))
         group-col-label (if (= 1 (count group-by))
                          (or (:label group-col) "Group")
                          (str "Grouped by: " grouped-label))
-        group-col-type (:type group-col)
-        group-col-filter-ops (:filter-operations group-col)
-        group-col-filters (get filters group-col-key)
-        group-first-filter (first group-col-filters)
-        group-current-filter-op (:op group-first-filter)
-        group-current-filter-val (:value group-first-filter)
-        group-sorted? (= (:column current-sort) group-col-name)
-        group-sort-dir (:direction current-sort)]
+         group-sorted? (= (:column current-sort) group-col-name)
+         group-sort-dir (:direction current-sort)]
     [:thead
      [:tr
       (when selectable?
@@ -77,31 +68,20 @@
               (and group-sorted? (= group-sort-dir "desc")) primitives/sort-icon-desc
               :else primitives/sort-icon-both)]
            [:span.font-semibold group-col-label]]
-          [:div.flex.items-center
-           (filter-menu/render
-            {:col-key group-col-key
-             :col-label group-col-label
-             :col-type group-col-type
-             :col-filter-ops group-col-filter-ops
-             :table-filter-ops table-filter-ops
-             :current-filter-op group-current-filter-op
-             :current-filter-value group-current-filter-val
-             :table-id table-id
-             :data-url data-url})
-           (column-menu/render-group-column {:data-url data-url
-                                             :group-col-key group-col-key})]]])
+           [:div.flex.items-center
+            (column-menu/render-group-column {:data-url data-url
+                                              :group-col-key group-col-key})]]])
       (for [[idx {:keys [key label type groupable filter-operations] :as col}] (map-indexed vector visible-cols)]
         (let [col-name (name key)
                ;; filters is now {:col-key [{:type "text" :op "..." :value "..."}]}
                ;; Get the first filter for display in the menu
               col-filters (get filters key)
-              first-filter (first col-filters)
-              current-filter-op (:op first-filter)
-              current-filter-val (:value first-filter)
-              is-sorted? (= (:column current-sort) col-name)
-              sort-dir (:direction current-sort)
-              sort-disabled? (and grouped? (not= key group-col-key))
-              show-filter? (not (and grouped? (= key group-col-key)))]
+               first-filter (first col-filters)
+               current-filter-op (:op first-filter)
+               current-filter-val (:value first-filter)
+               is-sorted? (= (:column current-sort) col-name)
+               sort-dir (:direction current-sort)
+               sort-disabled? (and grouped? (not= key group-col-key))]
           [:th
            {:style {:resize "horizontal" :overflow "hidden" :min-width "80px"}
              ;; Drop target handlers stay on th
@@ -125,23 +105,22 @@
                 (and is-sorted? (= sort-dir "desc")) primitives/sort-icon-desc
                 :else primitives/sort-icon-both)]
              [:span.font-semibold label]]
-            [:div.flex.items-center
-             (when show-filter?
-               (filter-menu/render
-                {:col-key key
-                 :col-label label
-                 :col-type type
-                 :col-filter-ops filter-operations
-                 :table-filter-ops table-filter-ops
-                 :current-filter-op current-filter-op
-                 :current-filter-value current-filter-val
-                 :table-id table-id
-                 :col-idx idx
-                 :total-cols total-cols
-                 :data-url data-url}))
-             (column-menu/render
-              {:col-key key
-               :col-label label
+             [:div.flex.items-center
+              (filter-menu/render
+               {:col-key key
+                :col-label label
+                :col-type type
+                :col-filter-ops filter-operations
+                :table-filter-ops table-filter-ops
+                :current-filter-op current-filter-op
+                :current-filter-value current-filter-val
+                :table-id table-id
+                :col-idx idx
+                :total-cols total-cols
+                :data-url data-url})
+              (column-menu/render
+               {:col-key key
+                :col-label label
                :data-url data-url
                :table-id table-id
                :groupable? groupable

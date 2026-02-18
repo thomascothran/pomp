@@ -91,6 +91,55 @@
   (e/js-execute browser/*driver*
                 "const body = document.querySelector('#cy-selected-node-properties'); if (!body) return {exists: false, text: null}; return {exists: true, text: (body.textContent || '').trim()};"))
 
+(defn- selected-node-property-value
+  [property-key]
+  (e/js-execute browser/*driver*
+                (str "const key = " (pr-str property-key) ";"
+                     "let rows = Array.from(document.querySelectorAll('#cy-selected-node-properties [data-cy-prop-key]'));"
+                     "if (!rows.length) { const root = document.querySelector('#cy-selected-node-properties'); rows = root ? Array.from(root.children) : []; }"
+                     "const row = rows.find((el) => { const label = el.querySelector('.text-xs'); return label && (label.textContent || '').trim() === key; });"
+                     "const el = row ? (row.querySelector('[data-cy-prop-value]') || row.querySelector('.font-mono.text-sm')) : null;"
+                     "return el ? (el.textContent || '').trim() : null;")))
+
+(defn- edit-selected-node-property-enter!
+  [property-key next-value]
+  (e/js-execute browser/*driver*
+                (str "const key = " (pr-str property-key) ";"
+                     "const next = " (pr-str next-value) ";"
+                     "let rows = Array.from(document.querySelectorAll('#cy-selected-node-properties [data-cy-prop-key]'));"
+                     "if (!rows.length) { const root = document.querySelector('#cy-selected-node-properties'); rows = root ? Array.from(root.children) : []; }"
+                     "const row = rows.find((el) => { const label = el.querySelector('.text-xs'); return label && (label.textContent || '').trim() === key; });"
+                     "if (!row) return false;"
+                     "const value = row.querySelector('[data-cy-prop-value]');"
+                     "if (!value) return false;"
+                     "value.dispatchEvent(new MouseEvent('dblclick', {bubbles: true, cancelable: true}));"
+                     "const input = row.querySelector('input[data-cy-prop-input]');"
+                     "if (!input) return false;"
+                     "input.value = next;"
+                     "input.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true}));"
+                     "return true;")))
+
+(defn- selected-node-property-edit-affordance
+  [property-key]
+  (e/js-execute browser/*driver*
+                (str "const key = " (pr-str property-key) ";"
+                     "let rows = Array.from(document.querySelectorAll('#cy-selected-node-properties [data-cy-prop-key]'));"
+                     "if (!rows.length) { const root = document.querySelector('#cy-selected-node-properties'); rows = root ? Array.from(root.children) : []; }"
+                     "const row = rows.find((el) => { const label = el.querySelector('.text-xs'); return label && (label.textContent || '').trim() === key; });"
+                     "if (!row) return null;"
+                     "const pencil = row.querySelector('[data-cy-prop-edit]');"
+                     "if (!pencil) return null;"
+                     "const className = pencil.getAttribute('class') || '';"
+                     "const clickEvent = new MouseEvent('click', {bubbles: true, cancelable: true});"
+                     "pencil.dispatchEvent(clickEvent);"
+                     "const input = row.querySelector('input[data-cy-prop-input]');"
+                     "return {"
+                     "  hasPencil: true,"
+                     "  hasHoverOnlyClass: className.includes('opacity-0') && className.includes('group-hover:opacity-100'),"
+                     "  nonClickableClass: className.includes('pointer-events-none'),"
+                     "  clickStartsEdit: !!input"
+                     "};")))
+
 (defn- rendered-position-drift
   [node-id previous-position]
   (when (and (map? previous-position)
@@ -159,6 +208,28 @@
         (Thread/sleep 200)
         (is (= after-first-expand (node-count))
             "Repeated expansion should not duplicate existing nodes")))))
+
+(deftest selected-node-property-is-inline-editable-test
+  (testing "selected node property value can be edited inline"
+    (e/go browser/*driver* cytoscape/base-url)
+    (e/wait-predicate #(pos? (node-count)))
+    (is (= "project:apollo" (emit-node-event! "project:apollo" "click"))
+        "Expected project seed node to be selectable")
+    (e/wait-predicate #(str/includes? (or (selected-node-property-value "domain") "") "platform"))
+    (let [affordance (selected-node-property-edit-affordance "domain")]
+      (is (= true (:hasPencil affordance))
+          "Expected edit pencil affordance to be present")
+      (is (= true (:hasHoverOnlyClass affordance))
+          "Expected pencil affordance to be hover-only")
+      (is (= true (:nonClickableClass affordance))
+          "Expected pencil affordance to be non-clickable")
+      (is (= false (:clickStartsEdit affordance))
+          "Expected clicking pencil to not enter edit mode"))
+    (is (true? (edit-selected-node-property-enter! "domain" "platform-ui"))
+        "Expected double-click on value to enter inline edit mode")
+    (e/wait-predicate #(str/includes? (or (selected-node-property-value "domain") "") "platform-ui"))
+    (is (str/includes? (or (selected-node-property-value "domain") "") "platform-ui")
+        "Expected edited domain value to be visible after commit")))
 
 (deftest expand-error-is-local-and-non-fatal-test
   (testing "anomaly patch marks local node error and keeps graph interactive"

@@ -83,6 +83,7 @@
 (deftest group-by-school-test
   (testing "grouping by school creates grouped rows"
     (open-datatable!)
+    (e/select browser/*driver* page-size-select "250")
     (e/click browser/*driver* school-menu-button)
     (e/wait-visible browser/*driver* group-by-school-item)
     (e/click browser/*driver* group-by-school-item)

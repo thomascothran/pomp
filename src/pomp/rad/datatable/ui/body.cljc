@@ -189,10 +189,7 @@
   [{:keys [cols rows groups group-by selectable? row-id-fn table-id data-url render-row render-cell]}]
   (let [row-id-fn (or row-id-fn :id)
         grouped? (seq groups)
-        group-col-keys (set group-by)
-        visible-cols (if grouped?
-                       (remove #(contains? group-col-keys (:key %)) cols)
-                       cols)]
+        visible-cols cols]
     [:tbody
       (if grouped?
         (let [groups-with-offsets (groups-with-offsets groups 0)]

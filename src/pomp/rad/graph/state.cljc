@@ -15,18 +15,78 @@
   (str source-id "|" (name relation) "|" target-id))
 
 (def ^:private base-nodes
-  [{:id (canonical-node-id :project "apollo") :type :project :label "Apollo Platform"}
-   {:id (canonical-node-id :story "auth-hardening") :type :story :label "Auth hardening"}
-   {:id (canonical-node-id :story "billing-pilot") :type :story :label "Billing pilot"}
-   {:id (canonical-node-id :task "jwt-rotation") :type :task :label "Rotate JWT keys"}
-   {:id (canonical-node-id :task "session-audit") :type :task :label "Audit session policy"}
-   {:id (canonical-node-id :task "invoice-reconcile") :type :task :label "Reconcile invoices"}
-   {:id (canonical-node-id :subtask "k8s-secret") :type :subtask :label "Update Kubernetes secret"}
-   {:id (canonical-node-id :subtask "audit-log") :type :subtask :label "Backfill auth audit log"}
-   {:id (canonical-node-id :developer "ava") :type :developer :label "Ava Chen"}
-   {:id (canonical-node-id :developer "kai") :type :developer :label "Kai Morgan"}
-   {:id (canonical-node-id :qa "mila") :type :qa :label "Mila Rossi"}
-   {:id (canonical-node-id :product-owner "noah") :type :product-owner :label "Noah Patel"}])
+  [{:id (canonical-node-id :project "apollo")
+    :type :project
+    :label "Apollo Platform"
+    :properties {"domain" "platform"
+                 "tier" "core"
+                 "release" "2026.04"}}
+   {:id (canonical-node-id :story "auth-hardening")
+    :type :story
+    :label "Auth hardening"
+    :properties {"priority" "high"
+                 "status" "in-progress"
+                 "owner" "security"}}
+   {:id (canonical-node-id :story "billing-pilot")
+    :type :story
+    :label "Billing pilot"
+    :properties {"priority" "medium"
+                 "status" "planned"
+                 "segment" "enterprise"}}
+   {:id (canonical-node-id :task "jwt-rotation")
+    :type :task
+    :label "Rotate JWT keys"
+    :properties {"sprint" 34
+                 "estimate" 5
+                 "status" "active"}}
+   {:id (canonical-node-id :task "session-audit")
+    :type :task
+    :label "Audit session policy"
+    :properties {"sprint" 34
+                 "estimate" 3
+                 "status" "todo"}}
+   {:id (canonical-node-id :task "invoice-reconcile")
+    :type :task
+    :label "Reconcile invoices"
+    :properties {"sprint" 35
+                 "estimate" 8
+                 "status" "todo"}}
+   {:id (canonical-node-id :subtask "k8s-secret")
+    :type :subtask
+    :label "Update Kubernetes secret"
+    :properties {"system" "kubernetes"
+                 "env" "staging"
+                 "blocked" false}}
+   {:id (canonical-node-id :subtask "audit-log")
+    :type :subtask
+    :label "Backfill auth audit log"
+    :properties {"system" "warehouse"
+                 "env" "prod"
+                 "blocked" true}}
+   {:id (canonical-node-id :developer "ava")
+    :type :developer
+    :label "Ava Chen"
+    :properties {"team" "platform"
+                 "timezone" "UTC-8"
+                 "capacity" 0.7}}
+   {:id (canonical-node-id :developer "kai")
+    :type :developer
+    :label "Kai Morgan"
+    :properties {"team" "platform"
+                 "timezone" "UTC+1"
+                 "capacity" 0.8}}
+   {:id (canonical-node-id :qa "mila")
+    :type :qa
+    :label "Mila Rossi"
+    :properties {"focus" "regression"
+                 "timezone" "UTC+2"
+                 "automation" true}}
+   {:id (canonical-node-id :product-owner "noah")
+    :type :product-owner
+    :label "Noah Patel"
+    :properties {"portfolio" "core-app"
+                 "org" "product"
+                 "fte" true}}])
 
 (def ^:private base-relationships
   [{:source (canonical-node-id :project "apollo") :target (canonical-node-id :story "auth-hardening") :relation :project/story :label "has story"}
