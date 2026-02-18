@@ -582,16 +582,16 @@
             :page {:size 2 :current 0}}
            nil)
       (let [[count-sql & count-params] (first @execute-calls)
-            [group-values-sql & group-values-params] (second @execute-calls)]
-        (is (re-find #"COUNT\(DISTINCT school\)" count-sql))
+            [query-sql & query-params] (second @execute-calls)]
+        (is (re-find #"COUNT\(\*\) AS total FROM philosophers" count-sql))
         (is (re-find #"LOWER\(region\) = \?" count-sql))
         (is (re-find #"LOWER\(name\) LIKE \? OR LOWER\(school\) LIKE \?" count-sql))
-        (is (re-find #"SELECT DISTINCT school FROM philosophers" group-values-sql))
-        (is (re-find #"LOWER\(region\) = \?" group-values-sql))
-        (is (re-find #"LOWER\(name\) LIKE \? OR LOWER\(school\) LIKE \?" group-values-sql))
-        (is (re-find #"ORDER BY school ASC LIMIT \? OFFSET \?" group-values-sql))
+        (is (re-find #"SELECT \* FROM philosophers" query-sql))
+        (is (re-find #"LOWER\(region\) = \?" query-sql))
+        (is (re-find #"LOWER\(name\) LIKE \? OR LOWER\(school\) LIKE \?" query-sql))
+        (is (re-find #"ORDER BY school ASC LIMIT \? OFFSET \?" query-sql))
         (is (= ["greece" "%stoa%" "%stoa%"] count-params))
-        (is (= ["greece" "%stoa%" "%stoa%" 2 0] group-values-params))))))
+        (is (= ["greece" "%stoa%" "%stoa%" 2 0] query-params))))))
 
 ;; =============================================================================
 ;; Integration with H2
@@ -739,27 +739,32 @@
         (is (= (:rows sql-result) (:rows mem-result)))))))
 
 (deftest query-fn-grouped-pagination-test
-  (testing "grouped pagination counts groups and keeps groups intact"
+  (testing "single-group pagination slices by leaf rows"
     (let [ds (jdbc/get-datasource h2-db)]
       (setup-h2-db ds)
       (seed-h2-data! ds h2-grouped-philosophers)
       (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
             qfn (sql/query-fn {:table-name "philosophers"} execute!)
-            result (qfn {:filters {}
-                         :sort [{:column "school" :direction "asc"}]
-                         :group-by [:school]
-                         :page {:size 2 :current 0}}
-                        nil)
-            expected-groups (->> h2-grouped-philosophers (map :school) distinct sort (take 2) vec)
-            actual-groups (->> (:rows result) (map :school) distinct vec)]
-        (is (= 3 (:total-rows result))
-            "Expected total-rows to reflect group count when grouped")
-        (is (= expected-groups actual-groups)
-            "Expected page to include the first two groups")
-        (is (= 3 (count (:rows result)))
-            "Expected rows for all groups on the page")
-        (is (= 2 (count (filter #(= "Academy" (:school %)) (:rows result))))
-            "Expected full group rows for Academy")))))
+            first-page (qfn {:filters {}
+                             :sort [{:column "school" :direction "asc"}]
+                             :group-by [:school]
+                             :page {:size 2 :current 0}}
+                            nil)
+            second-page (qfn {:filters {}
+                             :sort [{:column "school" :direction "asc"}]
+                             :group-by [:school]
+                             :page {:size 2 :current 1}}
+                            nil)]
+        (is (= 5 (:total-rows first-page))
+            "Expected total-rows to reflect leaf-row count")
+        (is (= 2 (count (:rows first-page)))
+            "Expected first page to return exactly page-size leaf rows")
+        (is (= #{1 2} (set (map :id (:rows first-page))))
+            "Expected first page to include academy leaves")
+        (is (= 2 (count (:rows second-page)))
+            "Expected second page to return exactly page-size leaf rows")
+        (is (= #{"Lyceum" "Stoa"} (set (map :school (:rows second-page))))
+            "Expected second page to continue with next grouped leaves")))))
 
 (deftest query-fn-grouped-sort-and-filter-test
   (testing "non-grouped sorting does not reorder groups"
@@ -794,19 +799,22 @@
         (is (= expected-order actual-order)
             "Expected grouped order to ignore non-grouped sort direction"))))
 
-  (testing "filtering by grouped column counts groups, not rows"
+  (testing "filtering by grouped column counts leaf rows"
     (let [ds (jdbc/get-datasource h2-db)]
       (setup-h2-db ds)
       (seed-h2-data! ds h2-grouped-philosophers)
       (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
             qfn (sql/query-fn {:table-name "philosophers"} execute!)
             result (qfn {:filters {:school [{:type "enum" :op "is" :value "Academy"}]}
-                         :sort []
+                         :sort [{:column "school" :direction "asc"}]
                          :group-by [:school]
-                         :page {:size 10 :current 0}}
+                         :page {:size 2 :current 0}}
                         nil)]
-                           (is (= 1 (:total-rows result))
-                               "Expected total-rows to equal group count after filtering")))))
+        (is (= 2 (:total-rows result))
+            "Expected total-rows to reflect leaf-row count")
+        (is (= [1 2] (map :id (:rows result)))
+            "Expected rows from matching group")
+        (is (= #{"Academy"} (set (map :school (:rows result)))))))))
 
 (deftest query-fn-grouped-multi-column-pagination-leaf-slices-test
   (testing "leaf-page size should slice multi-group rows by leaf rows"

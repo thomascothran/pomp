@@ -1,7 +1,6 @@
 (ns pomp.rad.datatable.query.in-memory-test
   (:require [clojure.test :refer [deftest is testing]]
-            [pomp.rad.datatable.query.in-memory :as query]
-            [pomp.rad.datatable.state.group :as group-state]))
+            [pomp.rad.datatable.query.in-memory :as query]))
 
 ;; =============================================================================
 ;; New filter structure: {:filters {:col-key [{:type "text" :op "contains" :value "x"} ...]}}
@@ -585,28 +584,30 @@
   [rows group-key]
   (->> rows (map group-key) distinct vec))
 
-(deftest grouped-pagination-uses-group-count-test
-  (testing "grouped pagination counts groups and keeps groups intact"
+(deftest grouped-pagination-leaf-slice-test
+  (testing "single-group pagination slices by leaf rows"
     (let [qfn (query/query-fn sample-rows)
           page-size 2
-          result (qfn {:filters {}
-                       :sort [{:column "school" :direction "asc"}]
-                       :group-by [:school]
-                       :page {:size page-size :current 0}}
-                      nil)
-          groups (group-state/group-rows (:rows result) [:school])
-          expected-order (expected-group-order sample-rows :school)
-          expected-groups (take page-size expected-order)
-          original-counts (frequencies (map :school sample-rows))]
-      (is (= (count expected-order) (:total-rows result))
-          "Expected total-rows to reflect group count when grouped")
-      (is (= page-size (count groups))
-          "Expected page size to limit group count")
-      (is (= (set expected-groups) (set (map :group-value groups)))
-          "Expected page to include only the first group values")
-       (doseq [{:keys [group-value count]} groups]
-         (is (= (get original-counts group-value) count)
-             "Expected full group row counts on the page")))))
+          first-page (qfn {:filters {}
+                           :sort [{:column "school" :direction "asc"}]
+                           :group-by [:school]
+                           :page {:size page-size :current 0}}
+                          nil)
+          second-page (qfn {:filters {}
+                            :sort [{:column "school" :direction "asc"}]
+                            :group-by [:school]
+                            :page {:size page-size :current 1}}
+                           nil)]
+      (is (= 5 (:total-rows first-page))
+          "Expected total-rows to reflect leaf-row count")
+      (is (= page-size (count (:rows first-page)))
+          "Expected page size to limit rows")
+      (is (= #{1 2} (set (map :id (:rows first-page))))
+          "Expected first page to include academy leaves")
+      (is (= page-size (count (:rows second-page)))
+          "Expected second page to continue with row paging")
+      (is (= #{"Lyceum" "Stoa"} (set (map :school (:rows second-page))))
+          "Expected second page to include the next grouped leaves"))))
 
 (def multi-group-pagination-rows
   [{:id 1 :name "A1" :century "A" :school "North"}
@@ -645,8 +646,8 @@
           "Expected second page to return exactly page-size leaf rows")
       (is (= [3 4] (map :id (:rows second-page)))
           "Expected second page to continue with leaf row slicing")
-       (is (= 6 (:total-rows first-page))
-           "Expected total-rows to reflect leaf-row count in multi-group mode"))))
+      (is (= 6 (:total-rows first-page))
+          "Expected total-rows to reflect leaf-row count in multi-group mode"))))
 
 (deftest grouped-multi-column-first-group-sort-test
   (testing "first grouped column asc/desc ordering is deterministic"
@@ -722,12 +723,15 @@
       (is (= ["A1" "A2"] academy-rows)
           "Expected non-grouped sort to leave row order intact within groups")))
 
-  (testing "filtering by grouped column counts groups, not rows"
+  (testing "filtering by grouped column counts leaf rows"
     (let [qfn (query/query-fn sample-rows)
           result (qfn {:filters {:school [{:type "enum" :op "is" :value "Academy"}]}
-                       :sort []
+                       :sort [{:column "school" :direction "asc"}]
                        :group-by [:school]
-                       :page {:size 10 :current 0}}
+                       :page {:size 2 :current 0}}
                       nil)]
-      (is (= 1 (:total-rows result))
-          "Expected total-rows to equal group count after filtering"))))
+      (is (= 2 (:total-rows result))
+          "Expected total-rows to reflect leaf rows after filtering")
+      (is (= [1 2] (map :id (:rows result)))
+          "Expected rows to include only matching group leaves")
+      (is (= #{"Academy"} (set (map :school (:rows result))))))))
