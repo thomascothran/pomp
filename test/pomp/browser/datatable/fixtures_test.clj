@@ -15,3 +15,10 @@
     (is (seq (:rows datatable/*state*)) "Expected fixture rows")
     (is (fn? (:rows-fn datatable/*state*)) "Expected rows-fn in fixture state")
     (is (fn? (:count-fn datatable/*state*)) "Expected count-fn in fixture state")))
+
+(deftest fixtures-include-synthetic-influence-column-test
+  (testing "datatable fixture state includes synthetic influence data"
+    (is (some #(= :influence (:key %)) (:columns datatable/*state*))
+        "Expected Influence column in fixture columns")
+    (is (every? number? (map :influence (:rows datatable/*state*)))
+        "Expected synthetic Influence values on all fixture rows")))

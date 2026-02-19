@@ -33,6 +33,9 @@
 (def columns-apply-button
   {:xpath "//div[@id='columns-menu']//button[normalize-space(text())='Apply']"})
 
+(def influence-header
+  {:xpath "//th//span[contains(@class,'font-semibold') and normalize-space(text())='Influence']"})
+
 (defn- open-datatable!
   []
   (e/go browser/*driver* datatable/base-url)
@@ -55,5 +58,11 @@
     (e/wait-visible browser/*driver* columns-apply-button)
     (e/click browser/*driver* region-checkbox)
     (e/click browser/*driver* columns-apply-button)
-    (e/wait-visible browser/*driver* region-header)
-    (is (region-header-present?) "Expected Region column visible again")))
+     (e/wait-visible browser/*driver* region-header)
+     (is (region-header-present?) "Expected Region column visible again")))
+
+(deftest initial-load-hides-seeded-column-test
+  (testing "column seeded as hidden is absent in headers"
+    (open-datatable!)
+    (is (empty? (e/query-all browser/*driver* influence-header))
+        "Expected Influence column hidden on first load")))

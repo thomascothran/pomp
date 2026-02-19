@@ -74,6 +74,31 @@ Creates method-specific Ring handlers for datatable data updates. Handles filter
 | `:signal-path` | `[keyword]` | `[:datatable]` | Path in signals where table state lives |
 | `:skeleton-rows` | `int` | `10` | Number of skeleton rows on initial load |
 | `:save-fn` | `fn` | `nil` | Save function for editable cells (see below) |
+| `:initial-signals-fn` | `fn` | `nil` | Seeds first-load table signals when request carries no table signals |
+
+#### `:initial-signals-fn`
+
+Use `:initial-signals-fn` to seed datatable state on the first load only.
+
+- Signature: `(fn [request] signals-map-or-nil)`
+- Called only when the incoming request does not include table signals.
+- Returned map should match datatable signal shape (for example `:filters`, `:sort`, `:page`, `:groupBy`, `:globalTableSearch`, `:columns`, `:columnOrder`).
+- Request-provided signals win over seeded defaults.
+
+Example: hide a column by default and seed pagination for a saved view.
+
+```clojure
+(dt/make-handlers
+ {:id "users-table"
+  :columns [{:key :name :label "Name" :type :text}
+            {:key :internal-score :label "Internal score" :type :number}]
+  :query-fn query-users
+  :data-url "/api/users"
+  :initial-signals-fn
+  (fn [_req]
+    {:page {:size 25 :current 0}
+     :columns {:internal-score {:visible false}}})})
+```
 
 #### Column spec shape
 

@@ -30,11 +30,14 @@
               "Epicureanism" "Stoicism" "Christian Platonism" "Scholasticism"
               "Rationalism" "Empiricism" "German Idealism" "Existentialism"]}
    {:key :region :label "Region" :type :enum :groupable true}
+   {:key :influence :label "Influence" :type :number}
    {:key :verified :label "Verified" :type :boolean :editable true}])
 
 (def philosophers
   "Seed data for the philosophers table."
-  [{:id 1 :name "Socrates" :century -5 :school "Classical Greek" :region "Greece" :verified true}
+  (mapv (fn [philosopher]
+          (assoc philosopher :influence (+ 10 (mod (* 7 (:id philosopher)) 91))))
+        [{:id 1 :name "Socrates" :century -5 :school "Classical Greek" :region "Greece" :verified true}
    {:id 2 :name "Plato" :century -4 :school "Platonism" :region "Greece" :verified true}
    {:id 3 :name "Aristotle" :century -4 :school "Peripatetic" :region "Greece" :verified true}
    {:id 4 :name "Confucius" :century -5 :school "Confucianism" :region "China" :verified true}
@@ -75,7 +78,7 @@
    {:id 39 :name "Simone de Beauvoir" :century 20 :school "Existentialism" :region "France" :verified true}
    {:id 40 :name "Albert Camus" :century 20 :school "Existentialism" :region "Algeria" :verified true}
    {:id 41 :name "Antisthenes" :century -4 :school "Classical Greek" :region "Greece" :verified true}
-   {:id 42 :name "Isocrates" :century -4 :school "Classical Greek" :region "Greece" :verified true}])
+   {:id 42 :name "Isocrates" :century -4 :school "Classical Greek" :region "Greece" :verified true}]))
 
 ;; =============================================================================
 ;; H2 Database Setup
@@ -96,24 +99,27 @@
 (defn create-schema!
   "Creates the philosophers table if it doesn't exist."
   []
-  (jdbc/execute! (get-datasource)
-                 ["CREATE TABLE IF NOT EXISTS philosophers (
+  (let [ds (get-datasource)]
+    (jdbc/execute! ds
+                   ["CREATE TABLE IF NOT EXISTS philosophers (
                      id INT PRIMARY KEY,
                      name VARCHAR(100),
                      century INT,
                      school VARCHAR(100),
                      region VARCHAR(100),
-                     verified BOOLEAN)"]))
+                     influence INT,
+                     verified BOOLEAN)"])
+    (jdbc/execute! ds ["ALTER TABLE philosophers ADD COLUMN IF NOT EXISTS influence INT"])))
 
 (defn seed-data!
   "Inserts the philosophers data into the table.
    Clears existing data first."
   []
   (let [ds (get-datasource)]
-    (jdbc/execute! ds ["DELETE FROM philosophers"])
-    (doseq [p philosophers]
-      (jdbc/execute! ds ["INSERT INTO philosophers (id, name, century, school, region, verified) VALUES (?, ?, ?, ?, ?, ?)"
-                         (:id p) (:name p) (:century p) (:school p) (:region p) (:verified p)]))))
+     (jdbc/execute! ds ["DELETE FROM philosophers"])
+     (doseq [p philosophers]
+       (jdbc/execute! ds ["INSERT INTO philosophers (id, name, century, school, region, influence, verified) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                         (:id p) (:name p) (:century p) (:school p) (:region p) (:influence p) (:verified p)]))))
 
 (defonce db-initialized? (atom false))
 
@@ -156,10 +162,12 @@
       :table-search-query table-search-rows
       :save-fn (sqlq/save-fn {:table "philosophers"} execute!)
       :data-url datatable-component-url
-      :render-html-fn ->html
-      :render-table-search table/default-render-table-search
-      :page-sizes [10 25 100 250]
-      :selectable? true})))
+       :render-html-fn ->html
+       :render-table-search table/default-render-table-search
+       :page-sizes [10 25 100 250]
+       :initial-signals-fn (fn [_]
+                             {:columns {:influence {:visible false}}})
+       :selectable? true})))
 
 (defn make-routes [_]
   (init-db!)

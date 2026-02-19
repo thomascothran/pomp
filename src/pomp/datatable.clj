@@ -129,12 +129,14 @@
    - :count-fn      - Optional count query function for total row count.
    - :render-table-search - Optional global search render function for table toolbar.
    - :save-fn       - Function to save cell edits. Called with {:row-id :col-key :value :req}.
-                      See `pomp.rad.datatable.query.sql/save-fn` for SQL implementation.
+                     See `pomp.rad.datatable.query.sql/save-fn` for SQL implementation.
+   - :initial-signals-fn - Optional (fn [req] signals-map) used only when request has no table signals.
+                           Useful for seeding saved views or default hidden columns on first load.
 
    Returns a Ring handler function that handles datatable requests via SSE."
   [{:keys [id columns rows-fn count-fn table-search-query data-url render-html-fn
            page-sizes selectable? skeleton-rows render-row render-header render-cell
-           filter-operations render-table-search save-fn]
+           filter-operations render-table-search save-fn initial-signals-fn]
     :or {page-sizes [10 25 100]
          selectable? false
          skeleton-rows 10}}
@@ -162,10 +164,15 @@
                              (d*/close-sse! sse))}))
 
         ;; Normal query/render flow
-        (let [current-signals (-> raw-signals
-                                  (assoc :group-by (mapv keyword (:groupBy raw-signals))))
+        (let [initial-load? (empty? raw-signals)
+              seeded-signals (when (and initial-load? initial-signals-fn)
+                               (initial-signals-fn req))
+              effective-signals (if (map? seeded-signals)
+                                  (merge seeded-signals raw-signals)
+                                  raw-signals)
+              current-signals (-> effective-signals
+                                  (assoc :group-by (mapv keyword (:groupBy effective-signals))))
               columns-state (:columns current-signals)
-              initial-load? (empty? raw-signals)
               column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
               ordered-cols (column-state/reorder columns column-order)
               visible-cols (column-state/filter-visible ordered-cols columns-state)

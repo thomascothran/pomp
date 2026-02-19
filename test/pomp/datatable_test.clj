@@ -67,6 +67,12 @@
           second
           (json/read-str {:key-fn keyword})))
 
+(defn- first-elements-payload
+  "Extracts the first datastar patch-elements payload string from SSE text."
+  [sse-body]
+  (some-> (re-find #"(?s)event: datastar-patch-elements\ndata: elements (.*?)\n\n" sse-body)
+          second))
+
 ;; =============================================================================
 ;; dt/render tests - filter-operations passthrough
 ;; This tests the public API that make-handlers uses internally
@@ -534,6 +540,55 @@
             "Signal-bearing GET should only patch the rendered table")
         (is (= 0 @scripts)
             "Signal-bearing GET should not execute initial-load script")))))
+
+(deftest make-handlers-initial-signals-fn-first-load-seeding-test
+  (testing "first load applies :initial-signals-fn to query-signals and visible columns"
+    (let [initial-signals-calls (atom 0)
+          captured-query-signals (atom nil)
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}
+                                               {:key :age :label "Age" :type :number}]
+                                     :rows-fn (fn [query-signals _]
+                                                (reset! captured-query-signals query-signals)
+                                                {:rows [] :total-rows 0 :page (:page query-signals)})
+                                     :initial-signals-fn (fn [_]
+                                                           (swap! initial-signals-calls inc)
+                                                           {:page {:size 25 :current 2}
+                                                            :columns {:age {:visible false}}})
+                                     :data-url "/data"
+                                     :render-html-fn str})
+          sse-body (-> (handler {:query-params {}})
+                       sse-response->string)
+          first-elements (first-elements-payload sse-body)]
+      (is (= 1 @initial-signals-calls)
+          "First load should call :initial-signals-fn exactly once")
+      (is (= {:size 25 :current 2} (:page @captured-query-signals))
+          "Seeded page should flow into rows-fn query-signals on first load")
+      (is (re-find #"\"Name\"" first-elements)
+          "First render should include visible column headers")
+      (is (not (re-find #"\"Age\"" first-elements))
+          "Seeded hidden columns should be omitted from first rendered headers")))
+
+  (testing "signal-bearing requests do not apply :initial-signals-fn"
+    (let [initial-signals-calls (atom 0)
+          captured-query-signals (atom nil)
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [query-signals _]
+                                                (reset! captured-query-signals query-signals)
+                                                {:rows [] :total-rows 0 :page (:page query-signals)})
+                                     :initial-signals-fn (fn [_]
+                                                           (swap! initial-signals-calls inc)
+                                                           {:page {:size 99 :current 9}})
+                                     :data-url "/data"
+                                     :render-html-fn str})]
+      (handler {:headers {"datastar-request" "true"}
+                :query-params {}
+                :body-params {:datatable {:test-table {:page {:size 25 :current 1}}}}})
+      (is (zero? @initial-signals-calls)
+          "Signal-bearing requests should ignore :initial-signals-fn")
+      (is (= {:size 25 :current 1} (:page @captured-query-signals))
+          "Request-provided page should win over seeded first-load defaults"))))
 
 (deftest extract-cell-edit-from-signals-test
   (testing "extracts a single edited cell directly from :cells"
