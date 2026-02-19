@@ -220,6 +220,10 @@
                                        (seq (:search-string query-signals*)))
                                 (table-search-query query-signals* request)
                                 (rows-fn query-signals* request))))
+              count-signals (state/next-state current-signals query-params)
+              count-task (future
+                           (when count-fn
+                             (state/query-count count-signals req count-fn)))
               {:keys [signals rows]} (state/query-rows current-signals query-params req run-rows-fn)
               group-by (:group-by signals)
               groups (when (seq group-by) (group-state/group-rows rows group-by))
@@ -275,7 +279,7 @@
                                                                                     :data-url data-url})})))]
                                (d*/patch-elements! sse (render-table nil))
                                (when count-fn
-                                 (let [total-rows (state/query-count signals req count-fn)]
+                                 (let [total-rows @count-task]
                                    (d*/patch-elements! sse (render-table total-rows)))))
                              (d*/close-sse! sse))}))))))
 
