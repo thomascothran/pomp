@@ -103,6 +103,26 @@
   [columns]
   (boolean (some :editable columns)))
 
+(defn- has-id-column?
+  [columns]
+  (boolean (some (fn [{:keys [key]}] (= :id key)) columns)))
+
+(defn- validate-identity-column!
+  [{:keys [id columns selectable?]}]
+  (let [editable-columns? (has-editable-columns? columns)
+        identity-required? (or selectable? editable-columns?)
+        has-identity-column? (has-id-column? columns)]
+    (when (and identity-required?
+               (not has-identity-column?))
+      (throw
+       (ex-info
+        "Datatable requires an :id column when row selection or editable columns are enabled"
+        {:table-id id
+         :required-column :id
+         :selectable? selectable?
+         :editable-columns? editable-columns?
+         :column-keys (mapv :key columns)})))))
+
 (defn- normalize-col-key
   [col-key]
   (cond
@@ -286,9 +306,15 @@
 (defn make-handlers
   "Creates method-specific datatable handlers.
 
-   Returns {:get fn :post fn}.
-   - :get always executes the query/render flow.
-   - :post executes save flow when query-param action=save, otherwise query/render flow."
+    Returns {:get fn :post fn}.
+    - :get always executes the query/render flow.
+    - :post executes save flow when query-param action=save, otherwise query/render flow.
+
+   Identity requirement:
+   - If :selectable? is true OR any column is :editable true,
+     :columns must include an :id key.
+   - The :id column may be hidden from UI via signals/column visibility."
   [opts]
+  (validate-identity-column! opts)
   {:get (make-handler* opts {:save-action? (constantly false)})
    :post (make-handler* opts {:save-action? (fn [_ action] (= action "save"))})})

@@ -31,7 +31,8 @@
               "Rationalism" "Empiricism" "German Idealism" "Existentialism"]}
    {:key :region :label "Region" :type :enum :groupable true}
    {:key :influence :label "Influence" :type :number}
-   {:key :verified :label "Verified" :type :boolean :editable true}])
+   {:key :verified :label "Verified" :type :boolean :editable true}
+   {:key :id :label "ID" :type :number}])
 
 (def philosophers
   "Seed data for the philosophers table."
@@ -166,7 +167,8 @@
        :render-table-search table/default-render-table-search
        :page-sizes [10 25 100 250]
        :initial-signals-fn (fn [_]
-                             {:columns {:influence {:visible false}}})
+                             {:columns {:influence {:visible false}
+                                        :id {:visible false}}})
        :selectable? true})))
 
 (defn make-routes [_]

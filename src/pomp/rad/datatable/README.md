@@ -100,6 +100,14 @@ Example: hide a column by default and seed pagination for a saved view.
      :columns {:internal-score {:visible false}}})})
 ```
 
+#### Identity column requirement
+
+If row selection (`:selectable? true`) or inline editing (`:editable true` on any column) is enabled,
+the table must include an `:id` column in server column definitions.
+
+- The `:id` column may be hidden from the UI via column visibility signals.
+- Do not synthesize IDs client-side; use a stable backend identity field.
+
 #### Column spec shape
 
 ```clojure
@@ -136,7 +144,7 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 | `:group-by`| `[keyword ...]` (optional)  | Ordered columns to group by |
 | `:project-columns` | `[keyword ...]` (optional) | Server-derived projection hint for adapters that support column projection |
 
-`:project-columns` is additive and optional. SQL-backed queries use it to project only required columns when present, and safely fall back to `SELECT *` when absent. Non-SQL adapters may ignore it.
+`:project-columns` is additive and optional. SQL-backed queries use it to project only required columns when present, and safely fall back to `SELECT *` when absent. Non-SQL adapters may ignore it. When selection or editing is enabled, include `:id` in server column definitions so identity remains available in projected rows.
 
 #### Filter spec shape
 

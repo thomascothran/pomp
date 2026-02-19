@@ -160,6 +160,48 @@
       (is (fn? handler)
           "make-handlers :get should return a function when :filter-operations is provided"))))
 
+(deftest make-handlers-identity-column-requirement-test
+  (testing "throws when :selectable? is true and :id column is missing"
+    (let [ex (try
+               (make-get-handler {:id "test-table"
+                                  :columns [{:key :name :label "Name" :type :string}]
+                                  :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                  :data-url "/data"
+                                  :render-html-fn str
+                                  :selectable? true})
+               nil
+               (catch clojure.lang.ExceptionInfo e
+                 e))]
+      (is (instance? clojure.lang.ExceptionInfo ex))
+      (is (re-find #"requires an :id column" (ex-message ex)))
+      (is (= :id (get-in (ex-data ex) [:required-column])))))
+
+  (testing "throws when editable columns are configured and :id column is missing"
+    (let [ex (try
+               (make-post-handler {:id "test-table"
+                                   :columns [{:key :name :label "Name" :type :string :editable true}]
+                                   :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                   :save-fn (fn [_] {:success true})
+                                   :data-url "/data"
+                                   :render-html-fn str})
+               nil
+               (catch clojure.lang.ExceptionInfo e
+                 e))]
+      (is (instance? clojure.lang.ExceptionInfo ex))
+      (is (re-find #"requires an :id column" (ex-message ex)))
+      (is (true? (get-in (ex-data ex) [:editable-columns?])))))
+
+  (testing "allows :id column to exist without being editable"
+    (let [handler (make-post-handler {:id "test-table"
+                                      :columns [{:key :id :label "ID" :type :number}
+                                                {:key :name :label "Name" :type :string :editable true}]
+                                      :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                      :save-fn (fn [_] {:success true})
+                                      :data-url "/data"
+                                      :render-html-fn str
+                                      :selectable? true})]
+      (is (fn? handler)))))
+
 (deftest make-handlers-passes-render-table-search-to-table-render-test
   (testing "make-handlers :get forwards :render-table-search while preserving toolbar"
     (let [render-opts (atom nil)
@@ -355,7 +397,8 @@
           table-search-query-calls (atom 0)
           save-calls (atom 0)
           handler (make-post-handler {:id "test-table"
-                                      :columns [{:key :name :label "Name" :type :string :editable true}]
+                                      :columns [{:key :id :label "ID" :type :number}
+                                                {:key :name :label "Name" :type :string :editable true}]
                                       :rows-fn (fn [_ _]
                                                  (swap! query-fn-calls inc)
                                                  {:rows [] :total-rows 0 :page {:size 10 :current 0}})
@@ -383,7 +426,8 @@
 
 (deftest make-handlers-accepts-save-fn-test
   (testing "make-handlers :post accepts :save-fn without error"
-    (let [columns [{:key :name :label "Name" :type :string :editable true}]
+    (let [columns [{:key :id :label "ID" :type :number}
+                   {:key :name :label "Name" :type :string :editable true}]
           save-fn (fn [_] {:success true})
           handler (make-post-handler {:id "test-table"
                                       :columns columns
@@ -400,7 +444,8 @@
     (let [patches (atom [])
           element-patches (atom [])
           handler (make-post-handler {:id "test-table"
-                                      :columns [{:key :name :label "Name" :type :string :editable true}]
+                                      :columns [{:key :id :label "ID" :type :number}
+                                                {:key :name :label "Name" :type :string :editable true}]
                                       :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                       :data-url "/data"
                                       :render-html-fn identity
@@ -443,7 +488,8 @@
     (let [patches (atom [])
           element-patches (atom [])
           handler (make-post-handler {:id "test-table"
-                                      :columns [{:key :school
+                                      :columns [{:key :id :label "ID" :type :number}
+                                                {:key :school
                                                  :label "School"
                                                  :type :enum
                                                  :editable true
@@ -490,7 +536,8 @@
   (testing "initial signal patch omits per-row/per-cell signals"
     (let [patches (atom [])
           handler (make-get-handler {:id "test-table"
-                                     :columns [{:key :name :label "Name" :type :string :editable true}
+                                     :columns [{:key :id :label "ID" :type :number}
+                                               {:key :name :label "Name" :type :string :editable true}
                                                {:key :status :label "Status" :type :string}]
                                      :rows-fn (fn [_ _]
                                                 {:rows [{:id "1" :name "Ada" :status "active"}
