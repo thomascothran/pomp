@@ -134,6 +134,9 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 | `:sort`    | `[{:column str :direction str}]` | Vector of sort specs (currently uses first only) |
 | `:page`    | `{:size int :current int}`  | Pagination state |
 | `:group-by`| `[keyword ...]` (optional)  | Ordered columns to group by |
+| `:project-columns` | `[keyword ...]` (optional) | Server-derived projection hint for adapters that support column projection |
+
+`:project-columns` is additive and optional. SQL-backed queries use it to project only required columns when present, and safely fall back to `SELECT *` when absent. Non-SQL adapters may ignore it.
 
 #### Filter spec shape
 

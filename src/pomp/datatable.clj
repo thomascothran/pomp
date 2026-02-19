@@ -103,13 +103,43 @@
   [columns]
   (boolean (some :editable columns)))
 
+(defn- normalize-col-key
+  [col-key]
+  (cond
+    (keyword? col-key) col-key
+    (string? col-key) (keyword col-key)
+    :else nil))
+
+(defn- derive-project-columns
+  [columns ordered-cols columns-state query-signals]
+  (let [known-col-keys (set (map :key columns))
+        visible-keys (->> ordered-cols
+                          (filter (fn [{:keys [key]}]
+                                    (get-in columns-state [key :visible] true)))
+                          (map :key))
+        filter-keys (->> (keys (:filters query-signals))
+                         (map normalize-col-key))
+        sort-keys (->> (:sort query-signals)
+                       (map :column)
+                       (map normalize-col-key))
+        group-keys (->> (:group-by query-signals)
+                        (map normalize-col-key))
+        projected-cols (->> (concat [:id] visible-keys filter-keys sort-keys group-keys)
+                            (filter known-col-keys)
+                            distinct
+                            vec)]
+    (when (seq projected-cols)
+      projected-cols)))
+
 (defn- make-handler*
   "Creates a Ring handler for a datatable.
 
    Required options:
    - :id            - Table element ID (string)
    - :columns       - Column definitions [{:key :name :label \"Name\" :type :string} ...]
-   - :rows-fn       - Row query function (see `pomp.rad.datatable.query.*`)
+   - :rows-fn       - Row query function (see `pomp.rad.datatable.query.*`).
+                     Query payload includes optional server-derived `:project-columns`
+                     for adapters that support projection.
    - :data-url      - URL for data fetches (string)
    - :render-html-fn - Function to convert hiccup to HTML string
 
@@ -131,7 +161,12 @@
    - :save-fn       - Function to save cell edits. Called with {:row-id :col-key :value :req}.
                      See `pomp.rad.datatable.query.sql/save-fn` for SQL implementation.
    - :initial-signals-fn - Optional (fn [req] signals-map) used only when request has no table signals.
-                           Useful for seeding saved views or default hidden columns on first load.
+                            Useful for seeding saved views or default hidden columns on first load.
+
+   Query payload contract note:
+   - `:project-columns` is optional and additive.
+   - SQL adapters use it to optimize projection.
+   - Adapters that do not support projection can ignore it without breaking behavior.
 
    Returns a Ring handler function that handles datatable requests via SSE."
   [{:keys [id columns rows-fn count-fn table-search-query data-url render-html-fn
@@ -176,12 +211,15 @@
               column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
               ordered-cols (column-state/reorder columns column-order)
               visible-cols (column-state/filter-visible ordered-cols columns-state)
-              run-rows-fn (if table-search-query
-                            (fn [query-signals request]
-                              (if (seq (:search-string query-signals))
-                                (table-search-query (assoc query-signals :columns columns) request)
-                                (rows-fn query-signals request)))
-                            rows-fn)
+              run-rows-fn (fn [query-signals request]
+                            (let [project-columns (derive-project-columns columns ordered-cols columns-state query-signals)
+                                  query-signals* (assoc query-signals
+                                                        :columns columns
+                                                        :project-columns project-columns)]
+                              (if (and table-search-query
+                                       (seq (:search-string query-signals*)))
+                                (table-search-query query-signals* request)
+                                (rows-fn query-signals* request))))
               {:keys [signals rows]} (state/query-rows current-signals query-params req run-rows-fn)
               group-by (:group-by signals)
               groups (when (seq group-by) (group-state/group-rows rows group-by))

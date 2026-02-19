@@ -252,10 +252,14 @@
 
 (defn generate-query-sql
   "Generates a complete SELECT query with filtering, sorting, and pagination.
+   Uses `:project-columns` for explicit projection when provided,
+   otherwise falls back to `SELECT *`.
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [columns filters page search-string sort]}]
+  [config {:keys [columns filters page project-columns search-string sort]}]
   (let [table-name (:table-name config)
-        base-sql (str "SELECT * FROM " table-name)
+        select-clause (when (seq project-columns)
+                        (str/join ", " (map #(col-name config %) project-columns)))
+        base-sql (str "SELECT " (or select-clause "*") " FROM " table-name)
         where-clause (combine-where-clauses
                       (generate-where-clause config filters)
                       (generate-global-search-clause config columns search-string))
@@ -289,22 +293,23 @@
 
 (defn rows-fn
   [config execute!]
-  (fn [{:keys [columns filters page group-by search-string] :as params} _request]
+  (fn [{:keys [columns filters page group-by project-columns search-string] :as params} _request]
     (let [size (:size page 10)
           requested-current (:current page)]
       (if (seq group-by)
         (let [group-sort (first-group-order-sort group-by (:sort params))
               count-sql (generate-count-sql config {:columns columns
-                                                     :filters filters
-                                                     :search-string search-string})
+                                                    :filters filters
+                                                    :search-string search-string})
               total-rows (-> (execute! count-sql) first :total)
               total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
               clamped-current (cond
-                               (nil? requested-current) (max 0 (dec total-pgs))
-                               (>= requested-current total-pgs) (max 0 (dec total-pgs))
-                               :else requested-current)
+                                (nil? requested-current) (max 0 (dec total-pgs))
+                                (>= requested-current total-pgs) (max 0 (dec total-pgs))
+                                :else requested-current)
               query-sql (generate-query-sql config {:columns columns
                                                     :filters filters
+                                                    :project-columns project-columns
                                                     :search-string search-string
                                                     :sort group-sort
                                                     :page {:size size :current clamped-current}})
@@ -313,14 +318,15 @@
            :page {:size size :current clamped-current}})
         (let [current (if (nil? requested-current)
                         (let [count-sql (generate-count-sql config {:columns columns
-                                                                  :filters filters
-                                                                  :search-string search-string})
+                                                                    :filters filters
+                                                                    :search-string search-string})
                               total-rows (-> (execute! count-sql) first :total)
                               total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))]
                           (max 0 (dec total-pgs)))
                         requested-current)
               query-sql (generate-query-sql config {:columns columns
                                                     :filters filters
+                                                    :project-columns project-columns
                                                     :search-string search-string
                                                     :sort (:sort params)
                                                     :page {:size size :current current}})
@@ -343,28 +349,33 @@
    config: {:table-name \"table\" :column-map {...} :case-sensitive? false :columns [...]}
    execute!: (fn [sqlvec] rows) - executes SQL and returns rows
 
+   Optional query input:
+   - `:project-columns` - server-derived list of columns to select.
+     When absent, SQL generation falls back to `SELECT *`.
+
    Returns a function with signature:
    (fn [{:keys [filters sort page]} request] {:rows [...] :total-rows n :page {...}})"
   [config execute!]
-  (fn [{:keys [columns filters page group-by search-string] :as params} _request]
+  (fn [{:keys [columns filters page group-by project-columns search-string] :as params} _request]
     (if (seq group-by)
       (let [size (:size page 10)
             group-sort (first-group-order-sort group-by (:sort params))
             count-sql (generate-count-sql config {:columns columns
-                                                 :filters filters
-                                                 :search-string search-string})
+                                                  :filters filters
+                                                  :search-string search-string})
             total-rows (-> (execute! count-sql) first :total)
             total-pages (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
             requested-current (:current page)
             clamped-current (cond
-                             (nil? requested-current) (max 0 (dec total-pages))
-                             (>= requested-current total-pages) (max 0 (dec total-pages))
-                             :else requested-current)
+                              (nil? requested-current) (max 0 (dec total-pages))
+                              (>= requested-current total-pages) (max 0 (dec total-pages))
+                              :else requested-current)
             query-sql (generate-query-sql config {:columns columns
-                                                 :filters filters
-                                                 :search-string search-string
-                                                 :sort group-sort
-                                                 :page {:size size :current clamped-current}})
+                                                  :filters filters
+                                                  :project-columns project-columns
+                                                  :search-string search-string
+                                                  :sort group-sort
+                                                  :page {:size size :current clamped-current}})
             rows (execute! query-sql)]
         {:rows rows
          :total-rows total-rows
@@ -386,6 +397,7 @@
              ;; Generate query with clamped page
             query-sql (generate-query-sql config {:columns columns
                                                   :filters filters
+                                                  :project-columns project-columns
                                                   :search-string search-string
                                                   :sort sort-spec
                                                   :page {:size size :current clamped-current}})

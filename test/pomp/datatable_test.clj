@@ -162,16 +162,16 @@
 
 (deftest make-handlers-passes-render-table-search-to-table-render-test
   (testing "make-handlers :get forwards :render-table-search while preserving toolbar"
-      (let [render-opts (atom nil)
-            render-table-search (fn [_] [:div "search"])
-            handler (make-get-handler {:id "test-table"
-                                       :columns [{:key :name :label "Name" :type :string}]
-                                       :rows-fn (fn [query-signals _]
-                                                  {:rows [] :page (:page query-signals)})
-                                       :count-fn (fn [_ _] {:total-rows 0})
-                                       :data-url "/data"
-                                       :render-html-fn identity
-                                       :render-table-search render-table-search})]
+    (let [render-opts (atom nil)
+          render-table-search (fn [_] [:div "search"])
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [query-signals _]
+                                                {:rows [] :page (:page query-signals)})
+                                     :count-fn (fn [_ _] {:total-rows 0})
+                                     :data-url "/data"
+                                     :render-html-fn identity
+                                     :render-table-search render-table-search})]
       (with-redefs [ring/->sse-response (fn [_ opts]
                                           (when-let [on-open-fn (get opts ring/on-open)]
                                             (on-open-fn ::fake-sse))
@@ -235,7 +235,7 @@
                                                 {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                      :table-search-query (fn [query-signals req]
                                                            (swap! table-search-query-calls conj {:query-signals query-signals
-                                                                                                  :req req})
+                                                                                                 :req req})
                                                            {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                      :data-url "/data"
                                      :render-html-fn str})]
@@ -315,8 +315,10 @@
 (deftest make-handlers-table-search-query-contract-payload-test
   (testing ":table-search-query receives contract payload keys"
     (let [captured-query-signals (atom nil)
-          columns [{:key :name :label "Name" :type :string}
-                   {:key :school :label "School" :type :enum}]
+          columns [{:key :id :label "ID" :type :number}
+                   {:key :name :label "Name" :type :string}
+                   {:key :school :label "School" :type :enum}
+                   {:key :region :label "Region" :type :string}]
           handler (make-get-handler {:id "test-table"
                                      :columns columns
                                      :rows-fn (fn [_ _]
@@ -326,16 +328,26 @@
                                                            {:rows [] :total-rows 0 :page {:size 10 :current 0}})
                                      :data-url "/data"
                                      :render-html-fn str})]
-      (handler {:query-params {"clicked" "name" "groupBy" "school"}
+      (handler {:query-params {"sortCol" "school" "sortDir" "desc" "groupBy" "school"}
                 :headers {"datastar-request" "true"}
                 :body-params {:datatable {:test-table {:globalTableSearch "Stoa"
-                                                       :filters {}
+                                                       :columns {:id {:visible false}
+                                                                 :school {:visible false}
+                                                                 :region {:visible false}}
+                                                       :filters {:region [{:type "string" :op "equals" :value "Greece"}]
+                                                                 :not-a-real-column [{:type "string" :op "equals" :value "x"}]}
+                                                       :project-columns [:not-a-real-column :region]
                                                        :page {:size 25 :current 1}}}}})
       (is (map? @captured-query-signals)
           "Expected :table-search-query to receive a query payload map")
       (is (every? #(contains? @captured-query-signals %)
-                  [:columns :search-string :filters :sort :page :group-by])
-          "Payload contract must include :columns, :search-string, :filters, :sort, :page, and :group-by"))))
+                  [:columns :search-string :filters :sort :page :group-by :project-columns])
+          "Payload contract must include :columns, :search-string, :filters, :sort, :page, :group-by, and :project-columns")
+      (is (= #{:id :name :school :region}
+             (set (:project-columns @captured-query-signals)))
+          "Projection should include visible, filtered, grouped/sorted, and id columns derived from server config")
+      (is (not (contains? (set (:project-columns @captured-query-signals)) :not-a-real-column))
+          "Projection must ignore unknown client-provided column keys"))))
 
 (deftest make-handlers-save-bypasses-query-flow-test
   (testing "save action bypasses query flow even when :table-search-query is present"

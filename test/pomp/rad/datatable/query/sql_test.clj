@@ -395,6 +395,30 @@
     (is (= ["SELECT * FROM philosophers"]
            (sql/generate-query-sql {:table-name "philosophers"} {})))))
 
+(deftest generate-query-sql-project-columns-test
+  (testing "projects explicit columns when :project-columns is present"
+    (is (= ["SELECT id, name FROM philosophers"]
+           (sql/generate-query-sql {:table-name "philosophers"}
+                                   {:project-columns [:id :name]}))))
+
+  (testing "projection uses column-map and composes with filters, sort, and pagination"
+    (is (= ["SELECT id, user_name, birth_century FROM philosophers WHERE LOWER(region) = ? ORDER BY birth_century DESC LIMIT ? OFFSET ?"
+            "greece" 5 5]
+           (sql/generate-query-sql {:table-name "philosophers"
+                                    :column-map {:name "user_name"
+                                                 :century "birth_century"}}
+                                   {:project-columns [:id :name :century]
+                                    :filters {:region [{:type "string" :op "equals" :value "Greece"}]}
+                                    :sort [{:column "century" :direction "desc"}]
+                                    :page {:size 5 :current 1}})))))
+
+(deftest generate-query-sql-project-columns-fallback-test
+  (testing "falls back to SELECT * when projection is missing"
+    (is (= ["SELECT * FROM philosophers WHERE LOWER(name) LIKE ?" "%plato%"]
+           (sql/generate-query-sql {:table-name "philosophers"}
+                                   {:filters {:name [{:type "string" :op "contains" :value "Plato"}]}
+                                    :project-columns nil})))))
+
 (deftest generate-query-sql-with-filters-test
   (testing "query with filters"
     (is (= ["SELECT * FROM philosophers WHERE LOWER(name) LIKE ?" "%socrates%"]
