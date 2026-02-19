@@ -15,3 +15,4 @@ Your job is *not* to write code, but to make specific suggestions via replies.
 For aesthetics, you default to what is provided by daisy ui, in `./context/daisy-ui-docs.txt`.
 
 RULE: Load the browser and clojure-eval skills
+RULE: use the browser as described in the browser skill; do not try to launch a browser except as described there
