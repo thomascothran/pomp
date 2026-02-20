@@ -3,6 +3,7 @@
             [reitit.ring :as ring]
             [demo.autocomplete :as dac]
             [demo.datatable :as ddt]
+            [demo.datatable-charts :as ddtc]
             [reitit.ring.middleware.dev :as dev]
             [muuntaja.core :as m]
             [reitit.ring.coercion :as coercion]
@@ -27,9 +28,10 @@
            :body "hi"})]
    ["/hello-world" (constantly {:body "hi"
                                 :status 200})]
-   ["/demo"
-    (dac/make-routes config)
-    (ddt/make-routes config)]
+    ["/demo"
+     (dac/make-routes config)
+     (ddt/make-routes config)
+     (ddtc/make-routes config)]
    ["/scratch/autocomplete" scratch.autocomplete/handler]
    ["/scratch/autocomplete/options" scratch.autocomplete/options-handler]
    ["/scratch/cytoscape" scratch.cytoscape/handler]

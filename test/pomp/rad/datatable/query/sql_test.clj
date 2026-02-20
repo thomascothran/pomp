@@ -478,6 +478,56 @@
                                               :century [{:type "number" :op "greater-than" :value "0"}]}})))))
 
 ;; =============================================================================
+;; Frequency Query
+;; =============================================================================
+
+(deftest generate-frequency-sql-coalesces-null-bucket-test
+  (testing "groups by bucket and maps nulls to Unknown"
+    (is (= ["SELECT COALESCE(region, 'Unknown') AS bucket, COUNT(*) AS count FROM philosophers GROUP BY COALESCE(region, 'Unknown')"]
+           (sql/generate-frequency-sql {:table-name "philosophers"}
+                                       {:bucket-column :region}))))
+
+  (testing "reuses datatable filter DSL semantics in WHERE"
+    (is (= ["SELECT COALESCE(region, 'Unknown') AS bucket, COUNT(*) AS count FROM philosophers WHERE LOWER(name) LIKE ? GROUP BY COALESCE(region, 'Unknown')"
+            "%plato%"]
+           (sql/generate-frequency-sql {:table-name "philosophers"}
+                                       {:bucket-column :region
+                                        :filters {:name [{:type "string" :op "contains" :value "Plato"}]}})))))
+
+(deftest generate-histogram-sql-excludes-nulls-and-composes-filters-test
+  (let [histogram-sql-fn (ns-resolve 'pomp.rad.datatable.query.sql 'generate-histogram-sql)]
+    (testing "histogram SQL helper exists"
+      (is (ifn? histogram-sql-fn)
+          "Expected generate-histogram-sql to be implemented"))
+
+    (when histogram-sql-fn
+      (testing "bins numeric values by fixed bucket size, excludes nulls, and composes with datatable filters"
+        (let [[sql-text & params] (histogram-sql-fn {:table-name "philosophers"}
+                                                    {:bucket-column :century
+                                                     :bucket-size 2
+                                                     :filters {:region [{:type "string" :op "equals" :value "Greece"}]}})]
+          (is (str/includes? sql-text "FROM philosophers"))
+          (is (str/includes? sql-text "century IS NOT NULL"))
+          (is (str/includes? sql-text "LOWER(region) = ?"))
+          (is (= "greece" (first params))))))))
+
+(deftest generate-null-count-sql-counts-only-nulls-and-composes-filters-test
+  (let [null-count-sql-fn (ns-resolve 'pomp.rad.datatable.query.sql 'generate-null-count-sql)]
+    (testing "null-count SQL helper exists"
+      (is (ifn? null-count-sql-fn)
+          "Expected generate-null-count-sql to be implemented"))
+
+    (when null-count-sql-fn
+      (testing "counts only null values and composes with datatable filters"
+        (let [[sql-text & params] (null-count-sql-fn {:table-name "philosophers"}
+                                                     {:bucket-column :century
+                                                      :filters {:region [{:type "string" :op "equals" :value "Greece"}]}})]
+          (is (str/includes? sql-text "FROM philosophers"))
+          (is (str/includes? sql-text "century IS NULL"))
+          (is (str/includes? sql-text "LOWER(region) = ?"))
+          (is (= "greece" (first params))))))))
+
+;; =============================================================================
 ;; Query Function Builder
 ;; =============================================================================
 
@@ -670,6 +720,60 @@
   (doseq [p rows]
     (jdbc/execute! ds ["INSERT INTO philosophers (id, name, century, school, region) VALUES (?, ?, ?, ?, ?)"
                        (:id p) (:name p) (:century p) (:school p) (:region p)])))
+
+(deftest h2-integration-frequency-sql-unknown-bucket-test
+  (testing "nil bucket rows roll up under Unknown with correct count"
+    (let [ds (jdbc/get-datasource h2-db)
+          rows [{:id 1 :name "Plato" :century -4 :school "Platonism" :region "Greece"}
+                {:id 2 :name "Aristotle" :century -4 :school "Peripatetic" :region nil}
+                {:id 3 :name "Zeno" :century -3 :school "Stoa" :region nil}
+                {:id 4 :name "Confucius" :century -5 :school "Confucianism" :region "China"}]
+          execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))]
+      (setup-h2-db ds)
+      (seed-h2-data! ds rows)
+      (let [frequency-sql (sql/generate-frequency-sql {:table-name "philosophers"}
+                                                      {:bucket-column :region})
+            result (execute! frequency-sql)
+            by-bucket (into {}
+                            (map (fn [{:keys [bucket count]}]
+                                   [bucket count])
+                                 result))]
+        (is (= 2 (get by-bucket "Unknown")))
+        (is (= 1 (get by-bucket "Greece")))
+        (is (= 1 (get by-bucket "China")))))))
+
+(deftest h2-integration-histogram-and-null-count-test
+  (let [histogram-sql-fn (ns-resolve 'pomp.rad.datatable.query.sql 'generate-histogram-sql)
+        null-count-sql-fn (ns-resolve 'pomp.rad.datatable.query.sql 'generate-null-count-sql)]
+    (testing "histogram and null-count SQL helpers exist"
+      (is (ifn? histogram-sql-fn)
+          "Expected generate-histogram-sql to be implemented")
+      (is (ifn? null-count-sql-fn)
+          "Expected generate-null-count-sql to be implemented"))
+
+    (when (and histogram-sql-fn null-count-sql-fn)
+      (testing "histogram excludes null numeric values while null-count reports null metadata"
+        (let [ds (jdbc/get-datasource h2-db)
+              rows [{:id 1 :name "A" :century 1 :school "Academy" :region "Greece"}
+                    {:id 2 :name "B" :century 2 :school "Academy" :region "Greece"}
+                    {:id 3 :name "C" :century nil :school "Academy" :region "Greece"}
+                    {:id 4 :name "D" :century nil :school "Academy" :region "Greece"}
+                    {:id 5 :name "E" :century 3 :school "Academy" :region "China"}]
+              execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))]
+          (setup-h2-db ds)
+          (seed-h2-data! ds rows)
+          (let [histogram-sql (histogram-sql-fn {:table-name "philosophers"}
+                                                {:bucket-column :century
+                                                 :bucket-size 2
+                                                 :filters {:region [{:type "string" :op "equals" :value "Greece"}]}})
+                null-count-sql (null-count-sql-fn {:table-name "philosophers"}
+                                                  {:bucket-column :century
+                                                   :filters {:region [{:type "string" :op "equals" :value "Greece"}]}})
+                histogram-rows (execute! histogram-sql)
+                null-count-row (first (execute! null-count-sql))
+                histogram-count (reduce + (map :count histogram-rows))]
+            (is (= 2 histogram-count))
+            (is (= 2 (:count null-count-row)))))))))
 
 (deftest h2-integration-basic-test
   (testing "basic query against H2"

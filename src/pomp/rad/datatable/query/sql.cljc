@@ -291,6 +291,60 @@
         params (when where-clause (rest where-clause))]
     (into [sql] params)))
 
+(defn generate-frequency-sql
+  "Generates a frequency query grouped by bucket column.
+   Null buckets are coalesced to Unknown.
+   Returns [sql-string & params] suitable for next.jdbc."
+  [config {:keys [bucket-column filters]}]
+  (let [table-name (:table-name config)
+        bucket-col (col-name config bucket-column)
+        bucket-expr (str "COALESCE(" bucket-col ", 'Unknown')")
+        where-clause (generate-where-clause config filters)
+        base-sql (str "SELECT " bucket-expr " AS bucket, COUNT(*) AS count FROM " table-name)
+        sql (str base-sql
+                 (when where-clause (str " " (first where-clause)))
+                 " GROUP BY " bucket-expr)
+        params (when where-clause (rest where-clause))]
+    (into [sql] params)))
+
+(defn- append-where-predicate
+  [where-clause predicate]
+  (if where-clause
+    (into [(str "WHERE " predicate " AND " (subs (first where-clause) (count "WHERE ")))]
+          (rest where-clause))
+    [(str "WHERE " predicate)]))
+
+(defn generate-histogram-sql
+  "Generates a histogram query for numeric buckets.
+   Excludes null bucket values and composes with datatable filters.
+   Returns [sql-string & params] suitable for next.jdbc."
+  [config {:keys [bucket-column bucket-size filters]}]
+  (let [table-name (:table-name config)
+        bucket-col (col-name config bucket-column)
+        bucket-expr (str "FLOOR(" bucket-col " / " bucket-size ") * " bucket-size)
+        where-clause (append-where-predicate
+                      (generate-where-clause config filters)
+                      (str bucket-col " IS NOT NULL"))
+        base-sql (str "SELECT " bucket-expr " AS bucket, COUNT(*) AS count FROM " table-name)
+        sql (str base-sql " " (first where-clause) " GROUP BY " bucket-expr)
+        params (rest where-clause)]
+    (into [sql] params)))
+
+(defn generate-null-count-sql
+  "Generates a query counting rows where bucket column is null.
+   Composes with datatable filters.
+   Returns [sql-string & params] suitable for next.jdbc."
+  [config {:keys [bucket-column filters]}]
+  (let [table-name (:table-name config)
+        bucket-col (col-name config bucket-column)
+        where-clause (append-where-predicate
+                      (generate-where-clause config filters)
+                      (str bucket-col " IS NULL"))
+        base-sql (str "SELECT COUNT(*) AS count FROM " table-name)
+        sql (str base-sql " " (first where-clause))
+        params (rest where-clause)]
+    (into [sql] params)))
+
 (defn rows-fn
   [config execute!]
   (fn [{:keys [columns filters page group-by project-columns search-string] :as params} _request]
