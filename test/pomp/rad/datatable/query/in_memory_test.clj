@@ -247,6 +247,19 @@
                                nil)))
           "total-rows is count after filtering, before pagination"))))
 
+(deftest stream-rows-fn-test
+  (testing "stream contract emits filtered+sorted rows without pagination"
+    (let [stream! (query/stream-rows-fn test-rows)
+          streamed (atom [])
+          done (atom nil)]
+      (stream! {:query {:filters {:city [{:type "string" :op "contains" :value "o"}]}
+                        :sort [{:column "name" :direction "desc"}]
+                        :page {:size 1 :current 1}}}
+               (fn [row] (swap! streamed conj row))
+               (fn [metadata] (reset! done metadata)))
+      (is (= ["Charlie" "Bob" "Alice"] (map :name @streamed)))
+      (is (= {:row-count 3} @done)))))
+
 (def global-search-test-rows
   [{:id 1 :name "Socrates" :school "Academy" :city "Athens"}
    {:id 2 :name "Plato" :school "Stoa" :city "Athens"}

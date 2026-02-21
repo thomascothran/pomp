@@ -12,54 +12,60 @@
                "resize" true}})
 
 (defn bar-spec
-  [{:keys [values title x-title y-title]}]
-  (merge
-   {"$schema" "https://vega.github.io/schema/vega-lite/v5.json"
-    "description" (or title "Frequency chart")
-    "data" {"values" (or values [])}
-    "mark" {"type" "bar"}
-    "encoding" {"x" {"field" "label"
-                         "type" "nominal"
-                         "title" (or x-title "Bucket")
-                         "sort" "-y"}
-                 "y" {"field" "value"
-                         "type" "quantitative"
-                         "title" (or y-title "Count")}
-                 "tooltip" [{"field" "label" "type" "nominal" "title" (or x-title "Bucket")}
-                             {"field" "value" "type" "quantitative" "title" (or y-title "Count")}]}}
-   responsive-spec-attrs))
+  [{:keys [values title x-title y-title height]}]
+  (let [spec (merge
+              {"$schema" "https://vega.github.io/schema/vega-lite/v5.json"
+               "description" (or title "Frequency chart")
+               "data" {"values" (or values [])}
+               "mark" {"type" "bar"}
+               "encoding" {"x" {"field" "label"
+                                "type" "nominal"
+                                "title" (or x-title "Bucket")
+                                "sort" "-y"}
+                           "y" {"field" "value"
+                                "type" "quantitative"
+                                "title" (or y-title "Count")}
+                           "tooltip" [{"field" "label" "type" "nominal" "title" (or x-title "Bucket")}
+                                      {"field" "value" "type" "quantitative" "title" (or y-title "Count")}]}}
+              responsive-spec-attrs)]
+    (cond-> spec
+      (some? height) (assoc "height" height))))
 
 (defn pie-spec
-  [{:keys [values title]}]
-  (merge
-   {"$schema" "https://vega.github.io/schema/vega-lite/v5.json"
-    "description" (or title "Pie chart")
-    "data" {"values" (or values [])}
-    "mark" {"type" "arc"}
-    "encoding" {"theta" {"field" "value" "type" "quantitative"}
-                 "color" {"field" "label" "type" "nominal" "title" "Region"}
-                 "tooltip" [{"field" "label" "type" "nominal" "title" "Region"}
-                             {"field" "value" "type" "quantitative" "title" "Count"}]}}
-   responsive-spec-attrs))
+  [{:keys [values title height]}]
+  (let [spec (merge
+              {"$schema" "https://vega.github.io/schema/vega-lite/v5.json"
+               "description" (or title "Pie chart")
+               "data" {"values" (or values [])}
+               "mark" {"type" "arc"}
+               "encoding" {"theta" {"field" "value" "type" "quantitative"}
+                           "color" {"field" "label" "type" "nominal" "title" "Region"}
+                           "tooltip" [{"field" "label" "type" "nominal" "title" "Region"}
+                                      {"field" "value" "type" "quantitative" "title" "Count"}]}}
+              responsive-spec-attrs)]
+    (cond-> spec
+      (some? height) (assoc "height" height))))
 
 (defn histogram-spec
-  [{:keys [values title subtitle x-title y-title]}]
-  (merge
-   {"$schema" "https://vega.github.io/schema/vega-lite/v5.json"
-    "description" (or title "Histogram")
-    "title" {"text" (or title "Histogram")
-               "subtitle" (or subtitle "")}
-    "data" {"values" (or values [])}
-    "mark" {"type" "bar"}
-    "encoding" {"x" {"field" "label"
-                         "type" "ordinal"
-                         "title" (or x-title "Bucket")}
-                 "y" {"field" "value"
-                         "type" "quantitative"
-                         "title" (or y-title "Count")}
-                 "tooltip" [{"field" "label" "type" "ordinal" "title" (or x-title "Bucket")}
-                             {"field" "value" "type" "quantitative" "title" (or y-title "Count")}]}}
-   responsive-spec-attrs))
+  [{:keys [values title subtitle x-title y-title height]}]
+  (let [spec (merge
+              {"$schema" "https://vega.github.io/schema/vega-lite/v5.json"
+               "description" (or title "Histogram")
+               "title" {"text" (or title "Histogram")
+                        "subtitle" (or subtitle "")}
+               "data" {"values" (or values [])}
+               "mark" {"type" "bar"}
+               "encoding" {"x" {"field" "label"
+                                "type" "ordinal"
+                                "title" (or x-title "Bucket")}
+                           "y" {"field" "value"
+                                "type" "quantitative"
+                                "title" (or y-title "Count")}
+                           "tooltip" [{"field" "label" "type" "ordinal" "title" (or x-title "Bucket")}
+                                      {"field" "value" "type" "quantitative" "title" (or y-title "Count")}]}}
+              responsive-spec-attrs)]
+    (cond-> spec
+      (some? height) (assoc "height" height))))
 
 (defn render-script
   [{:keys [target-id spec]}]

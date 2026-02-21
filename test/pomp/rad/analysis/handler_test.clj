@@ -32,6 +32,9 @@
     (testing "resolves filters from :analysis/filter-source-path"
       (is (= expected-filters
              (extract-filters req {:analysis/filter-source-path [:datatable :philosophers-table :filters]}))))
+    (testing "supports keyword/string variants for datatable filter path"
+      (is (= expected-filters
+             (extract-filters req {:analysis/filter-source-path ["datatable" "philosophers-table" "filters"]}))))
     (testing "missing path returns empty map"
       (is (= {}
              (extract-filters req {:analysis/filter-source-path [:datatable :missing-table :filters]}))))

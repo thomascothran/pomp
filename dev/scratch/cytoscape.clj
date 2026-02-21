@@ -6,24 +6,55 @@
 (def graph-id "scratch-cytoscape")
 (def seed-node-id "project:apollo")
 
+(def ^:private graph-system
+  (graph/make-graph {}))
+
+(def ^:private detail-card-ids
+  {:root (str graph-id "-details")
+   :properties "cy-selected-node-properties"})
+
+(def ^:private detail-card-signals
+  {:selected-node "graph.selectedNode"
+   :selected-node-id "graph.selectedNodeId"})
+
+(def ^:private detail-card-host-attrs
+  {:data-pomp-graph-id graph-id})
+
+(defn- render-detail-card
+  [selected-node]
+  (let [render-detail-card-fn (get-in graph-system [:details :render-detail-card])]
+    (render-detail-card-fn {:graph-id graph-id
+                            :ids detail-card-ids
+                            :signals detail-card-signals
+                            :selected-node selected-node
+                            :host-attrs detail-card-host-attrs})))
+
+(def ^:private marker-style-by-shape
+  {"ellipse" "border-radius: 9999px;"
+   "round-rectangle" "border-radius: 0.375rem;"
+   "rectangle" "border-radius: 0.125rem;"
+   "diamond" "border-radius: 0.125rem; transform: rotate(45deg);"
+   "hexagon" "clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%);"
+   "vee" "clip-path: polygon(0 0, 50% 92%, 100% 0, 74% 0, 50% 44%, 26% 0);"
+   "tag" "clip-path: polygon(0 0, 74% 0, 100% 50%, 74% 100%, 0 100%);"})
+
+(defn- node-marker-style
+  [visual]
+  (str (get marker-style-by-shape (:shape visual) "border-radius: 0.125rem;")
+       " background-color: " (:color visual) ";"
+       " border-color: " (:border-color visual) ";"))
+
 (def ^:private node-type-legend
-  [{:type "project"
-    :marker-style "border-radius: 9999px; background-color: #2563eb; border-color: #1d4ed8;"}
-   {:type "story"
-    :marker-style "border-radius: 0.375rem; background-color: #0f766e; border-color: #115e59;"}
-   {:type "task"
-    :marker-style "border-radius: 0.125rem; background-color: #ea580c; border-color: #c2410c;"}
-   {:type "subtask"
-    :marker-style "border-radius: 0.125rem; transform: rotate(45deg); background-color: #7c3aed; border-color: #6d28d9;"}
-   {:type "developer"
-    :marker-style "clip-path: polygon(25% 6%, 75% 6%, 100% 50%, 75% 94%, 25% 94%, 0 50%); background-color: #0891b2; border-color: #0e7490;"}
-   {:type "qa"
-    :marker-style "clip-path: polygon(0 0, 50% 92%, 100% 0, 74% 0, 50% 44%, 26% 0); background-color: #65a30d; border-color: #4d7c0f;"}
-   {:type "product-owner"
-    :marker-style "clip-path: polygon(0 0, 74% 0, 100% 50%, 74% 100%, 0 100%); background-color: #be123c; border-color: #9f1239;"}])
+  (let [node-types (get-in graph-system [:config :visual :node-types])]
+    (mapv (fn [{:keys [type label]}]
+            (let [type-key (keyword type)
+                  visual (get node-types type-key)]
+              {:label (or label (name type-key))
+               :marker-style (node-marker-style visual)}))
+          (get-in graph-system [:visual :legend :nodes]))))
 
 (def ^:private graph-handlers
-  (graph/make-handlers))
+  (:handlers graph-system))
 
 (def init-handler
   (:init graph-handlers))
@@ -103,21 +134,14 @@
                  :class "h-full w-full rounded-box"
                  :data-pomp-graph-canvas "true"}]]]]
        [:aside {:class "space-y-4"}
-        [:section {:class "card border border-base-300 bg-base-100 shadow-sm"}
-         [:div {:class "card-body gap-2 p-4"}
-          [:h2 {:class "card-title text-base"} "Details"]
-          [:div {:class "mt-2 max-h-48 space-y-2 overflow-auto"
-                 :id "cy-selected-node-properties"}
-           [:div {:class "space-y-0.5"}
-            [:div {:class "text-xs uppercase tracking-wide text-base-content/60"} "No properties"]
-            [:div {:class "font-mono text-sm"} "none"]]]]]
+        (render-detail-card nil)
         [:section {:class "card border border-base-300 bg-base-100 shadow-sm"}
          [:div {:class "card-body gap-3 p-4"}
           [:h2 {:class "card-title text-base"} "Node Type Legend"]
           [:div {:class "grid grid-cols-2 gap-x-4 gap-y-2 text-sm"}
-           (for [{:keys [type marker-style]} node-type-legend]
+           (for [{:keys [label marker-style]} node-type-legend]
              [:div {:class "flex items-center gap-2"
-                    :key type}
+                    :key label}
               [:span {:class "inline-block h-4 w-4 border border-base-content/35"
                       :style marker-style}]
-              [:span {:data-cy-node-type-label "true"} type]])]]]]]]))})
+              [:span {:data-cy-node-type-label "true"} label]])]]]]]]))})

@@ -49,8 +49,8 @@
                       "if (!g) return false;"
                       "const cy = g.cy || g;"
                       "const node = cy.getElementById('" node-id "');"
-                       "if (!node || node.empty()) return false;"
-                       "return node.hasClass('" class-name "');"))))
+                      "if (!node || node.empty()) return false;"
+                      "return node.hasClass('" class-name "');"))))
 
 (defn- node-ids
   []
@@ -70,9 +70,9 @@
                       "const cy = g.cy || g;"
                       "const source = cy.getElementById('" source-node-id "');"
                       "if (!source || source.empty()) return false;"
-                       "const sourcePos = source.position();"
-                       "const newlyAdded = cy.nodes().filter((n) => !before.has(n.id()));"
-                       "return newlyAdded.some((n) => { const p = n.position(); return p && p.x === sourcePos.x && p.y === sourcePos.y; });"))))
+                      "const sourcePos = source.position();"
+                      "const newlyAdded = cy.nodes().filter((n) => !before.has(n.id()));"
+                      "return newlyAdded.some((n) => { const p = n.position(); return p && p.x === sourcePos.x && p.y === sourcePos.y; });"))))
 
 (defn- node-rendered-position
   [node-id]
@@ -157,6 +157,95 @@
                        "const dy = p.y - " (:y previous-position) ";"
                        "return Math.sqrt((dx * dx) + (dy * dy));"))))
 
+(defn- init-custom-visual-graph!
+  []
+  (e/js-execute browser/*driver*
+                (str "if (typeof window.pompInitGraph !== 'function') return null;"
+                     "const graphId = 'smoke-visual-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);"
+                     "const hostId = graphId + '-host';"
+                     "const canvasId = graphId + '-canvas';"
+                     "const host = document.createElement('div');"
+                     "host.id = hostId;"
+                     "host.setAttribute('data-pomp-graph-id', graphId);"
+                     "host.style.width = '640px';"
+                     "host.style.height = '400px';"
+                     "host.style.position = 'relative';"
+                     "const canvas = document.createElement('div');"
+                     "canvas.id = canvasId;"
+                     "canvas.setAttribute('data-pomp-graph-canvas', 'true');"
+                     "canvas.style.width = '100%';"
+                     "canvas.style.height = '100%';"
+                     "host.appendChild(canvas);"
+                     "document.body.appendChild(host);"
+                     "window.pompInitGraph({"
+                     "  graphId: graphId,"
+                     "  hostEl: host,"
+                     "  canvasEl: canvas,"
+                     "  viewport: {fit: false},"
+                     "  nodes: ["
+                     "    {id: 'node:known', label: 'Known', type: 'service'},"
+                     "    {id: 'node:fallback', label: 'Fallback', type: 'unknown-type'},"
+                     "    {id: 'node:target', label: 'Target', type: 'service'}"
+                     "  ],"
+                     "  edges: ["
+                     "    {id: 'edge:known', source: 'node:known', target: 'node:target', relation: 'service/dependency', label: 'depends'},"
+                     "    {id: 'edge:fallback', source: 'node:target', target: 'node:fallback', relation: 'unknown/relation', label: 'related'}"
+                     "  ],"
+                     "  visual: {"
+                     "    nodeTypes: {"
+                     "      default: {label: 'Node', shape: 'triangle', color: '#112233', borderColor: '#223344'},"
+                     "      service: {label: 'Service', shape: 'hexagon', color: '#00aaee', borderColor: '#005577'}"
+                     "    },"
+                     "    edgeTypes: {"
+                     "      default: {label: 'Related', lineColor: '#123456', arrowColor: '#123456', labelColor: '#654321'},"
+                     "      'service/dependency': {label: 'Depends', lineColor: '#ff0066', arrowColor: '#ff0066', labelColor: '#660022'}"
+                     "    }"
+                     "  }"
+                     "});"
+                     "return graphId;")))
+
+(defn- custom-visual-style-checks
+  [graph-id]
+  (e/js-execute browser/*driver*
+                (str "const graphId = " (pr-str graph-id) ";"
+                     "const g = window.pompGraphs && window.pompGraphs[graphId];"
+                     "if (!g) return {ready: false};"
+                     "const cy = g.cy || g;"
+                     "if (!cy || !cy.getElementById) return {ready: false};"
+                     "const knownNode = cy.getElementById('node:known');"
+                     "const fallbackNode = cy.getElementById('node:fallback');"
+                     "const knownEdge = cy.getElementById('edge:known');"
+                     "const fallbackEdge = cy.getElementById('edge:fallback');"
+                     "if (!knownNode || knownNode.empty() || !fallbackNode || fallbackNode.empty() || !knownEdge || knownEdge.empty() || !fallbackEdge || fallbackEdge.empty()) return {ready: false};"
+                     "const normalize = (value) => String(value == null ? '' : value).toLowerCase().replace(/\\s+/g, '');"
+                     "const hexToRgb = (hex) => {"
+                     "  const cleaned = String(hex || '').replace('#', '');"
+                     "  if (!/^[0-9a-fA-F]{6}$/.test(cleaned)) return normalize(hex);"
+                     "  const r = parseInt(cleaned.slice(0, 2), 16);"
+                     "  const gVal = parseInt(cleaned.slice(2, 4), 16);"
+                     "  const b = parseInt(cleaned.slice(4, 6), 16);"
+                     "  return normalize(`rgb(${r}, ${gVal}, ${b})`);"
+                     "};"
+                     "const knownNodeShape = String(knownNode.style('shape') || '');"
+                     "const fallbackNodeShape = String(fallbackNode.style('shape') || '');"
+                     "const knownEdgeLineColor = normalize(knownEdge.style('line-color'));"
+                     "const fallbackEdgeLineColor = normalize(fallbackEdge.style('line-color'));"
+                     "const expectedKnownEdgeLineColor = hexToRgb('#ff0066');"
+                     "const expectedFallbackEdgeLineColor = hexToRgb('#123456');"
+                     "return {"
+                     "  ready: true,"
+                     "  knownNodeShape: knownNodeShape,"
+                     "  fallbackNodeShape: fallbackNodeShape,"
+                     "  knownEdgeLineColor: knownEdgeLineColor,"
+                     "  fallbackEdgeLineColor: fallbackEdgeLineColor,"
+                     "  knownNodeMatches: knownNodeShape === 'hexagon',"
+                     "  fallbackNodeMatches: fallbackNodeShape === 'triangle',"
+                     "  knownEdgeMatches: knownEdgeLineColor === expectedKnownEdgeLineColor,"
+                     "  fallbackEdgeMatches: fallbackEdgeLineColor === expectedFallbackEdgeLineColor,"
+                     "  expectedKnownEdgeLineColor: expectedKnownEdgeLineColor,"
+                     "  expectedFallbackEdgeLineColor: expectedFallbackEdgeLineColor"
+                     "};")))
+
 (deftest scratch-page-loads-and-host-present-test
   (testing "scratch cytoscape page initializes graph runtime"
     (e/go browser/*driver* cytoscape/base-url)
@@ -202,7 +291,7 @@
         (is (<= (double (rendered-position-drift source-node-id source-rendered-pos-before)) 8.0)
             "Expanded layout should keep source node anchored within 8px rendered drift")
         (is (false? (expanded-nodes-overlap-source? source-node-id before-node-ids))
-             "Expanded nodes should not be placed exactly on top of the source node"))
+            "Expanded nodes should not be placed exactly on top of the source node"))
       (let [after-first-expand (node-count)]
         (emit-node-event! source-node-id "dbltap")
         (Thread/sleep 200)
@@ -253,3 +342,21 @@
                (str/includes? text "domain")
                (str/includes? text "platform")))
         "Graph should remain interactive after local expansion error")))
+
+(deftest runtime-visual-config-applies-and-falls-back-test
+  (testing "runtime styles apply configured visuals and deterministic fallbacks"
+    (e/go browser/*driver* cytoscape/base-url)
+    (e/wait-predicate #(pos? (node-count)))
+    (let [graph-id (init-custom-visual-graph!)]
+      (is (string? graph-id)
+          "Expected custom graph init helper to return a graph id")
+      (e/wait-predicate #(true? (:ready (custom-visual-style-checks graph-id))))
+      (let [checks (custom-visual-style-checks graph-id)]
+        (is (true? (:knownNodeMatches checks))
+            (str "Configured node type should use configured shape: " (pr-str checks)))
+        (is (true? (:fallbackNodeMatches checks))
+            (str "Unknown node type should fall back to default node style: " (pr-str checks)))
+        (is (true? (:knownEdgeMatches checks))
+            (str "Configured edge relation should use configured line color: " (pr-str checks)))
+        (is (true? (:fallbackEdgeMatches checks))
+            (str "Unknown relation should fall back to default edge style: " (pr-str checks)))))))

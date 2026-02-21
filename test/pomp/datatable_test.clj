@@ -73,6 +73,12 @@
   (some-> (re-find #"(?s)event: datastar-patch-elements\ndata: elements (.*?)\n\n" sse-body)
           second))
 
+(defn- export-script-payload
+  [script fn-name]
+  (some-> (re-find (re-pattern (str "window\\." fn-name "\\((\\{.*\\})\\);")) script)
+          second
+          (json/read-str {:key-fn keyword})))
+
 ;; =============================================================================
 ;; dt/render tests - filter-operations passthrough
 ;; This tests the public API that make-handlers uses internally
@@ -390,6 +396,205 @@
           "Projection should include visible, filtered, grouped/sorted, and id columns derived from server config")
       (is (not (contains? (set (:project-columns @captured-query-signals)) :not-a-real-column))
           "Projection must ignore unknown client-provided column keys"))))
+
+(deftest make-handlers-export-stream-contract-payload-test
+  (testing "export action derives full-query payload and configured columns"
+    (let [stream-calls (atom [])
+          scripts (atom [])
+          columns [{:key :id :label "ID" :type :number}
+                   {:key :name :label "Name" :type :string}
+                   {:key :school :label "School" :type :enum}]
+          handler (make-get-handler {:id "test-table"
+                                     :columns columns
+                                     :rows-fn (fn [_ _] {:rows [] :page {:size 10 :current 0}})
+                                     :export-stream-rows-fn (fn [ctx _on-row! on-complete!]
+                                                              (swap! stream-calls conj ctx)
+                                                              (on-complete! {:row-count 0}))
+                                     :data-url "/data"
+                                     :render-html-fn str})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    d*/execute-script! (fn [_ payload]
+                                         (swap! scripts conj payload))
+                    d*/patch-signals! (fn [& _])
+                    d*/patch-elements! (fn [& _])
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {"action" "export"
+                                 "sortCol" "school"
+                                 "sortDir" "desc"}
+                  :headers {"datastar-request" "true"}
+                  :body-params {:datatable {:test-table {:globalTableSearch "  stoa  "
+                                                         :groupBy ["school"]
+                                                         :page {:size 10 :current 1}
+                                                         :columnOrder ["school" "name" "id"]
+                                                         :columns {:id {:visible false}}}}}})
+        (is (= 1 (count @stream-calls)) "Export action should invoke stream contract once")
+        (let [{:keys [query columns limits]} (first @stream-calls)]
+          (is (= [:school :name :id] columns)
+              "Export contract should include configured columns in current order")
+          (is (= [:school :name :id] (:project-columns query))
+              "Export query should project configured columns")
+          (is (= [] (:group-by query))
+              "Export query should disable grouped pagination semantics")
+          (is (nil? (:page query))
+              "Export query should ignore pagination scope")
+          (is (= "stoa" (:search-string query))
+              "Export query should preserve normalized global search")
+          (is (= "school" (get-in query [:sort 0 :column]))
+              "Export query should preserve active sorting column")
+          (is (= "desc" (get-in query [:sort 0 :direction]))
+              "Export query should preserve active sorting direction")
+          (is (nil? limits)
+              "Export limits should be nil by default"))
+        (is (some #(re-find #"pompDatatableExportBegin" %) @scripts)
+            "Export should emit begin script event")
+        (is (some #(re-find #"pompDatatableExportFinish" %) @scripts)
+            "Export should emit finish script event")))))
+
+(deftest make-handlers-export-stream-chunks-rows-test
+  (testing "export emits CSV chunks in batches rather than one script event per row"
+    (let [scripts (atom [])
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :id :label "ID" :type :number}
+                                               {:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _] {:rows [] :page {:size 10 :current 0}})
+                                     :export-limits {:chunk-rows 2}
+                                     :export-stream-rows-fn (fn [_ctx on-row! on-complete!]
+                                                              (on-row! {:id 1 :name "Socrates"})
+                                                              (on-row! {:id 2 :name "Plato"})
+                                                              (on-row! {:id 3 :name "Zeno"})
+                                                              (on-complete! {:row-count 3}))
+                                     :data-url "/data"
+                                     :render-html-fn str})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    d*/execute-script! (fn [_ payload]
+                                         (swap! scripts conj payload))
+                    d*/patch-signals! (fn [& _])
+                    d*/patch-elements! (fn [& _])
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {"action" "export"}
+                  :headers {"datastar-request" "true"}
+                  :body-params {:datatable {:test-table {}}}})
+        (let [append-payloads (->> @scripts
+                                   (keep #(export-script-payload % "pompDatatableExportAppend"))
+                                   (map :chunk)
+                                   vec)]
+          (is (= 2 (count append-payloads))
+              "chunk-rows=2 should flush three rows as two append events")
+          (is (re-find #"1,Socrates" (first append-payloads)))
+          (is (re-find #"2,Plato" (first append-payloads)))
+          (is (re-find #"3,Zeno" (second append-payloads))))))))
+
+(deftest make-handlers-export-stream-enforces-guardrails-test
+  (testing "export fails when max row limit is exceeded"
+    (let [scripts (atom [])
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :id :label "ID" :type :number}
+                                               {:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _] {:rows [] :page {:size 10 :current 0}})
+                                     :export-limits {:max-rows 2 :chunk-rows 10}
+                                     :export-stream-rows-fn (fn [_ctx on-row! on-complete!]
+                                                              (on-row! {:id 1 :name "Socrates"})
+                                                              (on-row! {:id 2 :name "Plato"})
+                                                              (on-row! {:id 3 :name "Zeno"})
+                                                              (on-complete! {:row-count 3}))
+                                     :data-url "/data"
+                                     :render-html-fn str})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    d*/execute-script! (fn [_ payload]
+                                         (swap! scripts conj payload))
+                    d*/patch-signals! (fn [& _])
+                    d*/patch-elements! (fn [& _])
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {"action" "export"}
+                  :headers {"datastar-request" "true"}
+                  :body-params {:datatable {:test-table {}}}})
+        (is (some #(re-find #"pompDatatableExportFail" %) @scripts)
+            "Export should emit fail event when row limit is exceeded")
+        (is (not-any? #(re-find #"pompDatatableExportFinish" %) @scripts)
+            "Export should not emit finish after row-limit failure"))))
+
+  (testing "export fails when timeout is exceeded"
+    (let [scripts (atom [])
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :id :label "ID" :type :number}
+                                               {:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _] {:rows [] :page {:size 10 :current 0}})
+                                     :export-limits {:timeout-ms 5}
+                                     :export-stream-rows-fn (fn [_ctx _on-row! on-complete!]
+                                                              (Thread/sleep 20)
+                                                              (on-complete! {:row-count 0}))
+                                     :data-url "/data"
+                                     :render-html-fn str})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    d*/execute-script! (fn [_ payload]
+                                         (swap! scripts conj payload))
+                    d*/patch-signals! (fn [& _])
+                    d*/patch-elements! (fn [& _])
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {"action" "export"}
+                  :headers {"datastar-request" "true"}
+                  :body-params {:datatable {:test-table {}}}})
+        (is (some #(re-find #"pompDatatableExportFail" %) @scripts)
+            "Export should emit fail event when timeout is exceeded")
+        (is (not-any? #(re-find #"pompDatatableExportFinish" %) @scripts)
+            "Export should not emit finish after timeout failure"))))
+
+  (testing "export fails when max byte limit is exceeded"
+    (let [scripts (atom [])
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :id :label "ID" :type :number}
+                                               {:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _] {:rows [] :page {:size 10 :current 0}})
+                                     :export-limits {:max-bytes 8}
+                                     :export-stream-rows-fn (fn [_ctx on-row! on-complete!]
+                                                              (on-row! {:id 1 :name "Socrates"})
+                                                              (on-complete! {:row-count 1}))
+                                     :data-url "/data"
+                                     :render-html-fn str})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    d*/execute-script! (fn [_ payload]
+                                         (swap! scripts conj payload))
+                    d*/patch-signals! (fn [& _])
+                    d*/patch-elements! (fn [& _])
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {"action" "export"}
+                  :headers {"datastar-request" "true"}
+                  :body-params {:datatable {:test-table {}}}})
+        (is (some #(re-find #"pompDatatableExportFail" %) @scripts)
+            "Export should emit fail event when max byte limit is exceeded")
+        (is (not-any? #(re-find #"pompDatatableExportFinish" %) @scripts)
+            "Export should not emit finish after max-byte failure")))))
+
+(deftest make-handlers-toolbar-includes-default-export-control-test
+  (testing "default render includes export action near columns control"
+    (let [handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _] {:rows [] :total-rows 0 :page {:size 10 :current 0}})
+                                     :export-stream-rows-fn (fn [_ _ on-complete!]
+                                                              (on-complete! {:row-count 0}))
+                                     :data-url "/data"
+                                     :render-html-fn str})
+          sse-body (-> (handler {:query-params {}})
+                       sse-response->string)]
+      (is (re-find #"Export CSV" sse-body)
+          "Default toolbar should render export control")
+      (is (re-find #"action=export" sse-body)
+          "Export control should request export action"))))
 
 (deftest make-handlers-save-bypasses-query-flow-test
   (testing "save action bypasses query flow even when :table-search-query is present"

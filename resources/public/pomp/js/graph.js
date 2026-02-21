@@ -535,14 +535,179 @@
     }
   }
 
-  function defaultStyle() {
-    return [
+  const BUILTIN_VISUAL = {
+    nodeTypes: {
+      default: {
+        shape: 'round-rectangle',
+        color: '#64748b',
+        borderColor: '#475569'
+      },
+      project: {
+        shape: 'ellipse',
+        color: '#2563eb',
+        borderColor: '#1d4ed8'
+      },
+      story: {
+        shape: 'round-rectangle',
+        color: '#0f766e',
+        borderColor: '#115e59'
+      },
+      task: {
+        shape: 'rectangle',
+        color: '#ea580c',
+        borderColor: '#c2410c'
+      },
+      subtask: {
+        shape: 'diamond',
+        color: '#7c3aed',
+        borderColor: '#6d28d9'
+      },
+      developer: {
+        shape: 'hexagon',
+        color: '#0891b2',
+        borderColor: '#0e7490'
+      },
+      qa: {
+        shape: 'vee',
+        color: '#65a30d',
+        borderColor: '#4d7c0f'
+      },
+      'product-owner': {
+        shape: 'tag',
+        color: '#be123c',
+        borderColor: '#9f1239'
+      }
+    },
+    edgeTypes: {
+      default: {
+        lineColor: '#8ca0b3',
+        arrowColor: '#8ca0b3',
+        labelColor: '#1f2937'
+      }
+    }
+  };
+
+  function getField(source, keys) {
+    if (!source || typeof source !== 'object') {
+      return undefined;
+    }
+
+    for (let i = 0; i < keys.length; i += 1) {
+      if (source[keys[i]] !== undefined) {
+        return source[keys[i]];
+      }
+    }
+
+    return undefined;
+  }
+
+  function asObjectMap(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return {};
+    }
+
+    return Object.assign({}, value);
+  }
+
+  function sortedVisualKeys(entries) {
+    return Object.keys(entries)
+      .filter(function(key) { return key && key !== 'default'; })
+      .sort();
+  }
+
+  function selectorLiteral(value) {
+    return String(value)
+      .replace(/\\/g, '\\\\')
+      .replace(/"/g, '\\"');
+  }
+
+  function nodeStyleFromVisualEntry(entry) {
+    const visual = asObjectMap(entry);
+    const style = {};
+
+    const shape = getField(visual, ['shape']);
+    const color = getField(visual, ['color', 'backgroundColor', 'background-color']);
+    const borderColor = getField(visual, ['borderColor', 'border-color']);
+    const borderWidth = getField(visual, ['borderWidth', 'border-width']);
+    const textColor = getField(visual, ['textColor', 'text-color']);
+
+    if (shape !== undefined) {
+      style.shape = shape;
+    }
+
+    if (color !== undefined) {
+      style['background-color'] = color;
+    }
+
+    if (borderColor !== undefined) {
+      style['border-color'] = borderColor;
+    }
+
+    if (borderWidth !== undefined) {
+      style['border-width'] = borderWidth;
+    }
+
+    if (textColor !== undefined) {
+      style.color = textColor;
+    }
+
+    return style;
+  }
+
+  function edgeStyleFromVisualEntry(entry) {
+    const visual = asObjectMap(entry);
+    const style = {};
+
+    const lineColor = getField(visual, ['lineColor', 'line-color']);
+    const arrowColor = getField(visual, ['arrowColor', 'arrow-color', 'targetArrowColor', 'target-arrow-color']);
+    const labelColor = getField(visual, ['labelColor', 'label-color', 'textColor', 'text-color']);
+    const width = getField(visual, ['width']);
+
+    if (lineColor !== undefined) {
+      style['line-color'] = lineColor;
+    }
+
+    if (arrowColor !== undefined) {
+      style['target-arrow-color'] = arrowColor;
+    }
+
+    if (labelColor !== undefined) {
+      style.color = labelColor;
+    }
+
+    if (width !== undefined) {
+      style.width = width;
+    }
+
+    return style;
+  }
+
+  function resolveVisualConfig(payload) {
+    const visual = asObjectMap(payload && payload.visual);
+    const customNodeTypes = asObjectMap(getField(visual, ['nodeTypes', 'node-types', 'node_types']));
+    const customEdgeTypes = asObjectMap(getField(visual, ['edgeTypes', 'edge-types', 'edge_types']));
+
+    return {
+      nodeTypes: Object.assign({}, BUILTIN_VISUAL.nodeTypes, customNodeTypes),
+      edgeTypes: Object.assign({}, BUILTIN_VISUAL.edgeTypes, customEdgeTypes)
+    };
+  }
+
+  function defaultStyle(payload) {
+    const visual = resolveVisualConfig(payload);
+    const nodeTypes = visual.nodeTypes;
+    const edgeTypes = visual.edgeTypes;
+
+    const nodeDefaultVisualStyle = nodeStyleFromVisualEntry(nodeTypes.default);
+    const edgeDefaultVisualStyle = edgeStyleFromVisualEntry(edgeTypes.default);
+
+    const styles = [
       {
         selector: 'node',
-        style: {
+        style: Object.assign({
           label: 'data(label)',
-          'background-color': '#64748b',
           shape: 'round-rectangle',
+          'background-color': '#64748b',
           'border-width': 2,
           'border-color': '#475569',
           color: '#0f172a',
@@ -554,81 +719,53 @@
           'text-background-shape': 'roundrectangle',
           'text-background-padding': 4,
           'text-margin-y': -1
-        }
-      },
-      {
-        selector: 'node[type = "project"]',
-        style: {
-          shape: 'ellipse',
-          'background-color': '#2563eb',
-          'border-color': '#1d4ed8'
-        }
-      },
-      {
-        selector: 'node[type = "story"]',
-        style: {
-          shape: 'round-rectangle',
-          'background-color': '#0f766e',
-          'border-color': '#115e59'
-        }
-      },
-      {
-        selector: 'node[type = "task"]',
-        style: {
-          shape: 'rectangle',
-          'background-color': '#ea580c',
-          'border-color': '#c2410c'
-        }
-      },
-      {
-        selector: 'node[type = "subtask"]',
-        style: {
-          shape: 'diamond',
-          'background-color': '#7c3aed',
-          'border-color': '#6d28d9'
-        }
-      },
-      {
-        selector: 'node[type = "developer"]',
-        style: {
-          shape: 'hexagon',
-          'background-color': '#0891b2',
-          'border-color': '#0e7490'
-        }
-      },
-      {
-        selector: 'node[type = "qa"]',
-        style: {
-          shape: 'vee',
-          'background-color': '#65a30d',
-          'border-color': '#4d7c0f'
-        }
-      },
-      {
-        selector: 'node[type = "product-owner"]',
-        style: {
-          shape: 'tag',
-          'background-color': '#be123c',
-          'border-color': '#9f1239'
-        }
-      },
-      {
-        selector: 'edge',
-        style: {
-          width: 2,
-          label: 'data(label)',
-          'line-color': '#8ca0b3',
-          'target-arrow-color': '#8ca0b3',
-          'target-arrow-shape': 'triangle',
-          'curve-style': 'bezier',
-          color: '#1f2937',
-          'font-size': 10,
-          'text-background-color': '#ffffff',
-          'text-background-opacity': 0.9,
-          'text-background-shape': 'roundrectangle',
-          'text-background-padding': 2
-        }
-      },
+        }, nodeDefaultVisualStyle)
+      }
+    ];
+
+    sortedVisualKeys(nodeTypes).forEach(function(type) {
+      const style = nodeStyleFromVisualEntry(nodeTypes[type]);
+      if (Object.keys(style).length === 0) {
+        return;
+      }
+
+      styles.push({
+        selector: 'node[type = "' + selectorLiteral(type) + '"]',
+        style: style
+      });
+    });
+
+    styles.push({
+      selector: 'edge',
+      style: Object.assign({
+        width: 2,
+        label: 'data(label)',
+        'line-color': '#8ca0b3',
+        'target-arrow-color': '#8ca0b3',
+        'target-arrow-shape': 'triangle',
+        'curve-style': 'bezier',
+        color: '#1f2937',
+        'font-size': 10,
+        'text-background-color': '#ffffff',
+        'text-background-opacity': 0.9,
+        'text-background-shape': 'roundrectangle',
+        'text-background-padding': 2
+      }, edgeDefaultVisualStyle)
+    });
+
+    sortedVisualKeys(edgeTypes).forEach(function(relation) {
+      const style = edgeStyleFromVisualEntry(edgeTypes[relation]);
+      if (Object.keys(style).length === 0) {
+        return;
+      }
+
+      styles.push({
+        selector: 'edge[relation = "' + selectorLiteral(relation) + '"]',
+        style: style
+      });
+    });
+
+    return styles.concat([
       {
         selector: 'node.loading',
         style: {
@@ -651,7 +788,7 @@
           'border-width': 4
         }
       }
-    ];
+    ]);
   }
 
   function registerGraphBridge(cy, graphId, hostEl, payload) {
@@ -796,7 +933,7 @@
         container: canvasEl,
         elements: [],
         layout: layoutOptions(payload, 'init'),
-        style: payload && payload.style ? payload.style : defaultStyle()
+        style: payload && payload.style ? payload.style : defaultStyle(payload)
       });
 
       registry[graphId] = cy;

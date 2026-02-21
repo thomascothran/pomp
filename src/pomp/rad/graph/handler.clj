@@ -190,11 +190,13 @@
                      (d*/close-sse! sse))}))
 
 (defn make-handlers
-  [{:keys [initialize-graph find-node-neighbors]}]
+  [{:keys [initialize-graph find-node-neighbors visual]}]
   {:init (fn [req]
            (let [query (init-query req)
                  context (select-keys query [:graph-id :seed-node-id])
-                 result (invoke-app initialize-graph query req context)]
+                 result (-> initialize-graph
+                            (invoke-app query req context)
+                            (assoc :visual visual))]
              (one-shot-script-handler req (script-event "pompInitGraph" result))))
 
    :expand (fn [req]

@@ -218,9 +218,18 @@
               sorted (sort-data filtered (:sort params))]
           {:rows (->> sorted
                       (drop (* current size))
-                      (take size)
-                      vec)
+                       (take size)
+                       vec)
            :page {:size size :current current}})))))
+
+(defn stream-rows-fn
+  [rows]
+  (fn [{:keys [query]} on-row! on-complete!]
+    (let [filtered (filtered-rows rows query)
+          sorted (sort-data filtered (:sort query))]
+      (doseq [row sorted]
+        (on-row! row))
+      (on-complete! {:row-count (count sorted)}))))
 
 (defn count-fn
   [rows]

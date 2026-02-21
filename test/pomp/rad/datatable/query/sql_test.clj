@@ -667,6 +667,54 @@
         (is (= ["greece" "%stoa%" "%stoa%"] count-params))
         (is (= ["greece" "%stoa%" "%stoa%" 2 0] query-params))))))
 
+(deftest stream-rows-fn-uses-injected-adapter-and-no-pagination-test
+  (testing "stream contract delegates to injected adapter and omits LIMIT/OFFSET"
+    (let [stream-calls (atom [])
+          streamed (atom [])
+          complete (atom nil)
+          stream-adapter! (fn [sqlvec on-row! on-complete!]
+                            (swap! stream-calls conj sqlvec)
+                            (on-row! {:id 1 :name "Socrates"})
+                            (on-row! {:id 2 :name "Plato"})
+                            (on-complete! {:row-count 2 :adapter :stream}))
+          stream! (sql/stream-rows-fn {:table-name "philosophers"} stream-adapter!)]
+      (stream! {:query {:filters {:name [{:type "string" :op "contains" :value "o"}]}
+                        :sort [{:column "name" :direction "asc"}]
+                        :page {:size 1 :current 2}}
+                :columns [:id :name]}
+               (fn [row] (swap! streamed conj row))
+               (fn [metadata] (reset! complete metadata)))
+      (let [[sql-text & params] (first @stream-calls)]
+        (is (re-find #"SELECT id, name FROM philosophers" sql-text))
+        (is (not (re-find #"LIMIT" sql-text)))
+        (is (not (re-find #"OFFSET" sql-text)))
+        (is (= ["%o%"] params)))
+      (is (= [{:id 1 :name "Socrates"} {:id 2 :name "Plato"}] @streamed))
+      (is (= {:row-count 2 :adapter :stream} @complete)))))
+
+(deftest stream-rows-fn-compat-materializes-with-execute-test
+  (testing "compat fallback helper materializes execute! rows when adapter streaming is unavailable"
+    (let [execute-calls (atom [])
+          streamed (atom [])
+          complete (atom nil)
+          execute! (fn [sqlvec]
+                     (swap! execute-calls conj sqlvec)
+                     [{:id 1 :name "Socrates"} {:id 2 :name "Plato"}])
+          stream! (sql/stream-rows-fn-compat {:table-name "philosophers"} execute!)]
+      (stream! {:query {:filters {:name [{:type "string" :op "contains" :value "o"}]}
+                        :sort [{:column "name" :direction "asc"}]
+                        :page {:size 1 :current 2}}
+                :columns [:id :name]}
+               (fn [row] (swap! streamed conj row))
+               (fn [metadata] (reset! complete metadata)))
+      (let [[sql-text & params] (first @execute-calls)]
+        (is (re-find #"SELECT id, name FROM philosophers" sql-text))
+        (is (not (re-find #"LIMIT" sql-text)))
+        (is (not (re-find #"OFFSET" sql-text)))
+        (is (= ["%o%"] params)))
+      (is (= [{:id 1 :name "Socrates"} {:id 2 :name "Plato"}] @streamed))
+      (is (= {:row-count 2} @complete)))))
+
 ;; =============================================================================
 ;; Integration with H2
 ;; =============================================================================
@@ -835,7 +883,7 @@
         (is (= (:total-rows sql-result) (:total-rows mem-result)))
         (is (= (:page sql-result) (:page mem-result)))
          ;; Compare row contents (ids should match when sorted by id)
-         (is (= (map :id (:rows sql-result)) (map :id (:rows mem-result))))))))
+        (is (= (map :id (:rows sql-result)) (map :id (:rows mem-result))))))))
 
 (deftest h2-vs-in-memory-global-search-parity-test
   (testing "SQL and in-memory stay equivalent for global search semantics"
@@ -879,10 +927,10 @@
                              :page {:size 2 :current 0}}
                             nil)
             second-page (qfn {:filters {}
-                             :sort [{:column "school" :direction "asc"}]
-                             :group-by [:school]
-                             :page {:size 2 :current 1}}
-                            nil)]
+                              :sort [{:column "school" :direction "asc"}]
+                              :group-by [:school]
+                              :page {:size 2 :current 1}}
+                             nil)]
         (is (= 5 (:total-rows first-page))
             "Expected total-rows to reflect leaf-row count")
         (is (= 2 (count (:rows first-page)))
@@ -980,8 +1028,8 @@
       (let [execute! (fn [sqlvec] (jdbc/execute! ds sqlvec {:builder-fn rs/as-unqualified-lower-maps}))
             qfn (sql/query-fn {:table-name "philosophers"} execute!)
             result (qfn {:filters {:name [{:type "string"
-                                          :op "is-any-of"
-                                          :value ["A1" "A2" "B1" "C1"]}]}
+                                           :op "is-any-of"
+                                           :value ["A1" "A2" "B1" "C1"]}]}
                          :sort []
                          :group-by [:century :school]
                          :page {:size 2 :current 0}}
