@@ -692,28 +692,20 @@
       (is (= [{:id 1 :name "Socrates"} {:id 2 :name "Plato"}] @streamed))
       (is (= {:row-count 2 :adapter :stream} @complete)))))
 
-(deftest stream-rows-fn-compat-materializes-with-execute-test
-  (testing "compat fallback helper materializes execute! rows when adapter streaming is unavailable"
-    (let [execute-calls (atom [])
-          streamed (atom [])
-          complete (atom nil)
-          execute! (fn [sqlvec]
-                     (swap! execute-calls conj sqlvec)
-                     [{:id 1 :name "Socrates"} {:id 2 :name "Plato"}])
-          stream! (sql/stream-rows-fn-compat {:table-name "philosophers"} execute!)]
-      (stream! {:query {:filters {:name [{:type "string" :op "contains" :value "o"}]}
-                        :sort [{:column "name" :direction "asc"}]
-                        :page {:size 1 :current 2}}
-                :columns [:id :name]}
-               (fn [row] (swap! streamed conj row))
-               (fn [metadata] (reset! complete metadata)))
-      (let [[sql-text & params] (first @execute-calls)]
-        (is (re-find #"SELECT id, name FROM philosophers" sql-text))
-        (is (not (re-find #"LIMIT" sql-text)))
-        (is (not (re-find #"OFFSET" sql-text)))
-        (is (= ["%o%"] params)))
-      (is (= [{:id 1 :name "Socrates"} {:id 2 :name "Plato"}] @streamed))
-      (is (= {:row-count 2} @complete)))))
+(deftest stream-rows-fn-missing-adapter-throws-test
+  (testing "stream-rows-fn throws when adapter is missing"
+    (let [stream! (sql/stream-rows-fn {:table-name "philosophers"} nil)
+          ex (try
+               (stream! {:query {:filters {:name [{:type "string" :op "contains" :value "o"}]}}
+                         :columns [:id :name]}
+                        (fn [_row])
+                        (fn [_metadata]))
+               nil
+               (catch clojure.lang.ExceptionInfo e
+                 e))]
+      (is (some? ex))
+      (is (= "stream-rows-fn requires a streaming adapter" (ex-message ex)))
+      (is (= "Pass a stream adapter implementation via stream-adapter!" (:hint (ex-data ex)))))))
 
 ;; =============================================================================
 ;; Integration with H2

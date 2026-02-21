@@ -155,7 +155,16 @@
                                   {:builder-fn rs/as-unqualified-lower-maps}))
         table-search-rows (sqlq/rows-fn {:table-name "philosophers"} execute!)
         table-count (sqlq/count-fn {:table-name "philosophers"} execute!)
-        stream-rows! (sqlq/stream-rows-fn-compat {:table-name "philosophers"} execute!)]
+        stream-adapter! (fn [sqlvec on-row! on-complete!]
+                          (let [row-count (volatile! 0)]
+                            (reduce (fn [_ row]
+                                      (vswap! row-count inc)
+                                      (on-row! (into {} row)))
+                                    nil
+                                    (jdbc/plan ds sqlvec
+                                               {:builder-fn rs/as-unqualified-lower-maps}))
+                            (on-complete! {:row-count @row-count})))
+        stream-rows! (sqlq/stream-rows-fn {:table-name "philosophers"} stream-adapter!)]
     (datatable/make-handlers
      {:id "datatable"
       :columns columns

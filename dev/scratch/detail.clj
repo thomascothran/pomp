@@ -196,16 +196,16 @@
             [:h2 {:class "card-title"} "Scholastic Reception"]
             [:ul {:class "steps steps-vertical steps-sm w-full"}
              [:li {:class "step step-primary"}
-              [:div {:class "space-y-1 pl-2"}
-               [:div {:class "text-sm font-medium leading-5"} "Arabic Commentators"]
+              [:div {:class "w-full space-y-1 pl-2 text-left"}
+               [:div {:class "text-sm font-semibold leading-5"} "Arabic Commentators"]
                [:p {:class "text-xs leading-5 text-base-content/70"} "Averroes transmits and systematizes Aristotle for Latin readers."]]]
              [:li {:class "step step-primary"}
-              [:div {:class "space-y-1 pl-2"}
-               [:div {:class "text-sm font-medium leading-5"} "University Adoption"]
+              [:div {:class "w-full space-y-1 pl-2 text-left"}
+               [:div {:class "text-sm font-semibold leading-5"} "University Adoption"]
                [:p {:class "text-xs leading-5 text-base-content/70"} "Paris and Bologna absorb Aristotelian logic and metaphysics."]]]
              [:li {:class "step"}
-              [:div {:class "space-y-1 pl-2"}
-               [:div {:class "text-sm font-medium leading-5"} "Neo-Aristotelian Revival"]
+              [:div {:class "w-full space-y-1 pl-2 text-left"}
+               [:div {:class "text-sm font-semibold leading-5"} "Neo-Aristotelian Revival"]
                [:p {:class "text-xs leading-5 text-base-content/70"} "Virtue ethics and teleology re-enter modern debates."]]]]]]]]]
        [:section {:class "card border border-base-300 bg-base-100 shadow"
                   :data-signals "{profileDetails:{curriculumFocus:'Practical wisdom and civic friendship',method:'Dialectic plus empirical observation',virtueModel:'Habit first, rule second',logicLegacy:'Syllogistic structure',polityPreference:'Mixed constitution',causalLens:'Final causes orient inquiry',knowledgeAim:'Demonstrative understanding',teleologyScope:'Nature and politics'},profileEditing:{curriculumFocus:false,method:false,virtueModel:false,logicLegacy:false,polityPreference:false,causalLens:false,knowledgeAim:false,teleologyScope:false},profileHover:{curriculumFocus:false,method:false,virtueModel:false,logicLegacy:false,polityPreference:false,causalLens:false,knowledgeAim:false,teleologyScope:false}}"}
@@ -257,22 +257,34 @@
         [:section {:class "card min-w-0 border border-base-300 bg-base-100/95 shadow-md"}
          [:div {:class "card-body min-w-0"}
           [:h2 {:class "card-title"} "Influenced Philosophers"]
-          [:ul {:class "timeline timeline-vertical timeline-compact"}
+          [:ul {:class "timeline timeline-vertical timeline-snap-icon"}
            [:li
-            [:div {:class "timeline-middle"} "1"]
-            [:div {:class "timeline-end timeline-box w-full min-w-0"}
-             [:div {:class "font-semibold"} "Averroes"]
-             [:p {:class "text-sm text-base-content/70 break-words"} "Systematic medieval commentaries on Aristotle."]]]
+            [:hr {:class "bg-base-300"}]
+            [:div {:class "timeline-middle self-center justify-self-center"}
+             [:div {:class "badge badge-outline badge-sm h-8 w-8 font-semibold tabular-nums"} "1"]]
+            [:div {:class "timeline-end timeline-box w-full max-w-xl min-w-0 place-self-center"}
+             [:div {:class "flex min-h-20 flex-col justify-center text-center"}
+              [:div {:class "text-base font-semibold leading-tight"} "Averroes"]
+              [:p {:class "text-sm leading-relaxed text-base-content/70"} "Systematic medieval commentaries on Aristotle."]]]
+            [:hr {:class "bg-base-300"}]]
            [:li
-            [:div {:class "timeline-middle"} "2"]
-            [:div {:class "timeline-end timeline-box w-full min-w-0"}
-             [:div {:class "font-semibold"} "Thomas Aquinas"]
-             [:p {:class "text-sm text-base-content/70 break-words"} "Integrated Aristotelian metaphysics with scholastic theology."]]]
+            [:hr {:class "bg-base-300"}]
+            [:div {:class "timeline-middle self-center justify-self-center"}
+             [:div {:class "badge badge-outline badge-sm h-8 w-8 font-semibold tabular-nums"} "2"]]
+            [:div {:class "timeline-end timeline-box w-full max-w-xl min-w-0 place-self-center"}
+             [:div {:class "flex min-h-20 flex-col justify-center text-center"}
+              [:div {:class "text-base font-semibold leading-tight"} "Thomas Aquinas"]
+              [:p {:class "text-sm leading-relaxed text-base-content/70"} "Integrated Aristotelian metaphysics with scholastic theology."]]]
+            [:hr {:class "bg-base-300"}]]
            [:li
-            [:div {:class "timeline-middle"} "3"]
-            [:div {:class "timeline-end timeline-box w-full min-w-0"}
-             [:div {:class "font-semibold"} "Alasdair MacIntyre"]
-             [:p {:class "text-sm text-base-content/70 break-words"} "Revived virtue ethics in contemporary moral philosophy."]]]]]]]
+            [:hr {:class "bg-base-300"}]
+            [:div {:class "timeline-middle self-center justify-self-center"}
+             [:div {:class "badge badge-outline badge-sm h-8 w-8 font-semibold tabular-nums"} "3"]]
+            [:div {:class "timeline-end timeline-box w-full max-w-xl min-w-0 place-self-center"}
+             [:div {:class "flex min-h-20 flex-col justify-center text-center"}
+              [:div {:class "text-base font-semibold leading-tight"} "Alasdair MacIntyre"]
+              [:p {:class "text-sm leading-relaxed text-base-content/70"} "Revived virtue ethics in contemporary moral philosophy."]]]
+            [:hr {:class "bg-base-300"}]]]]]]
        [:div {:class "grid min-w-0 gap-6 xl:grid-cols-2 2xl:grid-cols-3"}
         [:section {:class "card min-w-0 border border-base-300 bg-base-100 shadow-md"}
          [:div {:class "card-body min-w-0 gap-4"}

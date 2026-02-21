@@ -16,73 +16,73 @@
 
 (def ^:private base-nodes
   [{:id (canonical-node-id :project "apollo")
-    :type :project
+    :type :ellipse
     :label "Apollo Platform"
     :properties {"domain" "platform"
                  "tier" "core"
                  "release" "2026.04"}}
    {:id (canonical-node-id :story "auth-hardening")
-    :type :story
+    :type :round-rectangle
     :label "Auth hardening"
     :properties {"priority" "high"
                  "status" "in-progress"
                  "owner" "security"}}
    {:id (canonical-node-id :story "billing-pilot")
-    :type :story
+    :type :round-rectangle
     :label "Billing pilot"
     :properties {"priority" "medium"
                  "status" "planned"
                  "segment" "enterprise"}}
    {:id (canonical-node-id :task "jwt-rotation")
-    :type :task
+    :type :rectangle
     :label "Rotate JWT keys"
     :properties {"sprint" 34
                  "estimate" 5
                  "status" "active"}}
    {:id (canonical-node-id :task "session-audit")
-    :type :task
+    :type :rectangle
     :label "Audit session policy"
     :properties {"sprint" 34
                  "estimate" 3
                  "status" "todo"}}
    {:id (canonical-node-id :task "invoice-reconcile")
-    :type :task
+    :type :rectangle
     :label "Reconcile invoices"
     :properties {"sprint" 35
                  "estimate" 8
                  "status" "todo"}}
    {:id (canonical-node-id :subtask "k8s-secret")
-    :type :subtask
+    :type :diamond
     :label "Update Kubernetes secret"
     :properties {"system" "kubernetes"
                  "env" "staging"
                  "blocked" false}}
    {:id (canonical-node-id :subtask "audit-log")
-    :type :subtask
+    :type :diamond
     :label "Backfill auth audit log"
     :properties {"system" "warehouse"
                  "env" "prod"
                  "blocked" true}}
    {:id (canonical-node-id :developer "ava")
-    :type :developer
+    :type :hexagon
     :label "Ava Chen"
     :properties {"team" "platform"
                  "timezone" "UTC-8"
                  "capacity" 0.7}}
    {:id (canonical-node-id :developer "kai")
-    :type :developer
+    :type :hexagon
     :label "Kai Morgan"
     :properties {"team" "platform"
                  "timezone" "UTC+1"
                  "capacity" 0.8}}
    {:id (canonical-node-id :qa "mila")
-    :type :qa
+    :type :vee
     :label "Mila Rossi"
     :properties {"focus" "regression"
                  "timezone" "UTC+2"
                  "automation" true}}
    {:id (canonical-node-id :product-owner "noah")
-    :type :product-owner
+    :type :tag
     :label "Noah Patel"
     :properties {"portfolio" "core-app"
                  "org" "product"

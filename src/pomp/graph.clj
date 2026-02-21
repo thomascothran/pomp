@@ -10,34 +10,34 @@
 
 (def ^:private default-node-types
   {:default default-node-visual
-   :project {:label "project"
+   :ellipse {:label "ellipse"
              :shape "ellipse"
              :color "#2563eb"
              :border-color "#1d4ed8"}
-   :story {:label "story"
-           :shape "round-rectangle"
-           :color "#0f766e"
-           :border-color "#115e59"}
-   :task {:label "task"
-          :shape "rectangle"
-          :color "#ea580c"
-          :border-color "#c2410c"}
-   :subtask {:label "subtask"
-             :shape "diamond"
-             :color "#7c3aed"
-             :border-color "#6d28d9"}
-   :developer {:label "developer"
-               :shape "hexagon"
-               :color "#0891b2"
-               :border-color "#0e7490"}
-   :qa {:label "qa"
-        :shape "vee"
-        :color "#65a30d"
-        :border-color "#4d7c0f"}
-   :product-owner {:label "product-owner"
-                   :shape "tag"
-                   :color "#be123c"
-                   :border-color "#9f1239"}})
+   :round-rectangle {:label "round-rectangle"
+                     :shape "round-rectangle"
+                     :color "#0f766e"
+                     :border-color "#115e59"}
+   :rectangle {:label "rectangle"
+               :shape "rectangle"
+               :color "#ea580c"
+               :border-color "#c2410c"}
+   :diamond {:label "diamond"
+              :shape "diamond"
+              :color "#7c3aed"
+              :border-color "#6d28d9"}
+   :hexagon {:label "hexagon"
+             :shape "hexagon"
+             :color "#0891b2"
+             :border-color "#0e7490"}
+   :vee {:label "vee"
+         :shape "vee"
+         :color "#65a30d"
+         :border-color "#4d7c0f"}
+   :tag {:label "tag"
+         :shape "tag"
+         :color "#be123c"
+         :border-color "#9f1239"}})
 
 (def ^:private default-edge-visual
   {:label "Related"
@@ -103,7 +103,7 @@
           :find-node-neighbors find-node-neighbors}
    :visual {:node-types default-node-types
             :edge-types {:default default-edge-visual}
-            :legend-order [:project :story :task :subtask :developer :qa :product-owner]}
+            :legend-order [:ellipse :round-rectangle :rectangle :diamond :hexagon :vee :tag]}
    :details default-details})
 
 (defn- normalize-node-types

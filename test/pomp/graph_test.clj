@@ -221,7 +221,7 @@
     (is (some? make-graph)
         "pomp.graph/make-graph should exist so default legend behavior stays stable")
     (when make-graph
-      (is (= [:project :story :task :subtask :developer :qa :product-owner]
+      (is (= [:ellipse :round-rectangle :rectangle :diamond :hexagon :vee :tag]
              (mapv :type (get-in (make-graph {}) [:visual :legend :nodes])))
           "Default legend should keep the existing node type order for no-config callers"))))
 

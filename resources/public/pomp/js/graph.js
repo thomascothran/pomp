@@ -542,37 +542,37 @@
         color: '#64748b',
         borderColor: '#475569'
       },
-      project: {
+      ellipse: {
         shape: 'ellipse',
         color: '#2563eb',
         borderColor: '#1d4ed8'
       },
-      story: {
+      'round-rectangle': {
         shape: 'round-rectangle',
         color: '#0f766e',
         borderColor: '#115e59'
       },
-      task: {
+      rectangle: {
         shape: 'rectangle',
         color: '#ea580c',
         borderColor: '#c2410c'
       },
-      subtask: {
+      diamond: {
         shape: 'diamond',
         color: '#7c3aed',
         borderColor: '#6d28d9'
       },
-      developer: {
+      hexagon: {
         shape: 'hexagon',
         color: '#0891b2',
         borderColor: '#0e7490'
       },
-      qa: {
+      vee: {
         shape: 'vee',
         color: '#65a30d',
         borderColor: '#4d7c0f'
       },
-      'product-owner': {
+      tag: {
         shape: 'tag',
         color: '#be123c',
         borderColor: '#9f1239'

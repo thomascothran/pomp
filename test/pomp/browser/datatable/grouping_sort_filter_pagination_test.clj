@@ -153,10 +153,23 @@
 
 (defn- parse-pagination-label
   [text]
-  (let [[_ start end total] (re-find #"(\d+)\D+(\d+)\D+of\D+(\d+)" text)]
+  (when-let [[_ start end total] (re-find #"(\d+)\D+(\d+)\D+of\D+(\d+)" (or text ""))]
     {:start (Long/parseLong start)
      :end (Long/parseLong end)
      :total (Long/parseLong total)}))
+
+(defn- pagination-state
+  []
+  (some-> (e/get-element-text browser/*driver* pagination-label)
+          parse-pagination-label))
+
+(defn- wait-for-pagination-state!
+  [expected?]
+  (e/wait-visible browser/*driver* pagination-label)
+  (e/wait-predicate
+   #(when-let [state (pagination-state)]
+      (expected? state)))
+  (pagination-state))
 
 (deftest grouped-school-sort-and-filter-test
   (testing "grouped school column supports sorting and filtering"
@@ -228,22 +241,20 @@
           expected-first-page-end (min page-size row-count)
           expected-second-page-start (inc expected-first-page-end)
           expected-second-page-end (min row-count (+ expected-first-page-end page-size))]
-      (let [{:keys [start end total]} (parse-pagination-label
-                                       (e/get-element-text browser/*driver* pagination-label))]
+      (let [{:keys [start end total]} (wait-for-pagination-state!
+                                       #(and (= 1 (:start %))
+                                             (= expected-first-page-end (:end %))
+                                             (= row-count (:total %))))]
         (is (= 1 start) "Expected pagination label to start at 1")
         (is (= expected-first-page-end end)
             "Expected first page label range to use real-row page size")
         (is (= row-count total)
             "Expected pagination label total to match real row count"))
       (e/click browser/*driver* next-page-button)
-      (e/wait-predicate
-       #(let [{:keys [start end total]} (parse-pagination-label
-                                         (e/get-element-text browser/*driver* pagination-label))]
-          (and (= expected-second-page-start start)
-               (= expected-second-page-end end)
-               (= row-count total))))
-      (let [{:keys [start end total]} (parse-pagination-label
-                                       (e/get-element-text browser/*driver* pagination-label))]
+      (let [{:keys [start end total]} (wait-for-pagination-state!
+                                       #(and (= expected-second-page-start (:start %))
+                                             (= expected-second-page-end (:end %))
+                                             (= row-count (:total %))))]
         (is (= expected-second-page-start start)
             "Expected second page label start to advance by page size")
         (is (= expected-second-page-end end)

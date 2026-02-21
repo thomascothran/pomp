@@ -396,18 +396,8 @@
                                                    (assoc :page nil)))
           stream-fn (or stream-adapter!
                         (throw (ex-info "stream-rows-fn requires a streaming adapter"
-                                        {:hint "Use stream-rows-fn-compat when only execute! is available"})))]
+                                        {:hint "Pass a stream adapter implementation via stream-adapter!"})))]
       (stream-fn query-sql on-row! on-complete!))))
-
-(defn stream-rows-fn-compat
-  [config execute!]
-  (stream-rows-fn
-   config
-   (fn [sqlvec on-row! on-complete!]
-     (let [rows (execute! sqlvec)]
-       (doseq [row rows]
-         (on-row! row))
-       (on-complete! {:row-count (count rows)})))))
 
 (defn count-fn
   [config execute!]

@@ -6,8 +6,25 @@
 (def graph-id "scratch-cytoscape")
 (def seed-node-id "project:apollo")
 
+(def ^:private semantic-label-by-shape
+  {:ellipse "project"
+   :round-rectangle "story"
+   :rectangle "task"
+   :diamond "subtask"
+   :hexagon "developer"
+   :vee "qa"
+   :tag "product-owner"})
+
+(def ^:private scratch-node-types
+  (reduce-kv (fn [node-types node-type label]
+               (assoc-in node-types [node-type :label] label))
+             (get-in (graph/default-config) [:visual :node-types])
+             semantic-label-by-shape))
+
 (def ^:private graph-system
-  (graph/make-graph {}))
+  (graph/make-graph
+   {:visual
+    {:node-types scratch-node-types}}))
 
 (def ^:private detail-card-ids
   {:root (str graph-id "-details")

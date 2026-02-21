@@ -1,10 +1,15 @@
 (ns pomp.datatable-test
   (:require [clojure.data.json :as json]
-            [clojure.test :refer [deftest is testing]]
-            [pomp.datatable :as datatable]
-            [pomp.rad.datatable.ui.table :as table]
-            [starfederation.datastar.clojure.adapter.ring :as ring]
-            [starfederation.datastar.clojure.api :as d*]))
+             [clojure.test :refer [deftest is testing]]
+             [pomp.datatable :as datatable]
+             [pomp.datatable.export.csv :as export-csv]
+             [pomp.datatable.export.stream :as export-stream]
+             [pomp.datatable.handler.export :as export-handler]
+             [pomp.datatable.handler.query-render :as query-render-handler]
+             [pomp.datatable.handler.save :as save-handler]
+             [pomp.rad.datatable.ui.table :as table]
+             [starfederation.datastar.clojure.adapter.ring :as ring]
+             [starfederation.datastar.clojure.api :as d*]))
 
 ;; =============================================================================
 ;; Test helpers
@@ -151,6 +156,96 @@
 
 (defn- make-post-handler [opts]
   (:post (datatable/make-handlers opts)))
+
+(deftest make-handler-action-dispatch-functions-exist-test
+  (testing "datatable handler exposes dedicated action handlers for dispatch"
+    (is (some? (ns-resolve 'pomp.datatable.handler.save 'handle-save-action!))
+        "Expected dedicated save action handler namespace")
+    (is (some? (ns-resolve 'pomp.datatable.handler.export 'handle-export-action!))
+        "Expected dedicated export action handler namespace")
+    (is (some? (ns-resolve 'pomp.datatable 'handle-query-render-action!))
+        "Expected dedicated query/render action handler")))
+
+(deftest save-handler-delegation-test
+  (testing "datatable save action delegates to dedicated handler namespace"
+    (let [delegated-opts (atom nil)
+          expected {:status 297}
+          handler (make-post-handler {:id "test-table"
+                                      :columns [{:key :id :label "ID" :type :number}
+                                                {:key :name :label "Name" :type :string :editable true}]
+                                      :rows-fn (fn [_ _] {:rows [] :page {:size 10 :current 0}})
+                                      :save-fn (fn [_] {:success true})
+                                      :data-url "/data"
+                                      :render-html-fn str})]
+      (with-redefs [save-handler/handle-save-action!
+                    (fn [passed-opts]
+                      (reset! delegated-opts passed-opts)
+                      expected)]
+        (is (= expected (handler {:query-params {"action" "save"}}))
+            "datatable handler should return delegated save handler response")
+        (is (= "test-table" (:id @delegated-opts))
+            "datatable should pass table id to dedicated save handler")
+        (is (= {"action" "save"} (get-in @delegated-opts [:req :query-params]))
+            "datatable should pass request to dedicated save handler")
+        (is (= {"action" "save"} (:query-params @delegated-opts))
+            "datatable should pass query params to dedicated save handler")))))
+
+(deftest export-handler-delegation-test
+  (testing "datatable export action delegates to dedicated handler namespace"
+    (let [delegated-opts (atom nil)
+          expected {:status 298}
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _] {:rows [] :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn str
+                                     :export-stream-rows-fn (fn [_ _ _])})]
+      (with-redefs [export-handler/handle-export-action!
+                    (fn [passed-opts]
+                      (reset! delegated-opts passed-opts)
+                      expected)]
+        (is (= expected (handler {:query-params {"action" "export"}}))
+            "datatable handler should return delegated export handler response")
+        (is (= "test-table" (:id @delegated-opts))
+            "datatable should pass table id to dedicated export handler")
+        (is (= {"action" "export"} (:query-params @delegated-opts))
+            "datatable should pass request query params to dedicated export handler")))))
+
+(deftest query-render-handler-delegation-test
+  (testing "datatable query/render action delegates to dedicated handler namespace"
+    (let [delegated-opts (atom nil)
+          expected {:status 299}
+          opts {:req {:query-params {}}
+                :id "test-table"
+                :columns [{:key :name :label "Name" :type :string}]
+                :rows-fn (fn [_ _] {:rows [] :page {:size 10 :current 0}})
+                :data-url "/data"
+                :render-html-fn identity
+                :page-sizes [10 25]
+                :selectable? false
+                :skeleton-rows 10
+                :query-params {}
+                :raw-signals {}
+                :export-available? false}]
+      (with-redefs [query-render-handler/handle-query-render-action!
+                    (fn [passed-opts]
+                      (reset! delegated-opts passed-opts)
+                      expected)]
+        (is (= expected (#'datatable/handle-query-render-action! opts))
+            "datatable handler should return delegated handler response")
+        (is (= opts @delegated-opts)
+            "datatable handler should pass through all query/render options unchanged")))))
+
+(deftest export-modules-exist-test
+  (testing "export concerns are exposed through dedicated modules"
+    (is (fn? export-csv/derive-export-columns)
+        "Expected CSV planning helper in export namespace")
+    (is (fn? export-csv/csv-line)
+        "Expected CSV line formatter in export namespace")
+    (is (fn? export-stream/emit-export-script!)
+        "Expected export script emitter in stream namespace")
+    (is (fn? export-stream/run-export-stream!)
+        "Expected streaming guardrail runner in stream namespace")))
 
 (deftest make-handlers-accepts-filter-operations-test
   (testing "make-handlers accepts :filter-operations without error"
@@ -805,6 +900,56 @@
         (is (= 0 @scripts)
             "Signal-bearing GET should not execute initial-load script")))))
 
+(deftest make-handlers-initial-load-injects-split-datatable-scripts-test
+  (testing "initial load always injects helpers and selection scripts"
+    (let [scripts (atom [])
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _]
+                                                {:rows []
+                                                 :total-rows 0
+                                                 :page {:size 10 :current 0}})
+                                     :data-url "/data"
+                                     :render-html-fn identity
+                                     :export-enabled? false})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    d*/patch-signals! (fn [& _])
+                    d*/patch-elements! (fn [& _])
+                    d*/execute-script! (fn [_ payload]
+                                         (swap! scripts conj payload))
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {}})
+        (is (= 2 (count @scripts))
+            "Initial load should execute helpers and selection scripts"))))
+
+  (testing "initial load injects export script only when export is available"
+    (let [scripts (atom [])
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [_ _]
+                                                {:rows []
+                                                 :total-rows 0
+                                                 :page {:size 10 :current 0}})
+                                     :export-stream-rows-fn (fn [_ _ on-complete!]
+                                                              (on-complete! {:row-count 0}))
+                                     :data-url "/data"
+                                     :render-html-fn identity})]
+      (with-redefs [ring/->sse-response (fn [_ opts]
+                                          (when-let [on-open-fn (get opts ring/on-open)]
+                                            (on-open-fn ::fake-sse))
+                                          {:status 200})
+                    d*/patch-signals! (fn [& _])
+                    d*/patch-elements! (fn [& _])
+                    d*/execute-script! (fn [_ payload]
+                                         (swap! scripts conj payload))
+                    d*/close-sse! (fn [& _])]
+        (handler {:query-params {}})
+        (is (= 3 (count @scripts))
+            "Initial load should execute helpers, selection, and export scripts")))))
+
 (deftest make-handlers-initial-signals-fn-first-load-seeding-test
   (testing "first load applies :initial-signals-fn to query-signals and visible columns"
     (let [initial-signals-calls (atom 0)
@@ -901,6 +1046,6 @@
 
 (deftest selection-map-guard-test
   (testing "selection map should skip start cell hover"
-    (let [js-source (slurp "resources/public/pomp/js/datatable.js")]
+    (let [js-source (slurp "resources/public/pomp/js/datatable-selection.js")]
       (is (re-find #"if \(row === start\.row && col === start\.col\) return;" js-source)
           "Expected guard to avoid selection map when hovering start cell"))))

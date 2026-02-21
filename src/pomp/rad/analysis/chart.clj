@@ -149,10 +149,10 @@
                             default-rows->values)
         values->buckets-fn (or (:values->buckets-fn chart-spec)
                                default-values->buckets)
-         build-spec-fn (or (:build-spec-fn chart-spec)
-                           (when-not (:chart/spec chart-spec)
-                             (fn [values context]
-                               (default-build-spec values chart-spec context))))
+        build-spec-fn (or (:build-spec-fn chart-spec)
+                          (when-not (:chart/spec chart-spec)
+                            (fn [values context]
+                              (default-build-spec values chart-spec context))))
         result-fn (:result-fn chart-spec)
         table-name (or (:table-name chart-spec)
                        (:table-name shared-context))]
@@ -213,30 +213,30 @@
   ([shared-context chart-spec]
    (make-chart (merge shared-context chart-spec)))
   ([{:keys [analysis-fn render-card-fn render-chart-fn execute!]
-      :as config}]
-         (let [query-type* (default-query-type config)
-               analysis-fn* (or analysis-fn
-                            (when (and execute! query-type*)
-                              (make-analysis-fn (select-keys config [:table-name
-                                                                     :execute!
-                                                                     :sql/frequency-fn
-                                                                     :sql/histogram-fn
-                                                                     :sql/null-count-fn])
-                                               (assoc config :query/type query-type*))))
-           render-chart-fn* (or render-chart-fn
-                                (default-render-chart config))
-          render-script-fn* (or (:render-script-fn config)
-                                (default-render-script config))
-          render-card-fn* (or render-card-fn
-                              (default-render-card (assoc config :render-chart-fn render-chart-fn*)))
-          handler (analysis.handler/make-chart-handler
-                   (-> config
-                       (assoc :analysis-fn analysis-fn*
-                              :render-chart-fn render-card-fn*
-                              :render-script-fn render-script-fn*)))]
-      (assoc config
-             :analysis-fn analysis-fn*
-             :render-card-fn render-card-fn*
-             :render-chart-fn render-chart-fn*
-             :render-script-fn render-script-fn*
-             :handler handler))))
+     :as config}]
+   (let [query-type* (default-query-type config)
+         analysis-fn* (or analysis-fn
+                          (when (and execute! query-type*)
+                            (make-analysis-fn (select-keys config [:table-name
+                                                                   :execute!
+                                                                   :sql/frequency-fn
+                                                                   :sql/histogram-fn
+                                                                   :sql/null-count-fn])
+                                              (assoc config :query/type query-type*))))
+         render-chart-fn* (or render-chart-fn
+                              (default-render-chart config))
+         render-script-fn* (or (:render-script-fn config)
+                               (default-render-script config))
+         render-card-fn* (or render-card-fn
+                             (default-render-card (assoc config :render-chart-fn render-chart-fn*)))
+         handler (analysis.handler/make-chart-handler
+                  (-> config
+                      (assoc :analysis-fn analysis-fn*
+                             :render-chart-fn render-card-fn*
+                             :render-script-fn render-script-fn*)))]
+     (assoc config
+            :analysis-fn analysis-fn*
+            :render-card-fn render-card-fn*
+            :render-chart-fn render-chart-fn*
+            :render-script-fn render-script-fn*
+            :handler handler))))

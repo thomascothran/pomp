@@ -30,22 +30,10 @@
    - `datatable.<id>.selections.<row-id>` (boolean) per-row checkbox selection state.
   "
   (:require [starfederation.datastar.clojure.api :as d*]
-            [starfederation.datastar.clojure.adapter.ring :refer [->sse-response on-open]]
             [clojure.data.json :as json]
-            [clojure.java.io :as io]
-            [clojure.string :as str]
-            [pomp.icons :as icons]
-            [pomp.rad.datatable.state.table :as state]
-            [pomp.rad.datatable.ui.table :as table]
-            [pomp.rad.datatable.ui.export-button :as export-button]
-            [pomp.rad.datatable.state.column :as column-state]
-            [pomp.rad.datatable.state.group :as group-state]
-            [pomp.rad.datatable.state.filter :as filter-state]
-            [pomp.rad.datatable.ui.columns-menu :as columns-menu]))
-
-(def ^:private cell-select-script
-  "JavaScript for cell selection functionality, loaded from classpath."
-  (slurp (io/resource "public/pomp/js/datatable.js")))
+            [pomp.datatable.handler.export :as export-handler]
+            [pomp.datatable.handler.query-render :as query-render-handler]
+            [pomp.datatable.handler.save :as save-handler]))
 
 (defn get-signals
   "Extracts datatable signals from a Ring request for a specific table.
@@ -125,144 +113,9 @@
          :editable-columns? editable-columns?
          :column-keys (mapv :key columns)})))))
 
-(defn- normalize-col-key
-  [col-key]
-  (cond
-    (keyword? col-key) col-key
-    (string? col-key) (keyword col-key)
-    :else nil))
-
-(defn- derive-project-columns
-  [columns ordered-cols columns-state query-signals]
-  (let [known-col-keys (set (map :key columns))
-        visible-keys (->> ordered-cols
-                          (filter (fn [{:keys [key]}]
-                                    (get-in columns-state [key :visible] true)))
-                          (map :key))
-        filter-keys (->> (keys (:filters query-signals))
-                         (map normalize-col-key))
-        sort-keys (->> (:sort query-signals)
-                       (map :column)
-                       (map normalize-col-key))
-        group-keys (->> (:group-by query-signals)
-                        (map normalize-col-key))
-        projected-cols (->> (concat [:id] visible-keys filter-keys sort-keys group-keys)
-                            (filter known-col-keys)
-                            distinct
-                            vec)]
-    (when (seq projected-cols)
-      projected-cols)))
-
-(defn- derive-export-columns
-  [ordered-cols]
-  (->> ordered-cols
-       (map :key)
-       distinct
-       vec))
-
-(defn- csv-cell
-  [value]
-  (let [cell (if (nil? value) "" (str value))]
-    (if (re-find #"[\",\n\r]" cell)
-      (str "\"" (str/replace cell "\"" "\"\"") "\"")
-      cell)))
-
-(defn- csv-line
-  [row columns]
-  (str (str/join "," (map (fn [col-key]
-                            (csv-cell (get row col-key)))
-                          columns))
-       "\n"))
-
-(defn- emit-export-script!
-  [sse fn-name payload]
-  (let [result (d*/execute-script! sse
-                                   (str "if (typeof window !== 'undefined' && typeof window."
-                                        fn-name
-                                        " === 'function') { window."
-                                        fn-name
-                                        "("
-                                        (json/write-str payload)
-                                        "); }"))]
-    (when (false? result)
-      (throw (ex-info "Export stream disconnected"
-                      {:type :export-disconnected
-                       :fn-name fn-name})))))
-
-(defn- default-export-filename
-  [table-id]
-  (str table-id "-export.csv"))
-
-(defn- utf8-bytes
-  [s]
-  (count (.getBytes ^String s "UTF-8")))
-
-(defn- run-export-stream!
-  [{:keys [id sse export-filename export-columns export-stream-rows-fn stream-context export-limits]}]
-  (let [chunk-size (max 1 (long (or (:chunk-rows export-limits) 100)))
-        timeout-ms (:timeout-ms export-limits)
-        max-rows (:max-rows export-limits)
-        max-bytes (:max-bytes export-limits)
-        deadline-ms (when timeout-ms (+ (System/currentTimeMillis) timeout-ms))
-        row-count (volatile! 0)
-        byte-count (volatile! 0)
-        chunk-row-count (volatile! 0)
-        chunk-buffer (volatile! "")
-        fail-if-timeout! (fn []
-                           (when (and deadline-ms (> (System/currentTimeMillis) deadline-ms))
-                             (throw (ex-info "Export exceeded timeout"
-                                             {:type :export-timeout
-                                              :timeout-ms timeout-ms}))))
-        flush-chunk! (fn []
-                       (when (seq @chunk-buffer)
-                         (emit-export-script! sse
-                                              "pompDatatableExportAppend"
-                                              {:tableId id
-                                               :chunk @chunk-buffer})
-                         (vreset! chunk-buffer "")
-                         (vreset! chunk-row-count 0)))
-        on-row! (fn [row]
-                  (fail-if-timeout!)
-                  (let [line (csv-line row export-columns)
-                        next-row-count (inc @row-count)
-                        next-byte-count (+ @byte-count (utf8-bytes line))]
-                    (when (and max-rows (> next-row-count max-rows))
-                      (throw (ex-info "Export exceeded max rows"
-                                      {:type :export-max-rows
-                                       :max-rows max-rows
-                                       :row-count next-row-count})))
-                    (when (and max-bytes (> next-byte-count max-bytes))
-                      (throw (ex-info "Export exceeded max bytes"
-                                      {:type :export-max-bytes
-                                       :max-bytes max-bytes
-                                       :byte-count next-byte-count})))
-                    (vreset! row-count next-row-count)
-                    (vreset! byte-count next-byte-count)
-                    (vreset! chunk-buffer (str @chunk-buffer line))
-                    (let [next-chunk-count (inc @chunk-row-count)]
-                      (vreset! chunk-row-count next-chunk-count)
-                      (when (>= next-chunk-count chunk-size)
-                        (flush-chunk!)))))
-        on-complete! (fn [metadata]
-                       (fail-if-timeout!)
-                       (flush-chunk!)
-                       (emit-export-script! sse
-                                            "pompDatatableExportFinish"
-                                            {:tableId id
-                                             :filename export-filename
-                                             :metadata (merge metadata
-                                                              {:row-count @row-count
-                                                               :byte-count @byte-count})}))]
-    (if timeout-ms
-      (let [stream-future (future
-                            (export-stream-rows-fn stream-context on-row! on-complete!))
-            timeout-result (deref stream-future timeout-ms ::timeout)]
-        (when (= ::timeout timeout-result)
-          (future-cancel stream-future)
-          (throw (ex-info "Export exceeded timeout"
-                          {:type :export-timeout
-                           :timeout-ms timeout-ms}))))
-      (export-stream-rows-fn stream-context on-row! on-complete!))))
+(defn- handle-query-render-action!
+  [opts]
+  (query-render-handler/handle-query-render-action! opts))
 
 (defn- make-handler*
   "Creates a Ring handler for a datatable.
@@ -322,175 +175,48 @@
           raw-signals (get-signals req id)
           action (get query-params "action")
           export-available? (and export-enabled? (some? export-stream-rows-fn))]
-      ;; Handle save action
-      (if (and save-fn (save-action? req action))
-        (let [cell-edit (extract-cell-edit raw-signals)]
-          (when cell-edit
-            (save-fn (assoc cell-edit :req req)))
-          ;; Respond with SSE to clear per-cell edit state
-          (->sse-response req
-                          {on-open
-                           (fn [sse]
-                             (when cell-edit
-                               (let [{:keys [row-id col-key]} cell-edit
-                                     editing-path {(keyword row-id) {col-key false}}]
-                                 (d*/patch-signals! sse
-                                                    (json/write-str
-                                                     {:datatable {(keyword id) {:_editing editing-path
-                                                                                :cells nil}}}))))
-                             (d*/close-sse! sse))}))
+      (cond
+        (and save-fn (save-action? req action))
+        (save-handler/handle-save-action! {:req req
+                                           :id id
+                                           :raw-signals raw-signals
+                                           :query-params query-params
+                                           :save-fn save-fn
+                                           :extract-cell-edit-fn extract-cell-edit})
 
-        ;; Handle export action
-        (if (and export-available? (export-action? req action))
-          (let [initial-load? (empty? raw-signals)
-                seeded-signals (when (and initial-load? initial-signals-fn)
-                                 (initial-signals-fn req))
-                effective-signals (if (map? seeded-signals)
-                                    (merge seeded-signals raw-signals)
-                                    raw-signals)
-                current-signals (-> effective-signals
-                                    (assoc :group-by (mapv keyword (:groupBy effective-signals))))
-                column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
-                ordered-cols (column-state/reorder columns column-order)
-                export-columns (derive-export-columns ordered-cols)
-                export-query (-> (state/next-state current-signals query-params)
-                                 (assoc :columns columns
-                                        :project-columns export-columns
-                                        :group-by []
-                                        :page nil))
-                labels-by-key (into {}
-                                    (map (fn [{:keys [key label]}]
-                                           [key (or label (name key))])
-                                         ordered-cols))
-                header-row (csv-line labels-by-key export-columns)
-                export-filename (if export-filename-fn
-                                  (export-filename-fn {:id id
-                                                       :columns ordered-cols
-                                                       :query export-query
-                                                       :req req})
-                                  (default-export-filename id))
-                stream-context {:query export-query
-                                :columns export-columns
-                                :request req
-                                :limits export-limits}]
-            (->sse-response req
-                            {on-open
-                             (fn [sse]
-                               (try
-                                 (emit-export-script! sse
-                                                      "pompDatatableExportBegin"
-                                                      {:tableId id
-                                                       :filename export-filename
-                                                       :header header-row})
-                                 (run-export-stream! {:id id
-                                                      :sse sse
-                                                      :export-filename export-filename
-                                                      :export-columns export-columns
-                                                      :export-stream-rows-fn export-stream-rows-fn
-                                                      :stream-context stream-context
-                                                      :export-limits export-limits})
-                                 (catch Throwable ex
-                                   (try
-                                     (emit-export-script! sse
-                                                          "pompDatatableExportFail"
-                                                          {:tableId id
-                                                           :message (or (ex-message ex) "Export failed")})
-                                     (catch Throwable fail-ex
-                                       (when-not (= :export-disconnected (:type (ex-data fail-ex)))
-                                         (throw fail-ex)))))
-                                 (finally
-                                   (d*/close-sse! sse))))}))
+        (and export-available? (export-action? req action))
+        (export-handler/handle-export-action! {:req req
+                                               :id id
+                                               :columns columns
+                                               :raw-signals raw-signals
+                                               :query-params query-params
+                                               :initial-signals-fn initial-signals-fn
+                                               :export-limits export-limits
+                                               :export-filename-fn export-filename-fn
+                                               :export-stream-rows-fn export-stream-rows-fn})
 
-          ;; Normal query/render flow
-          (let [initial-load? (empty? raw-signals)
-                seeded-signals (when (and initial-load? initial-signals-fn)
-                                 (initial-signals-fn req))
-                effective-signals (if (map? seeded-signals)
-                                    (merge seeded-signals raw-signals)
-                                    raw-signals)
-                current-signals (-> effective-signals
-                                    (assoc :group-by (mapv keyword (:groupBy effective-signals))))
-                columns-state (:columns current-signals)
-                column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
-                ordered-cols (column-state/reorder columns column-order)
-                visible-cols (column-state/filter-visible ordered-cols columns-state)
-                run-rows-fn (fn [query-signals request]
-                              (let [project-columns (derive-project-columns columns ordered-cols columns-state query-signals)
-                                    query-signals* (assoc query-signals
-                                                          :columns columns
-                                                          :project-columns project-columns)]
-                                (if (and table-search-query
-                                         (seq (:search-string query-signals*)))
-                                  (table-search-query query-signals* request)
-                                  (rows-fn query-signals* request))))
-                count-signals (state/next-state current-signals query-params)
-                count-task (future
-                             (when count-fn
-                               (state/query-count count-signals req count-fn)))
-                {:keys [signals rows]} (state/query-rows current-signals query-params req run-rows-fn)
-                group-by (:group-by signals)
-                groups (when (seq group-by) (group-state/group-rows rows group-by))
-                filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))
-                export-render-fn (or render-export export-button/render)
-                toolbar-right-controls [:div.flex.items-center.gap-2
-                                        (when export-available?
-                                          (export-render-fn {:table-id id
-                                                             :data-url data-url}))
-                                        (columns-menu/render {:cols ordered-cols
-                                                              :columns-state columns-state
-                                                              :table-id id
-                                                              :data-url data-url})]
-                table-signals-patch (cond-> {:sort (:sort signals)
-                                             :page (:page signals)
-                                             :filters filters-patch
-                                             :groupBy (mapv name group-by)
-                                             :openFilter ""
-                                             :columnOrder column-order
-                                             :dragging nil
-                                             :dragOver nil}
-                                      (or (= action "global-search")
-                                          (and table-search-query
-                                               (contains? current-signals :globalTableSearch)))
-                                      (assoc :globalTableSearch (:search-string signals)))]
-            (->sse-response req
-                            {on-open
-                             (fn [sse]
-                               (when initial-load?
-                                 (d*/patch-elements! sse (render-html-fn (table/render-skeleton {:id id
-                                                                                                 :cols visible-cols
-                                                                                                 :n skeleton-rows
-                                                                                                 :selectable? selectable?})))
-                                 (d*/execute-script! sse cell-select-script))
-                               (d*/patch-signals! sse (json/write-str
-                                                       {:datatable {(keyword id) table-signals-patch}}))
-                               (let [render-table
-                                     (fn [total-rows]
-                                       (render-html-fn
-                                        (table/render {:id id
-                                                       :cols visible-cols
-                                                       :rows rows
-                                                       :groups groups
-                                                       :sort-state (:sort signals)
-                                                       :filters (:filters signals)
-                                                       :group-by group-by
-                                                       :total-rows total-rows
-                                                       :page-size (get-in signals [:page :size])
-                                                       :page-current (get-in signals [:page :current])
-                                                       :page-sizes page-sizes
-                                                       :data-url data-url
-                                                       :selectable? selectable?
-                                                       :render-row render-row
-                                                       :render-header render-header
-                                                       :render-cell render-cell
-                                                       :filter-operations filter-operations
-                                                       :render-table-search render-table-search
-                                                       :global-table-search (:search-string signals)
-                                                       :toolbar toolbar-right-controls})))]
-                                 (d*/patch-elements! sse (render-table nil))
-                                 (when count-fn
-                                   (let [total-rows @count-task]
-                                     (d*/patch-elements! sse (render-table total-rows)))))
-                               (d*/close-sse! sse))})))))))
+        :else
+        (handle-query-render-action! {:req req
+                                      :id id
+                                      :columns columns
+                                      :rows-fn rows-fn
+                                      :count-fn count-fn
+                                      :table-search-query table-search-query
+                                      :data-url data-url
+                                      :render-html-fn render-html-fn
+                                      :page-sizes page-sizes
+                                      :selectable? selectable?
+                                      :skeleton-rows skeleton-rows
+                                      :render-row render-row
+                                      :render-header render-header
+                                      :render-cell render-cell
+                                      :filter-operations filter-operations
+                                      :render-table-search render-table-search
+                                      :render-export render-export
+                                      :raw-signals raw-signals
+                                      :query-params query-params
+                                      :initial-signals-fn initial-signals-fn
+                                      :export-available? export-available?})))))
 
 (defn make-handlers
   "Creates method-specific datatable handlers.
