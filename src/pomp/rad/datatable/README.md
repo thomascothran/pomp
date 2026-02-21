@@ -146,6 +146,30 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 
 `:project-columns` is additive and optional. SQL-backed queries use it to project only required columns when present, and safely fall back to `SELECT *` when absent. Non-SQL adapters may ignore it. When selection or editing is enabled, include `:id` in server column definitions so identity remains available in projected rows.
 
+#### SQL request-scoped visibility (`:visibility-fn`)
+
+SQL adapters support an optional `:visibility-fn` in adapter config.
+
+- Signature: `(visibility-fn query-signals request) => nil | {:where-clauses [["sql predicate" & params] ...]}`
+- Purpose: enforce server-side visibility rules (tenant, region, role) without replacing default SQL row/count/export behavior.
+- Composition: visibility predicates are ANDed with datatable filters and global search predicates.
+
+Example with `rows-fn` and `count-fn`:
+
+```clojure
+(require '[pomp.rad.datatable.query.sql :as sqlq])
+
+(defn visibility-fn
+  [_query-signals request]
+  (when-let [tenant-id (get-in request [:identity :tenant-id])]
+    {:where-clauses [["tenant_id = ?" tenant-id]]}))
+
+(def rows!  (sqlq/rows-fn  {:table-name "users" :visibility-fn visibility-fn} execute!))
+(def count! (sqlq/count-fn {:table-name "users" :visibility-fn visibility-fn} execute!))
+```
+
+This same config also applies to `sqlq/query-fn` and `sqlq/stream-rows-fn`.
+
 #### Filter spec shape
 
 ```clojure

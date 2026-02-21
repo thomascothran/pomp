@@ -124,8 +124,11 @@
    - :id            - Table element ID (string)
    - :columns       - Column definitions [{:key :name :label \"Name\" :type :string} ...]
    - :rows-fn       - Row query function (see `pomp.rad.datatable.query.*`).
-                     Query payload includes optional server-derived `:project-columns`
-                     for adapters that support projection.
+                      Query payload includes optional server-derived `:project-columns`
+                      for adapters that support projection.
+                      SQL adapters can enforce request-scoped visibility by configuring
+                      `:visibility-fn` in the SQL query config passed to
+                      `pomp.rad.datatable.query.sql/rows-fn`.
    - :data-url      - URL for data fetches (string)
    - :render-html-fn - Function to convert hiccup to HTML string
 
@@ -141,26 +144,37 @@
    - :filter-operations - Override filter operations per type or column
                            Map of type keyword to operations vector.
                            Example: {:string [{:value \"contains\" :label \"Includes\"}]
-                                    :boolean [{:value \"is\" :label \"equals\"}]}
+                                     :boolean [{:value \"is\" :label \"equals\"}]}
    - :count-fn      - Optional count query function for total row count.
+                      When using SQL helpers, configure the same `:visibility-fn`
+                      in `pomp.rad.datatable.query.sql/count-fn` config so totals
+                      stay scoped to the request.
    - :render-table-search - Optional global search render function for table toolbar.
-    - :save-fn       - Function to save cell edits. Called with {:row-id :col-key :value :req}.
+   - :save-fn       - Function to save cell edits. Called with {:row-id :col-key :value :req}.
                       See `pomp.rad.datatable.query.sql/save-fn` for SQL implementation.
-    - :initial-signals-fn - Optional (fn [req] signals-map) used only when request has no table signals.
+   - :initial-signals-fn - Optional (fn [req] signals-map) used only when request has no table signals.
                              Useful for seeding saved views or default hidden columns on first load.
-    - :export-enabled? - Enables default export control and export action handling (default true).
-    - :export-stream-rows-fn - Adapter-injected stream function with signature:
-                               (fn [ctx on-row! on-complete!]).
-    - :export-filename-fn - Optional (fn [{:keys [id columns query req]}] filename).
-    - :export-limits - Optional map passed to adapter stream context under :limits.
-    - :render-export - Optional export button render override.
+   - :export-enabled? - Enables default export control and export action handling (default true).
+   - :export-stream-rows-fn - Adapter-injected stream function with signature:
+                              (fn [ctx on-row! on-complete!]).
+                              SQL streaming should use
+                              `pomp.rad.datatable.query.sql/stream-rows-fn` with
+                              the same `:visibility-fn` config.
+   - :export-filename-fn - Optional (fn [{:keys [id columns query req]}] filename).
+   - :export-limits - Optional map passed to adapter stream context under :limits.
+   - :render-export - Optional export button render override.
 
     Query payload contract note:
    - `:project-columns` is optional and additive.
    - SQL adapters use it to optimize projection.
    - Adapters that do not support projection can ignore it without breaking behavior.
 
-   Returns a Ring handler function that handles datatable requests via SSE."
+    SQL visibility hook contract:
+    - `:visibility-fn` => `(fn [query-signals request] nil | {:where-clauses [[\"sql = ?\" param ...] ...]})`
+    - Configure it on the SQL query helper config (`rows-fn`, `count-fn`, and
+      `stream-rows-fn`), not directly on `make-handler*`.
+
+    Returns a Ring handler function that handles datatable requests via SSE."
   [{:keys [id columns rows-fn count-fn table-search-query data-url render-html-fn
            page-sizes selectable? skeleton-rows render-row render-header render-cell
            filter-operations render-table-search save-fn initial-signals-fn
@@ -225,10 +239,15 @@
     - :get always executes the query/render flow.
     - :post executes save flow when query-param action=save, otherwise query/render flow.
 
-   Identity requirement:
-   - If :selectable? is true OR any column is :editable true,
-     :columns must include an :id key.
-   - The :id column may be hidden from UI via signals/column visibility."
+    Identity requirement:
+    - If :selectable? is true OR any column is :editable true,
+      :columns must include an :id key.
+    - The :id column may be hidden from UI via signals/column visibility.
+
+    SQL visibility note:
+    - To scope rows/count/export per request, configure `:visibility-fn` on the
+      SQL query helper config used to build `:rows-fn`, `:count-fn`, and
+      `:export-stream-rows-fn`."
   [opts]
   (validate-identity-column! opts)
   {:get (make-handler* opts {:save-action? (constantly false)

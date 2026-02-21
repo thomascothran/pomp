@@ -39,3 +39,6 @@
 
 (def columns-icon
   icons/columns-icon)
+
+(def export-icon
+  icons/export-icon)

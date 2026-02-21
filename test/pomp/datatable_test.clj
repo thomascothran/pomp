@@ -686,8 +686,12 @@
                                      :render-html-fn str})
           sse-body (-> (handler {:query-params {}})
                        sse-response->string)]
-      (is (re-find #"Export CSV" sse-body)
-          "Default toolbar should render export control")
+      (is (re-find #":aria-label \"Export CSV\"" sse-body)
+          "Default toolbar should render export icon button with accessible label")
+      (is (re-find #":title \"Export CSV\"" sse-body)
+          "Default toolbar should expose tooltip text for export control")
+      (is (re-find #"M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" sse-body)
+          "Default toolbar should render the export download icon path")
       (is (re-find #"action=export" sse-body)
           "Export control should request export action"))))
 

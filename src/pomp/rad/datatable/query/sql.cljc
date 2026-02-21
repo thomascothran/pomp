@@ -2,7 +2,14 @@
   "SQL query generator for datatable.
 
    Generates ANSI-compliant SQL for filtering, sorting, and pagination.
-   Designed for use with next.jdbc."
+   Designed for use with next.jdbc.
+
+   Supports an optional `:visibility-fn` in adapter config for request-scoped
+   row visibility. Hook contract:
+
+   (fn [query-signals request]) =>
+     nil
+     OR {:where-clauses [[\"predicate SQL\" & jdbc-params] ...]}"
   (:require [clojure.string :as str]))
 
 (defn col-name
@@ -200,23 +207,46 @@
         (into [(str "(" (str/join " OR " sql-parts) ")")] params)))))
 
 (defn- combine-where-clauses
-  [filter-clause global-search-clause]
-  (let [drop-where-prefix (fn [s] (subs s (count "WHERE ")))]
-    (cond
-      (and filter-clause global-search-clause)
-      (into [(str "WHERE "
-                  (drop-where-prefix (first filter-clause))
-                  " AND "
-                  (first global-search-clause))]
-            (concat (rest filter-clause) (rest global-search-clause)))
+  [filter-clause global-search-clause visibility-where-clauses]
+  (let [drop-where-prefix (fn [s] (subs s (count "WHERE ")))
+        clauses (concat (when filter-clause
+                          [(into [(drop-where-prefix (first filter-clause))]
+                                 (rest filter-clause))])
+                        (when global-search-clause
+                          [global-search-clause])
+                        visibility-where-clauses)]
+    (when (seq clauses)
+      (into [(str "WHERE " (str/join " AND " (map first clauses)))]
+            (mapcat rest clauses)))))
 
-      filter-clause filter-clause
+(defn- malformed-visibility-clauses-ex
+  [context where-clauses]
+  (ex-info "visibility-fn must return {:where-clauses [[\"sql = ?\" param ...] ...]}"
+           {:context context
+            :where-clauses where-clauses}))
 
-      global-search-clause
-      (into [(str "WHERE " (first global-search-clause))]
-            (rest global-search-clause))
+(defn- resolve-visibility-where-clauses
+  [config query-signals request context]
+  (when-let [visibility-fn (:visibility-fn config)]
+    (let [result (visibility-fn query-signals request)]
+      (cond
+        (nil? result) nil
 
-      :else nil)))
+        (and (map? result) (contains? result :where-clauses))
+        (let [where-clauses (:where-clauses result)]
+          (when-not (vector? where-clauses)
+            (throw (malformed-visibility-clauses-ex context where-clauses)))
+          (when-not (every? (fn [clause]
+                              (and (vector? clause)
+                                   (string? (first clause))))
+                            where-clauses)
+            (throw (malformed-visibility-clauses-ex context where-clauses)))
+          where-clauses)
+
+        :else
+        (throw (ex-info "visibility-fn must return nil or {:where-clauses [...]}"
+                        {:context context
+                         :result result}))))))
 
 (defn generate-order-clause
   "Generates an ORDER BY clause from sort spec.
@@ -254,15 +284,18 @@
   "Generates a complete SELECT query with filtering, sorting, and pagination.
    Uses `:project-columns` for explicit projection when provided,
    otherwise falls back to `SELECT *`.
+   Also accepts internal `:visibility-where-clauses` to append request-scoped
+   predicates with AND semantics.
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [columns filters page project-columns search-string sort]}]
+  [config {:keys [columns filters page project-columns search-string sort visibility-where-clauses]}]
   (let [table-name (:table-name config)
         select-clause (when (seq project-columns)
                         (str/join ", " (map #(col-name config %) project-columns)))
         base-sql (str "SELECT " (or select-clause "*") " FROM " table-name)
-        where-clause (combine-where-clauses
-                      (generate-where-clause config filters)
-                      (generate-global-search-clause config columns search-string))
+         where-clause (combine-where-clauses
+                       (generate-where-clause config filters)
+                       (generate-global-search-clause config columns search-string)
+                       visibility-where-clauses)
         order-clause (generate-order-clause config sort)
         limit-clause (generate-limit-clause page)
         ;; Build SQL string
@@ -278,13 +311,16 @@
 
 (defn generate-count-sql
   "Generates a COUNT query for total rows (after filtering).
+   Also accepts internal `:visibility-where-clauses` to append request-scoped
+   predicates with AND semantics.
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [columns filters search-string]}]
+  [config {:keys [columns filters search-string visibility-where-clauses]}]
   (let [table-name (:table-name config)
         base-sql (str "SELECT COUNT(*) AS total FROM " table-name)
-        where-clause (combine-where-clauses
-                      (generate-where-clause config filters)
-                      (generate-global-search-clause config columns search-string))
+         where-clause (combine-where-clauses
+                       (generate-where-clause config filters)
+                       (generate-global-search-clause config columns search-string)
+                       visibility-where-clauses)
         sql (if where-clause
               (str base-sql " " (first where-clause))
               base-sql)
@@ -346,15 +382,25 @@
     (into [sql] params)))
 
 (defn rows-fn
+  "Creates a rows query function for SQL-backed datatable handlers.
+
+   Honors optional `:visibility-fn` from config. When provided,
+   `(visibility-fn query-signals request)` may return request-scoped predicates
+   via `{:where-clauses [[\"predicate SQL\" & params] ...]}`.
+
+   Visibility predicates are composed into both grouped and non-grouped query
+   paths."
   [config execute!]
-  (fn [{:keys [columns filters page group-by project-columns search-string] :as params} _request]
+  (fn [{:keys [columns filters page group-by project-columns search-string] :as params} request]
     (let [size (:size page 10)
-          requested-current (:current page)]
+          requested-current (:current page)
+          visibility-where-clauses (resolve-visibility-where-clauses config params request :rows)]
       (if (seq group-by)
         (let [group-sort (first-group-order-sort group-by (:sort params))
               count-sql (generate-count-sql config {:columns columns
-                                                    :filters filters
-                                                    :search-string search-string})
+                                                     :filters filters
+                                                     :search-string search-string
+                                                     :visibility-where-clauses visibility-where-clauses})
               total-rows (-> (execute! count-sql) first :total)
               total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
               clamped-current (cond
@@ -365,6 +411,7 @@
                                                     :filters filters
                                                     :project-columns project-columns
                                                     :search-string search-string
+                                                    :visibility-where-clauses visibility-where-clauses
                                                     :sort group-sort
                                                     :page {:size size :current clamped-current}})
               rows (execute! query-sql)]
@@ -372,8 +419,9 @@
            :page {:size size :current clamped-current}})
         (let [current (if (nil? requested-current)
                         (let [count-sql (generate-count-sql config {:columns columns
-                                                                    :filters filters
-                                                                    :search-string search-string})
+                                                                     :filters filters
+                                                                     :search-string search-string
+                                                                     :visibility-where-clauses visibility-where-clauses})
                               total-rows (-> (execute! count-sql) first :total)
                               total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))]
                           (max 0 (dec total-pgs)))
@@ -382,6 +430,7 @@
                                                     :filters filters
                                                     :project-columns project-columns
                                                     :search-string search-string
+                                                    :visibility-where-clauses visibility-where-clauses
                                                     :sort (:sort params)
                                                     :page {:size size :current current}})
               rows (execute! query-sql)]
@@ -389,45 +438,63 @@
            :page {:size size :current current}})))))
 
 (defn stream-rows-fn
+  "Creates a streaming rows function for export.
+
+   Honors optional `:visibility-fn` from config using `:request` in stream
+   context, and applies visibility predicates to the streamed SQL query."
   [config stream-adapter!]
-  (fn [{:keys [query columns]} on-row! on-complete!]
+  (fn [{:keys [query columns request]} on-row! on-complete!]
     (let [query-sql (generate-query-sql config (-> query
-                                                   (assoc :project-columns columns)
-                                                   (assoc :page nil)))
+                                                    (assoc :project-columns columns)
+                                                    (assoc :visibility-where-clauses
+                                                           (resolve-visibility-where-clauses config query request :stream-rows))
+                                                    (assoc :page nil)))
           stream-fn (or stream-adapter!
-                        (throw (ex-info "stream-rows-fn requires a streaming adapter"
+                         (throw (ex-info "stream-rows-fn requires a streaming adapter"
                                         {:hint "Pass a stream adapter implementation via stream-adapter!"})))]
       (stream-fn query-sql on-row! on-complete!))))
 
 (defn count-fn
+  "Creates a total-count query function for SQL-backed datatable handlers.
+
+   Honors optional `:visibility-fn` from config so count totals remain scoped
+   to the same request visibility as row queries."
   [config execute!]
-  (fn [{:keys [columns filters search-string]} _request]
+  (fn [{:keys [columns filters search-string] :as params} request]
     (let [count-sql (generate-count-sql config {:columns columns
-                                                :filters filters
-                                                :search-string search-string})
+                                                 :filters filters
+                                                 :search-string search-string
+                                                 :visibility-where-clauses (resolve-visibility-where-clauses config params request :count)})
           total-rows (-> (execute! count-sql) first :total)]
       {:total-rows total-rows})))
 
 (defn query-fn
   "Creates a query function for SQL-backed datatable.
 
-   config: {:table-name \"table\" :column-map {...} :case-sensitive? false :columns [...]}
+   config: {:table-name \"table\" :column-map {...} :case-sensitive? false :columns [...]
+            :visibility-fn (fn [query-signals request] ...)}
    execute!: (fn [sqlvec] rows) - executes SQL and returns rows
 
    Optional query input:
    - `:project-columns` - server-derived list of columns to select.
      When absent, SQL generation falls back to `SELECT *`.
 
+   Optional adapter behavior:
+   - `:visibility-fn` - request-scoped visibility hook returning nil or
+     `{:where-clauses [[\"predicate SQL\" & params] ...]}`.
+
    Returns a function with signature:
    (fn [{:keys [filters sort page]} request] {:rows [...] :total-rows n :page {...}})"
   [config execute!]
-  (fn [{:keys [columns filters page group-by project-columns search-string] :as params} _request]
+  (fn [{:keys [columns filters page group-by project-columns search-string] :as params} request]
+    (let [visibility-where-clauses (resolve-visibility-where-clauses config params request :query)]
     (if (seq group-by)
       (let [size (:size page 10)
             group-sort (first-group-order-sort group-by (:sort params))
             count-sql (generate-count-sql config {:columns columns
                                                   :filters filters
-                                                  :search-string search-string})
+                                                  :search-string search-string
+                                                  :visibility-where-clauses visibility-where-clauses})
             total-rows (-> (execute! count-sql) first :total)
             total-pages (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
             requested-current (:current page)
@@ -439,6 +506,7 @@
                                                   :filters filters
                                                   :project-columns project-columns
                                                   :search-string search-string
+                                                  :visibility-where-clauses visibility-where-clauses
                                                   :sort group-sort
                                                   :page {:size size :current clamped-current}})
             rows (execute! query-sql)]
@@ -449,7 +517,8 @@
             ;; Get total count first
             count-sql (generate-count-sql config {:columns columns
                                                   :filters filters
-                                                  :search-string search-string})
+                                                  :search-string search-string
+                                                  :visibility-where-clauses visibility-where-clauses})
             total-rows (-> (execute! count-sql) first :total)
             ;; Calculate page clamping (same logic as in-memory)
             size (:size page 10)
@@ -464,12 +533,13 @@
                                                   :filters filters
                                                   :project-columns project-columns
                                                   :search-string search-string
+                                                  :visibility-where-clauses visibility-where-clauses
                                                   :sort sort-spec
                                                   :page {:size size :current clamped-current}})
             rows (execute! query-sql)]
         {:rows rows
          :total-rows total-rows
-         :page {:size size :current clamped-current}}))))
+         :page {:size size :current clamped-current}})))))
 
 (defn save-fn
   "Creates a save function for cell edits.

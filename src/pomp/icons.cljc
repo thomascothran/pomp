@@ -143,6 +143,17 @@
            :stroke-linejoin "round"
            :d "M9 4.5v15m6-15v15m-10.875 0h15.75c.621 0 1.125-.504 1.125-1.125V5.625c0-.621-.504-1.125-1.125-1.125H4.125C3.504 4.5 3 5.004 3 5.625v12.75c0 .621.504 1.125 1.125 1.125Z"}]])
 
+(def export-icon
+  [:svg.w-4.h-4
+   {:xmlns "http://www.w3.org/2000/svg"
+    :fill "none"
+    :viewBox "0 0 24 24"
+    :stroke-width "1.5"
+    :stroke "currentColor"}
+   [:path {:stroke-linecap "round"
+           :stroke-linejoin "round"
+           :d "M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"}]])
+
 (def boolean-true-icon
   [:svg.w-4.h-4.text-success {:xmlns "http://www.w3.org/2000/svg"
                               :fill "none"

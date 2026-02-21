@@ -667,6 +667,96 @@
         (is (= ["greece" "%stoa%" "%stoa%"] count-params))
         (is (= ["greece" "%stoa%" "%stoa%" 2 0] query-params))))))
 
+(deftest query-fn-visibility-fn-composes-with-filters-and-search-test
+  (testing "visibility where-clause is ANDed with filters and global search"
+    (let [execute-calls (atom [])
+          execute! (fn [sqlvec]
+                     (swap! execute-calls conj sqlvec)
+                     (if (str/starts-with? (first sqlvec) "SELECT COUNT")
+                       [{:total 3}]
+                       mock-philosophers))
+          visibility-fn (fn [_query-signals request]
+                          {:where-clauses [["tenant_id = ?" (get-in request [:identity :tenant-id])]]})
+          qfn (sql/query-fn {:table-name "philosophers"
+                             :columns global-search-sql-columns
+                             :visibility-fn visibility-fn}
+                            execute!)
+          request {:identity {:tenant-id 7}}]
+      (qfn {:columns global-search-sql-columns
+            :search-string "stoa"
+            :filters {:region [{:type "string" :op "equals" :value "Greece"}]}
+            :sort [{:column "id" :direction "asc"}]
+            :page {:size 10 :current 0}}
+           request)
+      (let [[count-sql & count-params] (first @execute-calls)
+            [query-sql & query-params] (second @execute-calls)]
+        (is (re-find #"LOWER\(region\) = \?" count-sql))
+        (is (re-find #"LOWER\(name\) LIKE \? OR LOWER\(school\) LIKE \?" count-sql))
+        (is (re-find #"tenant_id = \?" count-sql))
+        (is (re-find #"LOWER\(region\) = \?" query-sql))
+        (is (re-find #"LOWER\(name\) LIKE \? OR LOWER\(school\) LIKE \?" query-sql))
+        (is (re-find #"tenant_id = \?" query-sql))
+        (is (= ["greece" "%stoa%" "%stoa%" 7] count-params))
+        (is (= ["greece" "%stoa%" "%stoa%" 7 10 0] query-params))))))
+
+(deftest query-fn-visibility-fn-invalid-shape-throws-test
+  (testing "invalid visibility-fn output shape throws ex-info"
+    (let [execute! (fn [_sqlvec] [{:total 0}])
+          qfn (sql/query-fn {:table-name "philosophers"
+                             :visibility-fn (fn [_query-signals _request]
+                                              {:where-clauses ["tenant_id = ?"]})}
+                            execute!)
+          ex (try
+               (qfn {:filters {}
+                     :sort []
+                     :page {:size 10 :current 0}}
+                    {:identity {:tenant-id 7}})
+               nil
+               (catch clojure.lang.ExceptionInfo e
+                 e))]
+      (is (some? ex))
+      (is (re-find #"visibility-fn" (ex-message ex))))))
+
+(deftest rows-fn-visibility-fn-applies-to-count-and-rows-test
+  (testing "rows-fn applies visibility where clause to count and data query"
+    (let [execute-calls (atom [])
+          execute! (fn [sqlvec]
+                     (swap! execute-calls conj sqlvec)
+                     (if (str/starts-with? (first sqlvec) "SELECT COUNT")
+                       [{:total 3}]
+                       mock-philosophers))
+          rows! (sql/rows-fn {:table-name "philosophers"
+                              :visibility-fn (fn [_query-signals request]
+                                               {:where-clauses [["tenant_id = ?" (:tenant-id request)]]})}
+                             execute!)]
+      (rows! {:filters {:name [{:type "string" :op "contains" :value "o"}]}
+              :sort [{:column "id" :direction "asc"}]
+              :page {:size 10 :current nil}}
+             {:tenant-id 9})
+      (let [[count-sql & count-params] (first @execute-calls)
+            [query-sql & query-params] (second @execute-calls)]
+        (is (re-find #"tenant_id = \?" count-sql))
+        (is (re-find #"tenant_id = \?" query-sql))
+        (is (= ["%o%" 9] count-params))
+        (is (= ["%o%" 9 10 0] query-params))))))
+
+(deftest count-fn-visibility-fn-applies-where-clause-test
+  (testing "count-fn applies visibility where clause"
+    (let [execute-calls (atom [])
+          execute! (fn [sqlvec]
+                     (swap! execute-calls conj sqlvec)
+                     [{:total 2}])
+          count! (sql/count-fn {:table-name "philosophers"
+                                :visibility-fn (fn [_query-signals request]
+                                                 {:where-clauses [["tenant_id = ?" (:tenant-id request)]]})}
+                               execute!)
+          result (count! {:filters {:region [{:type "string" :op "equals" :value "Greece"}]}}
+                         {:tenant-id 11})
+          [count-sql & count-params] (first @execute-calls)]
+      (is (= 2 (:total-rows result)))
+      (is (re-find #"tenant_id = \?" count-sql))
+      (is (= ["greece" 11] count-params)))))
+
 (deftest stream-rows-fn-uses-injected-adapter-and-no-pagination-test
   (testing "stream contract delegates to injected adapter and omits LIMIT/OFFSET"
     (let [stream-calls (atom [])
@@ -706,6 +796,27 @@
       (is (some? ex))
       (is (= "stream-rows-fn requires a streaming adapter" (ex-message ex)))
       (is (= "Pass a stream adapter implementation via stream-adapter!" (:hint (ex-data ex)))))))
+
+(deftest stream-rows-fn-visibility-fn-applies-where-clause-test
+  (testing "stream-rows-fn applies visibility where clause to export query"
+    (let [stream-calls (atom [])
+          stream-adapter! (fn [sqlvec _on-row! _on-complete!]
+                            (swap! stream-calls conj sqlvec))
+          stream! (sql/stream-rows-fn {:table-name "philosophers"
+                                       :visibility-fn (fn [_query-signals request]
+                                                        {:where-clauses [["tenant_id = ?" (get-in request [:identity :tenant-id])]]})}
+                                      stream-adapter!)]
+      (stream! {:query {:filters {:name [{:type "string" :op "contains" :value "o"}]}
+                        :sort [{:column "id" :direction "asc"}]
+                        :page {:size 1 :current 2}}
+                :columns [:id :name]
+                :request {:identity {:tenant-id 13}}}
+               (fn [_row])
+               (fn [_metadata]))
+      (let [[sql-text & params] (first @stream-calls)]
+        (is (re-find #"tenant_id = \?" sql-text))
+        (is (not (re-find #"LIMIT" sql-text)))
+        (is (= ["%o%" 13] params))))))
 
 ;; =============================================================================
 ;; Integration with H2

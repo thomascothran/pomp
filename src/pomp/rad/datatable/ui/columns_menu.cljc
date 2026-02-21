@@ -5,7 +5,7 @@
   [{:keys [cols columns-state table-id data-url]}]
   (let [popover-id "columns-menu"
         anchor-name "--columns-menu"]
-    [:div.ml-auto
+    [:div
      [:button.btn.btn-ghost.btn-sm.px-2
       {:popovertarget popover-id
        :style {:anchor-name anchor-name}}
