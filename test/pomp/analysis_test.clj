@@ -40,6 +40,26 @@
         (is (fn? handler)
             "Expected public entrypoint to delegate to handler factory")))))
 
+(deftest make-board-entrypoint-test
+  (let [public-maker (requiring-resolve 'pomp.analysis/make-board)]
+    (is (var? public-maker)
+        "Expected public make-board entrypoint")
+    (when (var? public-maker)
+      (let [board ((var-get public-maker)
+                   {:analysis/id "library-analysis"
+                    :analysis/filter-source-path [:datatable :library :filters]
+                    :chart-definitions {:genre {:chart/id "genre-frequency"}}
+                    :board-items [{:chart-key :genre}]
+                    :make-chart-fn (fn [_]
+                                     {:analysis-fn (constantly {:chart/buckets []})
+                                      :render-card-fn (constantly [:div "card"])
+                                      :render-script-fn (constantly nil)})
+                    :render-html-fn identity})]
+        (is (map? board)
+            "Expected public make-board entrypoint to return board descriptor map")
+        (is (fn? (:handler board))
+            "Expected board descriptor to include :handler from delegated factory")))))
+
 (deftest make-analysis-fn-frequency-query-shape-test
   (let [make-analysis-fn (requiring-resolve 'pomp.analysis/make-analysis-fn)
         sql-calls (atom [])

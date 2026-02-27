@@ -11,22 +11,12 @@
 
 (def datatable-id "philosophers-table")
 (def datatable-component-url "/demo/datatable-charts/data")
-(def school-frequency-url "/demo/datatable-charts/analysis/school-frequency")
-(def region-pie-url "/demo/datatable-charts/analysis/region-pie")
-(def influence-histogram-url "/demo/datatable-charts/analysis/influence-histogram")
+(def analysis-board-url "/demo/datatable-charts/analysis-board")
 (def influence-bucket-size 10)
+(def board-id "chart-grid")
 
-(def default-chart-layout
-  {:chart-grid-class "flex flex-wrap gap-6"
-   :school-frequency-wrapper-class "w-full max-w-3xl"
-   :region-pie-wrapper-class "w-full max-w-xl"
-   :influence-histogram-wrapper-class "w-full max-w-3xl"
-   :school-frequency-mount-class "min-h-48 w-full"
-   :region-pie-mount-class "min-h-48 w-full"
-   :influence-histogram-mount-class "min-h-48 w-full"
-   :school-frequency-spec-height nil
-   :region-pie-spec-height nil
-   :influence-histogram-spec-height nil})
+(def default-board-class "flex flex-wrap gap-6")
+(def default-mount-class "min-h-48 w-full")
 
 (defn- execute!
   [sqlvec]
@@ -46,31 +36,19 @@
    :analysis/filter-source-path [:datatable (keyword datatable-id) :filters]
    :render-html-fn ->html})
 
-(defn- make-chart-handler
-  [chart-config]
-  (let [{:keys [handler]}
-        (analysis/make-chart
-         (merge analysis-shared-context
-                chart-shared-config
-                chart-config))]
-    handler))
-
 (def chart-definitions
   {:school-frequency (analysis/frequency-chart
                       {:id "school-frequency"
-                       :target-id "school-frequency-chart-vega"
                        :title "School Frequency"
                        :bucket-column :school
                        :spec {:x-title "School"
                               :y-title "Count"}})
    :region-pie (analysis/pie-chart
                 {:id "region-pie"
-                 :target-id "region-pie-chart-vega"
                  :title "Region Share"
                  :bucket-column :region})
    :influence-histogram (analysis/histogram-chart
                          {:id "influence-histogram"
-                          :target-id "influence-histogram-chart-vega"
                           :title "Influence Histogram"
                           :bucket-column :influence
                           :bucket-size influence-bucket-size
@@ -80,26 +58,26 @@
                          {:chart/null-count-subtitle "Null values: {null-count}"
                           :chart/null-count-line? true})})
 
-(def chart-layout-keys
-  {:school-frequency {:mount-class-key :school-frequency-mount-class
-                      :spec-height-key :school-frequency-spec-height}
-   :region-pie {:mount-class-key :region-pie-mount-class
-                :spec-height-key :region-pie-spec-height}
-   :influence-histogram {:mount-class-key :influence-histogram-mount-class
-                         :spec-height-key :influence-histogram-spec-height}})
+(def default-board-items
+  [{:chart-key :school-frequency}
+   {:chart-key :region-pie
+    :wrapper-class "w-full max-w-xl"}
+   {:chart-key :influence-histogram}])
 
-(defn- make-handler-for-chart
-  [chart-key chart-layout]
-  (let [{:keys [mount-class-key spec-height-key]} (get chart-layout-keys chart-key)
-        base-config (get chart-definitions chart-key)
-        spec-height (get chart-layout spec-height-key)
-        chart-config (-> base-config
-                         (assoc :chart/target-class (get chart-layout mount-class-key))
-                         (update :chart/spec-config (fnil assoc {}) :height spec-height))]
-    (make-chart-handler chart-config)))
+(defn- default-wrapper-class
+  [chart-key]
+  (case chart-key
+    :region-pie "w-full max-w-xl"
+    "w-full max-w-3xl"))
+
+(defn- endpoint-url->route-path
+  [endpoint-url]
+  (if (.startsWith endpoint-url "/demo")
+    (subs endpoint-url (count "/demo"))
+    endpoint-url))
 
 (defn- page-handler
-  [chart-layout _req]
+  [{:keys [analysis-url board-id board-class]} _req]
   {:status 200
    :headers {"Content-Type" "text/html"}
    :body (->html
@@ -107,38 +85,11 @@
             {:nav-title "Pomp Demo"}
             [:div.p-8.space-y-6
              [:h1.text-2xl.font-bold "Philosophers: Datatable + Analysis"]
-             [:div#chart-grid
-              {:class (:chart-grid-class chart-layout)}
-              [:div#school-frequency-chart-wrapper
-               {:class (:school-frequency-wrapper-class chart-layout)
-                :data-init (str "@post('" school-frequency-url "')")
-                :data-on-signal-patch (str "@post('" school-frequency-url "')")}
-               [:div#school-frequency-chart.card.bg-base-100.border.border-base-300.shadow-sm
-                [:div.card-body
-                 [:h2.card-title "School Frequency"]
-                 [:div {:id "school-frequency-chart-vega"
-                        :class (:school-frequency-mount-class chart-layout)}
-                  [:p.text-sm.opacity-70 "Loading chart..."]]]]]
-              [:div#region-pie-chart-wrapper
-               {:class (:region-pie-wrapper-class chart-layout)
-                :data-init (str "@post('" region-pie-url "')")
-                :data-on-signal-patch (str "@post('" region-pie-url "')")}
-               [:div#region-pie-chart.card.bg-base-100.border.border-base-300.shadow-sm
-                [:div.card-body
-                 [:h2.card-title "Region Share"]
-                 [:div {:id "region-pie-chart-vega"
-                        :class (:region-pie-mount-class chart-layout)}
-                  [:p.text-sm.opacity-70 "Loading chart..."]]]]]
-              [:div#influence-histogram-chart-wrapper
-               {:class (:influence-histogram-wrapper-class chart-layout)
-                :data-init (str "@post('" influence-histogram-url "')")
-                :data-on-signal-patch (str "@post('" influence-histogram-url "')")}
-               [:div#influence-histogram-chart.card.bg-base-100.border.border-base-300.shadow-sm
-                [:div.card-body
-                 [:h2.card-title "Influence Histogram"]
-                 [:div {:id "influence-histogram-chart-vega"
-                        :class (:influence-histogram-mount-class chart-layout)}
-                  [:p.text-sm.opacity-70 "Loading chart..."]]]]]]
+             [:div {:id board-id
+                    :class board-class
+                    :data-init (str "@post('" analysis-url "')")
+                    :data-on-signal-patch (str "@post('" analysis-url "')")}
+              [:div.text-sm.opacity-70 "Loading analysis board..."]]
              [:div#datatable-container
               {:data-init (str "@get('" datatable-component-url "')")}
               [:div {:id datatable-id}]]]))})
@@ -167,16 +118,19 @@
   [opts]
   (datatable-demo/init-db!)
   (let [{:keys [get post]} (make-datatable-handlers)
-        chart-layout (merge default-chart-layout (:chart-layout opts))
-        school-frequency-handler (make-handler-for-chart :school-frequency chart-layout)
-        region-pie-handler (make-handler-for-chart :region-pie chart-layout)
-        influence-histogram-handler (make-handler-for-chart :influence-histogram chart-layout)]
-    [["/datatable-charts" (partial page-handler chart-layout)]
+        board-config (analysis/make-board
+                      (merge analysis-shared-context
+                             chart-shared-config
+                             {:chart-definitions chart-definitions
+                              :board-items (or (:board-items opts) default-board-items)
+                              :analysis-url analysis-board-url
+                              :board-id board-id
+                              :board-class (or (:board-class opts) default-board-class)
+                              :default-wrapper-class-fn default-wrapper-class
+                              :default-mount-class default-mount-class}))
+        analysis-route-path (endpoint-url->route-path analysis-board-url)]
+    [["/datatable-charts" (partial page-handler board-config)]
      ["/datatable-charts/data" {:get get
                                 :post post}]
-     ["/datatable-charts/analysis/school-frequency" {:get school-frequency-handler
-                                                     :post school-frequency-handler}]
-     ["/datatable-charts/analysis/region-pie" {:get region-pie-handler
-                                               :post region-pie-handler}]
-     ["/datatable-charts/analysis/influence-histogram" {:get influence-histogram-handler
-                                                        :post influence-histogram-handler}]]))
+     [analysis-route-path {:get (:handler board-config)
+                           :post (:handler board-config)}]]))
