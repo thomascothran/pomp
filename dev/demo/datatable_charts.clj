@@ -5,18 +5,16 @@
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as rs]
             [pomp.analysis :as analysis]
+            [pomp.rad.analysis.board :as analysis.board]
             [pomp.datatable :as datatable]
             [pomp.rad.datatable.query.sql :as sqlq]
             [pomp.rad.datatable.ui.table :as table]))
 
 (def datatable-id "philosophers-table")
 (def datatable-component-url "/demo/datatable-charts/data")
-(def analysis-board-url "/demo/datatable-charts/analysis-board")
+(def analysis-board-route-path "/datatable-charts/analysis-board")
 (def influence-bucket-size 10)
 (def board-id "chart-grid")
-
-(def default-board-class "flex flex-wrap gap-6")
-(def default-mount-class "min-h-48 w-full")
 
 (defn- execute!
   [sqlvec]
@@ -26,10 +24,7 @@
 
 (def analysis-shared-context
   {:table-name "philosophers"
-   :execute! execute!
-   :sql/frequency-fn sqlq/generate-frequency-sql
-   :sql/histogram-fn sqlq/generate-histogram-sql
-   :sql/null-count-fn sqlq/generate-null-count-sql})
+   :execute! execute!})
 
 (def chart-shared-config
   {:analysis/id "philosophers-overview"
@@ -64,20 +59,12 @@
     :wrapper-class "w-full max-w-xl"}
    {:chart-key :influence-histogram}])
 
-(defn- default-wrapper-class
-  [chart-key]
-  (case chart-key
-    :region-pie "w-full max-w-xl"
-    "w-full max-w-3xl"))
-
-(defn- endpoint-url->route-path
-  [endpoint-url]
-  (if (.startsWith endpoint-url "/demo")
-    (subs endpoint-url (count "/demo"))
-    endpoint-url))
-
 (defn- page-handler
-  [{:keys [analysis-url board-id board-class]} _req]
+  [{:keys [analysis-url
+           board-id
+           board-class
+           data-on-signal-patch-filter
+           render-board-shell-fn]} _req]
   {:status 200
    :headers {"Content-Type" "text/html"}
    :body (->html
@@ -85,11 +72,13 @@
             {:nav-title "Pomp Demo"}
             [:div.p-8.space-y-6
              [:h1.text-2xl.font-bold "Philosophers: Datatable + Analysis"]
-             [:div {:id board-id
-                    :class board-class
-                    :data-init (str "@post('" analysis-url "')")
-                    :data-on-signal-patch (str "@post('" analysis-url "')")}
-              [:div.text-sm.opacity-70 "Loading analysis board..."]]
+             (render-board-shell-fn
+              {:board-id board-id
+               :board-class board-class
+               :analysis-url analysis-url
+               :data-on-signal-patch-filter data-on-signal-patch-filter
+               :body [:div {:id (analysis.board/board-body-id board-id)}
+                      [:div.text-sm.opacity-70 "Loading analysis board..."]]})
              [:div#datatable-container
               {:data-init (str "@get('" datatable-component-url "')")}
               [:div {:id datatable-id}]]]))})
@@ -115,20 +104,17 @@
       :selectable? true})))
 
 (defn make-routes
-  [opts]
+  [_opts]
   (datatable-demo/init-db!)
   (let [{:keys [get post]} (make-datatable-handlers)
         board-config (analysis/make-board
                       (merge analysis-shared-context
                              chart-shared-config
                              {:chart-definitions chart-definitions
-                              :board-items (or (:board-items opts) default-board-items)
-                              :analysis-url analysis-board-url
-                              :board-id board-id
-                              :board-class (or (:board-class opts) default-board-class)
-                              :default-wrapper-class-fn default-wrapper-class
-                              :default-mount-class default-mount-class}))
-        analysis-route-path (endpoint-url->route-path analysis-board-url)]
+                              :board-items default-board-items
+                              :analysis-url (str "/demo" analysis-board-route-path)
+                              :board-id board-id}))
+        analysis-route-path analysis-board-route-path]
     [["/datatable-charts" (partial page-handler board-config)]
      ["/datatable-charts/data" {:get get
                                 :post post}]
