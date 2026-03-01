@@ -3,7 +3,7 @@
             [demo.util :refer [->html]]
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as rs]
-            [pomp.datatable :as datatable]
+            [pomp.rad.datatable :as datatable]
             [pomp.rad.datatable.ui.table :as table]
             [pomp.rad.datatable.query.sql :as sqlq]))
 

@@ -1,6 +1,6 @@
-(ns pomp.datatable.handler.signals-test
+(ns pomp.rad.datatable.handler.signals-test
   (:require [clojure.test :refer [deftest is testing]]
-            [pomp.datatable.handler.signals :as signals]))
+            [pomp.rad.datatable.handler.signals :as signals]))
 
 (deftest effective-signals-test
   (testing "first load seeds signals and request signals win on conflicts"

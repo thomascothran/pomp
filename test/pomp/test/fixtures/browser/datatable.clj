@@ -5,7 +5,7 @@
             [muuntaja.core :as m]
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as rs]
-            [pomp.datatable :as datatable]
+            [pomp.rad.datatable :as datatable]
             [pomp.rad.datatable.ui.table :as table]
             [pomp.rad.datatable.query.in-memory :as in-memory]
             [pomp.rad.datatable.query.sql :as sqlq]))

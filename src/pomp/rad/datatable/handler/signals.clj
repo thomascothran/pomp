@@ -1,4 +1,4 @@
-(ns pomp.datatable.handler.signals)
+(ns pomp.rad.datatable.handler.signals)
 
 (defn effective-signals
   [{:keys [raw-signals initial-signals-fn req]}]

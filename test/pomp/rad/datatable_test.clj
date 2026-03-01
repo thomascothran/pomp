@@ -1,12 +1,12 @@
-(ns pomp.datatable-test
+(ns pomp.rad.datatable-test
   (:require [clojure.data.json :as json]
              [clojure.test :refer [deftest is testing]]
-             [pomp.datatable :as datatable]
-             [pomp.datatable.export.csv :as export-csv]
-             [pomp.datatable.export.stream :as export-stream]
-             [pomp.datatable.handler.export :as export-handler]
-             [pomp.datatable.handler.query-render :as query-render-handler]
-             [pomp.datatable.handler.save :as save-handler]
+             [pomp.rad.datatable :as datatable]
+             [pomp.rad.datatable.export.csv :as export-csv]
+             [pomp.rad.datatable.export.stream :as export-stream]
+             [pomp.rad.datatable.handler.export :as export-handler]
+             [pomp.rad.datatable.handler.query-render :as query-render-handler]
+             [pomp.rad.datatable.handler.save :as save-handler]
              [pomp.rad.datatable.ui.table :as table]
              [starfederation.datastar.clojure.adapter.ring :as ring]
              [starfederation.datastar.clojure.api :as d*]))
@@ -159,11 +159,11 @@
 
 (deftest make-handler-action-dispatch-functions-exist-test
   (testing "datatable handler exposes dedicated action handlers for dispatch"
-    (is (some? (ns-resolve 'pomp.datatable.handler.save 'handle-save-action!))
+    (is (some? (ns-resolve 'pomp.rad.datatable.handler.save 'handle-save-action!))
         "Expected dedicated save action handler namespace")
-    (is (some? (ns-resolve 'pomp.datatable.handler.export 'handle-export-action!))
+    (is (some? (ns-resolve 'pomp.rad.datatable.handler.export 'handle-export-action!))
         "Expected dedicated export action handler namespace")
-    (is (some? (ns-resolve 'pomp.datatable 'handle-query-render-action!))
+    (is (some? (ns-resolve 'pomp.rad.datatable 'handle-query-render-action!))
         "Expected dedicated query/render action handler")))
 
 (deftest save-handler-delegation-test

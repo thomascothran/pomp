@@ -1,7 +1,7 @@
-(ns pomp.datatable.handler.query-render
+(ns pomp.rad.datatable.handler.query-render
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
-            [pomp.datatable.handler.signals :as handler-signals]
+            [pomp.rad.datatable.handler.signals :as handler-signals]
             [pomp.rad.datatable.state.column :as column-state]
             [pomp.rad.datatable.state.filter :as filter-state]
             [pomp.rad.datatable.state.group :as group-state]

@@ -1,4 +1,4 @@
-(ns pomp.datatable
+(ns pomp.rad.datatable
   "Main entry point for the datatable component.
 
    Use `make-handlers` to create method-specific Ring handlers for your datatable.
@@ -31,9 +31,9 @@
   "
   (:require [starfederation.datastar.clojure.api :as d*]
             [clojure.data.json :as json]
-            [pomp.datatable.handler.export :as export-handler]
-            [pomp.datatable.handler.query-render :as query-render-handler]
-            [pomp.datatable.handler.save :as save-handler]))
+            [pomp.rad.datatable.handler.export :as export-handler]
+            [pomp.rad.datatable.handler.query-render :as query-render-handler]
+            [pomp.rad.datatable.handler.save :as save-handler]))
 
 (defn get-signals
   "Extracts datatable signals from a Ring request for a specific table.

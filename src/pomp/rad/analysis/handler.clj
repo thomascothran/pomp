@@ -1,7 +1,7 @@
 (ns pomp.rad.analysis.handler
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
-            [pomp.datatable :as datatable]
+            [pomp.rad.datatable :as datatable]
             [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.ring :refer [->sse-response on-open]]))
 

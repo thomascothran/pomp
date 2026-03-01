@@ -6,7 +6,7 @@
             [next.jdbc.result-set :as rs]
             [pomp.rad.analysis :as analysis]
             [pomp.rad.analysis.board :as analysis.board]
-            [pomp.datatable :as datatable]
+            [pomp.rad.datatable :as datatable]
             [pomp.rad.datatable.query.sql :as sqlq]
             [pomp.rad.datatable.ui.table :as table]))
 

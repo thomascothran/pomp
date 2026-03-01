@@ -257,7 +257,7 @@ Complete example with inline editing and SQL persistence:
 
 ```clojure
 (ns myapp.routes
-  (:require [pomp.datatable :as dt]
+  (:require [pomp.rad.datatable :as dt]
             [pomp.rad.datatable.query.sql :as sqlq]
             [next.jdbc :as jdbc]))
 
