@@ -28,10 +28,10 @@
            :body "hi"})]
    ["/hello-world" (constantly {:body "hi"
                                 :status 200})]
-    ["/demo"
-     (dac/make-routes config)
-     (ddt/make-routes config)
-     (ddtc/make-routes config)]
+   ["/demo"
+    (dac/make-routes config)
+    (ddt/make-routes config)
+    (ddtc/make-routes config)]
    ["/scratch/autocomplete" scratch.autocomplete/handler]
    ["/scratch/autocomplete/options" scratch.autocomplete/options-handler]
    ["/scratch/cytoscape" scratch.cytoscape/handler]

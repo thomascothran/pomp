@@ -25,7 +25,7 @@
     (concat execute-script-events patch-script-events)))
 
 (deftest make-chart-handler-entrypoint-test
-  (let [public-maker (requiring-resolve 'pomp.analysis/make-chart-handler)]
+  (let [public-maker (requiring-resolve 'pomp.rad.analysis/make-chart-handler)]
     (is (var? public-maker)
         "Expected public make-chart-handler entrypoint")
     (when (var? public-maker)
@@ -41,7 +41,7 @@
             "Expected public entrypoint to delegate to handler factory")))))
 
 (deftest make-board-entrypoint-test
-  (let [public-maker (requiring-resolve 'pomp.analysis/make-board)]
+  (let [public-maker (requiring-resolve 'pomp.rad.analysis/make-board)]
     (is (var? public-maker)
         "Expected public make-board entrypoint")
     (when (var? public-maker)
@@ -61,7 +61,7 @@
             "Expected board descriptor to include :handler from delegated factory")))))
 
 (deftest make-analysis-fn-frequency-query-shape-test
-  (let [make-analysis-fn (requiring-resolve 'pomp.analysis/make-analysis-fn)
+  (let [make-analysis-fn (requiring-resolve 'pomp.rad.analysis/make-analysis-fn)
         sql-calls (atom [])
         execute-calls (atom [])]
     (is (var? make-analysis-fn)
@@ -95,7 +95,7 @@
           (is (contains? result :chart/buckets)))))))
 
 (deftest make-analysis-fn-table-name-precedence-test
-  (let [make-analysis-fn (requiring-resolve 'pomp.analysis/make-analysis-fn)
+  (let [make-analysis-fn (requiring-resolve 'pomp.rad.analysis/make-analysis-fn)
         sql-calls (atom [])
         shared-context {:table-name "shared_table"
                         :sql/frequency-fn (fn [table-ctx query-ctx]
@@ -124,7 +124,7 @@
             "Expected shared :table-name default and chart-level override precedence")))))
 
 (deftest make-analysis-fn-chart-value-sort-frequency-test
-  (let [make-analysis-fn (requiring-resolve 'pomp.analysis/make-analysis-fn)]
+  (let [make-analysis-fn (requiring-resolve 'pomp.rad.analysis/make-analysis-fn)]
     (is (var? make-analysis-fn)
         "Expected public make-analysis-fn entrypoint")
     (when (var? make-analysis-fn)
@@ -148,7 +148,7 @@
             "Expected declarative :chart/value-sort :frequency to sort by value desc, then label asc")))))
 
 (deftest make-analysis-fn-rows->values-fn-precedence-over-value-sort-test
-  (let [make-analysis-fn (requiring-resolve 'pomp.analysis/make-analysis-fn)]
+  (let [make-analysis-fn (requiring-resolve 'pomp.rad.analysis/make-analysis-fn)]
     (is (var? make-analysis-fn)
         "Expected public make-analysis-fn entrypoint")
     (when (var? make-analysis-fn)
@@ -170,7 +170,7 @@
             "Expected explicit :rows->values-fn output order to take precedence over declarative :chart/value-sort")))))
 
 (deftest make-analysis-fn-default-rows->values-preserves-row-order-test
-  (let [make-analysis-fn (requiring-resolve 'pomp.analysis/make-analysis-fn)]
+  (let [make-analysis-fn (requiring-resolve 'pomp.rad.analysis/make-analysis-fn)]
     (is (var? make-analysis-fn)
         "Expected public make-analysis-fn entrypoint")
     (when (var? make-analysis-fn)
@@ -191,7 +191,7 @@
             "Expected default rows-to-values mapping to preserve row order when no explicit sort is configured")))))
 
 (deftest make-analysis-fn-histogram-range-shape-and-bucket-asc-sort-test
-  (let [make-analysis-fn (requiring-resolve 'pomp.analysis/make-analysis-fn)]
+  (let [make-analysis-fn (requiring-resolve 'pomp.rad.analysis/make-analysis-fn)]
     (is (var? make-analysis-fn)
         "Expected public make-analysis-fn entrypoint")
     (when (var? make-analysis-fn)
@@ -216,7 +216,7 @@
             "Expected declarative histogram range labels sorted by ascending bucket when no :rows->values-fn is provided")))))
 
 (deftest make-analysis-fn-histogram-null-count-subtitle-config-test
-  (let [make-analysis-fn (requiring-resolve 'pomp.analysis/make-analysis-fn)]
+  (let [make-analysis-fn (requiring-resolve 'pomp.rad.analysis/make-analysis-fn)]
     (is (var? make-analysis-fn)
         "Expected public make-analysis-fn entrypoint")
     (when (var? make-analysis-fn)
@@ -244,7 +244,7 @@
             "Expected declarative null-count subtitle config to inject resolved null count into default histogram spec")))))
 
 (deftest make-chart-default-card-behavior-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)
         render-chart-calls (atom [])]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
@@ -278,7 +278,7 @@
             "Expected default card renderer to return renderable card value")))))
 
 (deftest make-chart-default-card-renders-declarative-null-count-line-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)]
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
     (when (var? make-chart)
@@ -311,7 +311,7 @@
             "Expected default card body to render declarative null-count line when configured")))))
 
 (deftest make-chart-shared-context-call-shape-test
-  (let [make-chart (var-get (requiring-resolve 'pomp.analysis/make-chart))
+  (let [make-chart (var-get (requiring-resolve 'pomp.rad.analysis/make-chart))
         sql-calls (atom [])
         shared-context {:analysis/id "philosophers-overview"
                         :analysis/filter-source-path [:datatable :philosophers-table :filters]
@@ -337,7 +337,7 @@
         "Expected chart-spec :table-name to override shared-context :table-name")))
 
 (deftest make-chart-custom-render-card-override-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)
         custom-render-calls (atom [])]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
@@ -366,7 +366,7 @@
             "Expected handler output to include custom card render marker")))))
 
 (deftest make-chart-default-renderer-and-script-defaults-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)]
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
     (when (var? make-chart)
@@ -404,7 +404,7 @@
               "Expected default script payload to include configured :chart/spec"))))))
 
 (deftest make-chart-default-renderer-uses-target-class-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)]
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
     (when (var? make-chart)
@@ -437,7 +437,7 @@
               "Expected patched chart mount to include declarative :chart/target-class"))))))
 
 (deftest make-chart-render-chart-fn-precedence-over-target-class-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)
         render-chart-calls (atom [])]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
@@ -478,7 +478,7 @@
               "Expected declarative :chart/target-class to be ignored when explicit renderer is supplied"))))))
 
 (deftest make-chart-frequency-default-script-builds-real-spec-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)]
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
     (when (var? make-chart)
@@ -510,7 +510,7 @@
               "Expected default frequency script payload to build a real spec, not null"))))))
 
 (deftest make-chart-frequency-default-builder-applies-spec-config-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)]
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
     (when (var? make-chart)
@@ -544,7 +544,7 @@
               "Expected execute-script payload to include declarative y-axis title"))))))
 
 (deftest make-chart-build-spec-fn-precedence-over-spec-config-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)]
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
     (when (var? make-chart)
@@ -581,7 +581,7 @@
               "Expected declarative spec-config height to be ignored when :build-spec-fn is present"))))))
 
 (deftest make-chart-build-spec-fn-precedence-over-null-count-subtitle-config-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)]
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
     (when (var? make-chart)
@@ -625,7 +625,7 @@
             "Expected declarative null-count subtitle config to be ignored when explicit :build-spec-fn is present")))))
 
 (deftest make-chart-override-precedence-for-build-and-render-fns-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)
         build-spec-calls (atom [])
         render-chart-calls (atom [])
         render-script-calls (atom [])]
@@ -674,7 +674,7 @@
               "Expected overridden script payload to be emitted"))))))
 
 (deftest make-chart-frequency-defaults-query-type-from-chart-type-test
-  (let [make-chart (requiring-resolve 'pomp.analysis/make-chart)]
+  (let [make-chart (requiring-resolve 'pomp.rad.analysis/make-chart)]
     (is (var? make-chart)
         "Expected public make-chart entrypoint")
     (when (var? make-chart)
@@ -709,9 +709,9 @@
                 "Expected execute-script payloads under chart-type-only config")))))))
 
 (deftest preset-chart-constructors-public-vars-test
-  (let [frequency-chart (requiring-resolve 'pomp.analysis/frequency-chart)
-        pie-chart (requiring-resolve 'pomp.analysis/pie-chart)
-        histogram-chart (requiring-resolve 'pomp.analysis/histogram-chart)]
+  (let [frequency-chart (requiring-resolve 'pomp.rad.analysis/frequency-chart)
+        pie-chart (requiring-resolve 'pomp.rad.analysis/pie-chart)
+        histogram-chart (requiring-resolve 'pomp.rad.analysis/histogram-chart)]
     (is (var? frequency-chart)
         "Expected public frequency-chart constructor")
     (is (var? pie-chart)
@@ -720,9 +720,9 @@
         "Expected public histogram-chart constructor")))
 
 (deftest preset-chart-constructors-map-input-and-allow-override-passthrough-test
-  (let [frequency-chart (requiring-resolve 'pomp.analysis/frequency-chart)
-        pie-chart (requiring-resolve 'pomp.analysis/pie-chart)
-        histogram-chart (requiring-resolve 'pomp.analysis/histogram-chart)
+  (let [frequency-chart (requiring-resolve 'pomp.rad.analysis/frequency-chart)
+        pie-chart (requiring-resolve 'pomp.rad.analysis/pie-chart)
+        histogram-chart (requiring-resolve 'pomp.rad.analysis/histogram-chart)
         concise-input {:id "preset-chart"
                        :title "Preset chart"
                        :target-id "preset-chart-target"

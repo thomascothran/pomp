@@ -1,4 +1,23 @@
 (ns pomp.rad.analysis.board
+  "Internal board builder for the public `pomp.rad.analysis/make-board` API.
+
+  Purpose:
+  - Build a reusable analysis board descriptor from chart definitions and board items.
+  - Provide one board-level SSE handler that recomputes all board items on filter changes.
+
+  Architecture:
+  - The shell element is stable and keeps Datastar trigger wiring (`data-init`,
+    `data-on-signal-patch`).
+  - Only the body (`<board-id>__body`) is patched on refresh, so updates do not replace
+    shell-level trigger attributes.
+  - Item identity is normalized from `:instance-id` (if present) or `:chart-key` and then
+    expanded into predictable ids (`__wrapper`, `__card`, `__mount-point`) plus identity
+    class suffixes.
+
+  Usage model:
+  - Consumers typically call `pomp.rad.analysis/make-board`.
+  - This namespace is the implementation for that API and is still safe to call directly
+    when low-level customization is needed."
   (:require [clojure.string :as str]
             [pomp.rad.analysis.chart :as analysis.chart]
             [pomp.rad.analysis.handler :as analysis.handler]
@@ -172,6 +191,69 @@
            :chart-instance (make-chart-fn chart-config))))
 
 (defn make-board
+  "Builds an analysis board descriptor map with a single SSE refresh endpoint.
+
+  The returned descriptor includes:
+  - `:handler`: one board-level SSE endpoint that recomputes and patches all board items.
+  - `:render-board-fn`: shell/body renderer where shell stays stable and body is patchable.
+  - `:board-items`: normalized item configs with derived ids and chart instances.
+
+  Identity derivation:
+  - Base identity uses `:instance-id` when provided, otherwise `(name :chart-key)`.
+  - Derived ids are deterministic:
+    - wrapper: `<base>__wrapper`
+    - card: `<base>__card`
+    - mount: `<base>__mount-point`
+
+  Override hooks:
+  - `:render-board-fn` controls full board rendering.
+  - `:render-board-item-fn` controls each item wrapper/card composition.
+  - `:render-board-shell-fn` controls shell trigger wrapper rendering.
+
+  Examples:
+
+  (def board
+    (make-board
+     {:analysis/id :library-analysis
+      :analysis/filter-source-path [:datatable :library :filters]
+      :chart-definitions
+      {:genre {:chart/id :genre-frequency
+               :chart/type :frequency
+               :query/type :frequency
+               :bucket-column :genre}}
+      :board-items [{:chart-key :genre}]
+      :table-name :books
+      :sql/frequency-fn sql/frequency
+      :execute! db/execute!
+      :render-html-fn hiccup->html}))
+
+  ;; explicit per-item instance identity
+  (make-board
+   {:analysis/id :library-analysis
+    :analysis/filter-source-path [:datatable :library :filters]
+    :chart-definitions {:genre {:chart/id :genre-frequency}}
+    :board-items [{:chart-key :genre
+                   :instance-id :genre-main}]
+    :make-chart-fn (fn [_] {:analysis-fn (constantly {:chart/buckets []})
+                            :render-card-fn (constantly [:div \"card\"])
+                            :render-script-fn (constantly nil)})
+    :render-html-fn pr-str})
+
+  ;; customize shell and item rendering hooks
+  (make-board
+   {:analysis/id :library-analysis
+    :analysis/filter-source-path [:datatable :library :filters]
+    :chart-definitions {:genre {:chart/id :genre-frequency}}
+    :board-items [{:chart-key :genre}]
+    :render-board-shell-fn (fn [{:keys [board-id body]}]
+                             [:section {:id board-id} body])
+    :render-board-item-fn (fn [{:keys [wrapper-id rendered-card]}]
+                            [:article {:id wrapper-id} rendered-card])
+    :render-board-fn default-render-board
+    :make-chart-fn (fn [_] {:analysis-fn (constantly {:chart/buckets []})
+                            :render-card-fn (constantly [:div \"card\"])
+                            :render-script-fn (constantly nil)})
+    :render-html-fn pr-str})"
   ([shared-context board-spec]
    (make-board (merge shared-context board-spec)))
   ([{:keys [chart-definitions
