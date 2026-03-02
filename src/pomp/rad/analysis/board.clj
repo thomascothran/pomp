@@ -101,50 +101,46 @@
                        :class (or board-body-class board-class)}
                   (mapv render-board-item-fn board-items)])))
 
+(defn emit-board!
+  [{:keys [sse req board-id board-class board-shell-class board-body-class
+           board-items render-board-fn render-board-item-fn analysis-url
+           data-on-signal-patch-filter render-html-fn]}]
+  (let [results (mapv (fn [{:keys [chart-instance]}]
+                        (let [context (analysis.handler/build-context req chart-instance)
+                              result (merge (select-keys context [:analysis/id
+                                                                  :chart/id
+                                                                  :chart/type
+                                                                  :chart/renderer])
+                                            ((:analysis-fn chart-instance) context))
+                              rendered-card ((:render-card-fn chart-instance) result)]
+                          {:rendered-card rendered-card
+                           :script ((:render-script-fn chart-instance) result)}))
+                      board-items)
+        board-body-html (render-html-fn
+                         (render-board-fn {:board-id board-id
+                                           :board-class board-class
+                                           :board-shell-class board-shell-class
+                                           :board-body-class board-body-class
+                                           :board-items (mapv merge board-items results)
+                                           :render-board-item-fn render-board-item-fn
+                                           :render-board-shell-fn (fn [{:keys [body]}] body)
+                                           :analysis-url analysis-url
+                                           :data-on-signal-patch-filter data-on-signal-patch-filter}))]
+    (d*/patch-elements! sse board-body-html)
+    (doseq [{:keys [script]} results]
+      (when (and (string? script)
+                 (not (str/blank? script)))
+        (d*/execute-script! sse script)))))
+
 (defn make-board-handler
-   [{:keys [board-id
-            board-class
-            board-shell-class
-            board-body-class
-            board-items
-             render-board-fn
-             render-board-item-fn
-            render-board-shell-fn
-            data-on-signal-patch-filter
-            analysis-url
-            render-html-fn]}]
+  [config]
   (fn [req]
     (->sse-response
      req
      {on-open
       (fn [sse]
-        (let [results (mapv (fn [{:keys [chart-instance]}]
-                              (let [context (analysis.handler/build-context req chart-instance)
-                                    result (merge (select-keys context [:analysis/id
-                                                                        :chart/id
-                                                                        :chart/type
-                                                                        :chart/renderer])
-                                                  ((:analysis-fn chart-instance) context))
-                                    rendered-card ((:render-card-fn chart-instance) result)]
-                                {:rendered-card rendered-card
-                                 :script ((:render-script-fn chart-instance) result)}))
-                            board-items)
-              board-body-html (render-html-fn
-                               (render-board-fn {:board-id board-id
-                                                  :board-class board-class
-                                                  :board-shell-class board-shell-class
-                                                  :board-body-class board-body-class
-                                                  :board-items (mapv merge board-items results)
-                                                  :render-board-item-fn render-board-item-fn
-                                                  :render-board-shell-fn (fn [{:keys [body]}] body)
-                                                 :analysis-url analysis-url
-                                                 :data-on-signal-patch-filter data-on-signal-patch-filter}))]
-          (d*/patch-elements! sse board-body-html)
-          (doseq [{:keys [script]} results]
-            (when (and (string? script)
-                       (not (str/blank? script)))
-              (d*/execute-script! sse script)))
-          (d*/close-sse! sse)))})))
+        (emit-board! (assoc config :req req :sse sse))
+        (d*/close-sse! sse))})))
 
 (defn- normalize-board-item
   [{:keys [chart-definitions
@@ -315,4 +311,6 @@
                                :data-on-signal-patch-filter data-on-signal-patch-filter*
                                :board-items board-items*})]
      (assoc board-config
+            :emit! (fn [sse req]
+                     (emit-board! (assoc board-config :sse sse :req req)))
             :handler (make-board-handler board-config)))))

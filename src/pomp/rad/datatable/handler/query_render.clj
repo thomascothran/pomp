@@ -52,7 +52,7 @@
     (when (seq projected-cols)
       projected-cols)))
 
-(defn handle-query-render-action!
+(defn- query-render-open-fn
   [{:keys [req id columns rows-fn count-fn table-search-query data-url render-html-fn
            page-sizes selectable? skeleton-rows render-row render-header render-cell
            filter-operations render-table-search render-export raw-signals
@@ -99,49 +99,59 @@
                                      :columnOrder column-order
                                      :dragging nil
                                      :dragOver nil}
-                              (or (= (get query-params "action") "global-search")
-                                  (and table-search-query
-                                       (contains? current-signals :globalTableSearch)))
-                              (assoc :globalTableSearch (:search-string signals)))]
+                               (or (= (get query-params "action") "global-search")
+                                   (and table-search-query
+                                        (contains? current-signals :globalTableSearch)))
+                               (assoc :globalTableSearch (:search-string signals)))]
+    (fn [sse]
+      (when initial-load?
+        (d*/patch-elements! sse (render-html-fn (table/render-skeleton {:id id
+                                                                        :cols visible-cols
+                                                                        :n skeleton-rows
+                                                                        :selectable? selectable?})))
+        (d*/execute-script! sse datatable-helpers-script)
+        (d*/execute-script! sse datatable-selection-script)
+        (when export-available?
+          (d*/execute-script! sse datatable-export-script)))
+      (d*/patch-signals! sse (json/write-str
+                              {:datatable {(keyword id) table-signals-patch}}))
+      (let [render-table
+            (fn [total-rows]
+              (render-html-fn
+               (table/render {:id id
+                              :cols visible-cols
+                              :rows rows
+                              :groups groups
+                              :sort-state (:sort signals)
+                              :filters (:filters signals)
+                              :group-by group-by
+                              :total-rows total-rows
+                              :page-size (get-in signals [:page :size])
+                              :page-current (get-in signals [:page :current])
+                              :page-sizes page-sizes
+                              :data-url data-url
+                              :selectable? selectable?
+                              :render-row render-row
+                              :render-header render-header
+                              :render-cell render-cell
+                              :filter-operations filter-operations
+                              :render-table-search render-table-search
+                              :global-table-search (:search-string signals)
+                              :toolbar toolbar-right-controls})))]
+        (d*/patch-elements! sse (render-table nil))
+        (when count-fn
+          (let [total-rows @count-task]
+            (d*/patch-elements! sse (render-table total-rows))))))))
+
+(defn emit-query-render!
+  [{:keys [sse] :as opts}]
+  ((query-render-open-fn opts) sse))
+
+(defn handle-query-render-action!
+  [{:keys [req] :as opts}]
+  (let [open-fn (query-render-open-fn opts)]
     (->sse-response req
                     {on-open
                      (fn [sse]
-                        (when initial-load?
-                          (d*/patch-elements! sse (render-html-fn (table/render-skeleton {:id id
-                                                                                          :cols visible-cols
-                                                                                          :n skeleton-rows
-                                                                                          :selectable? selectable?})))
-                          (d*/execute-script! sse datatable-helpers-script)
-                          (d*/execute-script! sse datatable-selection-script)
-                          (when export-available?
-                            (d*/execute-script! sse datatable-export-script)))
-                        (d*/patch-signals! sse (json/write-str
-                                                {:datatable {(keyword id) table-signals-patch}}))
-                        (let [render-table
-                             (fn [total-rows]
-                               (render-html-fn
-                                (table/render {:id id
-                                               :cols visible-cols
-                                               :rows rows
-                                               :groups groups
-                                               :sort-state (:sort signals)
-                                               :filters (:filters signals)
-                                               :group-by group-by
-                                               :total-rows total-rows
-                                               :page-size (get-in signals [:page :size])
-                                               :page-current (get-in signals [:page :current])
-                                               :page-sizes page-sizes
-                                               :data-url data-url
-                                               :selectable? selectable?
-                                               :render-row render-row
-                                               :render-header render-header
-                                               :render-cell render-cell
-                                               :filter-operations filter-operations
-                                               :render-table-search render-table-search
-                                               :global-table-search (:search-string signals)
-                                               :toolbar toolbar-right-controls})))]
-                          (d*/patch-elements! sse (render-table nil))
-                          (when count-fn
-                            (let [total-rows @count-task]
-                              (d*/patch-elements! sse (render-table total-rows)))))
-                        (d*/close-sse! sse))})))
+                       (open-fn sse)
+                       (d*/close-sse! sse))})))

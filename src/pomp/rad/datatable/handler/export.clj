@@ -7,8 +7,8 @@
             [starfederation.datastar.clojure.adapter.ring :refer [->sse-response gzip-profile on-open write-profile]]
             [starfederation.datastar.clojure.api :as d*]))
 
-(defn handle-export-action!
-  [{:keys [req id columns raw-signals query-params initial-signals-fn
+(defn emit-export-action!
+  [{:keys [sse req id columns raw-signals query-params initial-signals-fn
            export-limits export-filename-fn export-stream-rows-fn]}]
   (let [current-signals (handler-signals/current-signals {:raw-signals raw-signals
                                                           :initial-signals-fn initial-signals-fn
@@ -36,31 +36,36 @@
                         :columns export-columns
                         :request req
                         :limits export-limits}]
-    (->sse-response req
-                    {write-profile gzip-profile
-                      on-open
-                     (fn [sse]
-                       (try
-                         (export-stream/emit-export-script! sse
-                                                            "pompDatatableExportBegin"
-                                                            {:tableId id
-                                                             :filename export-filename
-                                                             :header header-row})
-                         (export-stream/run-export-stream! {:id id
-                                                            :sse sse
-                                                            :export-filename export-filename
-                                                            :export-columns export-columns
-                                                            :export-stream-rows-fn export-stream-rows-fn
-                                                            :stream-context stream-context
-                                                            :export-limits export-limits})
-                         (catch Throwable ex
-                           (try
-                             (export-stream/emit-export-script! sse
-                                                                "pompDatatableExportFail"
-                                                                {:tableId id
-                                                                 :message (or (ex-message ex) "Export failed")})
-                             (catch Throwable fail-ex
-                               (when-not (= :export-disconnected (:type (ex-data fail-ex)))
-                                 (throw fail-ex)))))
-                         (finally
-                           (d*/close-sse! sse))))})))
+    (try
+      (export-stream/emit-export-script! sse
+                                         "pompDatatableExportBegin"
+                                         {:tableId id
+                                          :filename export-filename
+                                          :header header-row})
+      (export-stream/run-export-stream! {:id id
+                                         :sse sse
+                                         :export-filename export-filename
+                                         :export-columns export-columns
+                                         :export-stream-rows-fn export-stream-rows-fn
+                                         :stream-context stream-context
+                                         :export-limits export-limits})
+      (catch Throwable ex
+        (try
+          (export-stream/emit-export-script! sse
+                                             "pompDatatableExportFail"
+                                             {:tableId id
+                                              :message (or (ex-message ex) "Export failed")})
+          (catch Throwable fail-ex
+            (when-not (= :export-disconnected (:type (ex-data fail-ex)))
+              (throw fail-ex))))))))
+
+(defn handle-export-action!
+  [{:keys [req] :as opts}]
+  (->sse-response req
+                  {write-profile gzip-profile
+                   on-open
+                   (fn [sse]
+                     (try
+                       (emit-export-action! (assoc opts :sse sse))
+                       (finally
+                         (d*/close-sse! sse))))}))

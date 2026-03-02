@@ -117,6 +117,10 @@
   [opts]
   (query-render-handler/handle-query-render-action! opts))
 
+(defn- emit-query-render-action!
+  [opts]
+  (query-render-handler/emit-query-render! opts))
+
 (defn- make-handler*
   "Creates a Ring handler for a datatable.
 
@@ -229,8 +233,69 @@
                                       :render-export render-export
                                       :raw-signals raw-signals
                                       :query-params query-params
-                                      :initial-signals-fn initial-signals-fn
-                                      :export-available? export-available?})))))
+                                       :initial-signals-fn initial-signals-fn
+                                       :export-available? export-available?})))))
+
+(defn- make-emitter*
+  [{:keys [id columns rows-fn count-fn table-search-query data-url render-html-fn
+           page-sizes selectable? skeleton-rows render-row render-header render-cell
+           filter-operations render-table-search save-fn initial-signals-fn
+           export-enabled? export-stream-rows-fn export-limits export-filename-fn render-export]
+    :or {page-sizes [10 25 100]
+         selectable? false
+         skeleton-rows 10
+         export-enabled? true}}
+   {:keys [save-action? export-action?]}]
+  (fn [sse req]
+    (let [query-params (:query-params req)
+          raw-signals (get-signals req id)
+          action (get query-params "action")
+          export-available? (and export-enabled? (some? export-stream-rows-fn))]
+      (cond
+        (and save-fn (save-action? req action))
+        (save-handler/emit-save-action! {:sse sse
+                                         :req req
+                                         :id id
+                                         :raw-signals raw-signals
+                                         :query-params query-params
+                                         :save-fn save-fn
+                                         :extract-cell-edit-fn extract-cell-edit})
+
+        (and export-available? (export-action? req action))
+        (export-handler/emit-export-action! {:sse sse
+                                             :req req
+                                             :id id
+                                             :columns columns
+                                             :raw-signals raw-signals
+                                             :query-params query-params
+                                             :initial-signals-fn initial-signals-fn
+                                             :export-limits export-limits
+                                             :export-filename-fn export-filename-fn
+                                             :export-stream-rows-fn export-stream-rows-fn})
+
+        :else
+        (emit-query-render-action! {:sse sse
+                                    :req req
+                                    :id id
+                                    :columns columns
+                                    :rows-fn rows-fn
+                                    :count-fn count-fn
+                                    :table-search-query table-search-query
+                                    :data-url data-url
+                                    :render-html-fn render-html-fn
+                                    :page-sizes page-sizes
+                                    :selectable? selectable?
+                                    :skeleton-rows skeleton-rows
+                                    :render-row render-row
+                                    :render-header render-header
+                                    :render-cell render-cell
+                                    :filter-operations filter-operations
+                                    :render-table-search render-table-search
+                                    :render-export render-export
+                                    :raw-signals raw-signals
+                                    :query-params query-params
+                                    :initial-signals-fn initial-signals-fn
+                                    :export-available? export-available?})))))
 
 (defn make-handlers
   "Creates method-specific datatable handlers.
@@ -253,4 +318,19 @@
   {:get (make-handler* opts {:save-action? (constantly false)
                              :export-action? (fn [_ action] (= action "export"))})
    :post (make-handler* opts {:save-action? (fn [_ action] (= action "save"))
+                              :export-action? (fn [_ action] (= action "export"))})})
+
+(defn make-emitters
+  "Creates method-specific datatable SSE emitters.
+
+  Returns {:get fn :post fn} where each fn has signature (fn [sse req]).
+  Dispatch semantics mirror `make-handlers`:
+  - :get emits query/render by default and export for action=export.
+  - :post emits save for action=save, export for action=export,
+    otherwise query/render."
+  [opts]
+  (validate-identity-column! opts)
+  {:get (make-emitter* opts {:save-action? (constantly false)
+                             :export-action? (fn [_ action] (= action "export"))})
+   :post (make-emitter* opts {:save-action? (fn [_ action] (= action "save"))
                               :export-action? (fn [_ action] (= action "export"))})})
