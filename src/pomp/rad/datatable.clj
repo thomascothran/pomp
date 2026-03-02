@@ -233,8 +233,8 @@
                                       :render-export render-export
                                       :raw-signals raw-signals
                                       :query-params query-params
-                                       :initial-signals-fn initial-signals-fn
-                                       :export-available? export-available?})))))
+                                      :initial-signals-fn initial-signals-fn
+                                      :export-available? export-available?})))))
 
 (defn- make-emitter*
   [{:keys [id columns rows-fn count-fn table-search-query data-url render-html-fn

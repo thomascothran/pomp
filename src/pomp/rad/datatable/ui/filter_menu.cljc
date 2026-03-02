@@ -138,7 +138,7 @@
        {:data-on:submit__prevent
         (str "document.getElementById('" popover-id "').hidePopover(); "
              signal-path " = [{type: '" filter-type-str "', op: evt.target.elements['filterOp'].value, value: evt.target.elements['filterVal'].value}]; "
-             "@post('" data-url "')")}
+              "@post('" data-url "?action=filter-change')")}
        [:div.text-sm.font-semibold (str "Filter " col-label)]
        [:input {:type "hidden" :name "filterOp" :value current-op}]
        [:details.dropdown.w-full
@@ -161,13 +161,13 @@
         [:button.btn.btn-sm.btn-ghost.flex-1
          {:type "button"
           :disabled (not has-filter?)
-          :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
-                              signal-path " = null; "
-                              "@post('" data-url "')")}
-         "Clear"]
-        [:button.btn.btn-sm.btn-primary.flex-1
-         {:type "button"
-          :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
-                              signal-path " = [{type: '" filter-type-str "', op: evt.target.closest('form').elements['filterOp'].value, value: evt.target.closest('form').elements['filterVal'].value}]; "
-                              "@post('" data-url "')")}
-         "Apply"]]]])))
+           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
+                               signal-path " = null; "
+                               "@post('" data-url "?action=filter-change')")}
+          "Clear"]
+         [:button.btn.btn-sm.btn-primary.flex-1
+          {:type "button"
+           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
+                               signal-path " = [{type: '" filter-type-str "', op: evt.target.closest('form').elements['filterOp'].value, value: evt.target.closest('form').elements['filterVal'].value}]; "
+                               "@post('" data-url "?action=filter-change')")}
+          "Apply"]]]])))

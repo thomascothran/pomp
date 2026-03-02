@@ -3,6 +3,7 @@
 (defn next-state
   [signals query-params]
   (let [action (get query-params "action")
+        clear-filters? (some? (get query-params "clearFilters"))
         page-action (get query-params "page")
         new-size-str (get query-params "pageSize")
         current-size (:size signals 10)
@@ -14,6 +15,8 @@
         page (cond
                new-size-str 0
                (= action "global-search") 0
+               (= action "filter-change") 0
+               clear-filters? 0
                (= page-action "first") 0
                (= page-action "prev") (max 0 (dec current-page))
                (= page-action "next") (inc current-page)

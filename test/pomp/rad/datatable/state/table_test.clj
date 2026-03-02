@@ -64,3 +64,24 @@
           "Ungroup should remove only the deepest grouped column")
       (is (= (:filters signals) (:filters next-signals))
           "Ungroup transition should not wipe active filters"))))
+
+(deftest next-state-filter-change-resets-page-test
+  (let [signals {:filters {:school [{:type "enum" :op "is" :value "Academy"}]}
+                 :sort [{:column "name" :direction "asc"}]
+                 :page {:size 10 :current 4}
+                 :group-by []
+                 :globalTableSearch ""}]
+    (testing "filter-change action resets pagination to page 0"
+      (let [next-signals (table-state/next-state signals {"action" "filter-change"})]
+        (is (= {:size 10 :current 0} (:page next-signals))
+            "Applying filters should reset pagination to page 0")))
+
+    (testing "clearFilters request resets pagination to page 0"
+      (let [next-signals (table-state/next-state signals {"clearFilters" "1"})]
+        (is (= {:size 10 :current 0} (:page next-signals))
+            "Clearing filters should reset pagination to page 0")))
+
+    (testing "requests without filter changes preserve current page"
+      (let [next-signals (table-state/next-state signals {})]
+        (is (= (:page signals) (:page next-signals))
+            "Unchanged filters should keep the current page")))))
