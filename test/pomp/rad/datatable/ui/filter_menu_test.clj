@@ -65,6 +65,10 @@
           "Should NOT send filterOp as URL param")
       (is (not (str/includes? onclick "filterVal="))
           "Should NOT send filterVal as URL param")
+      (is (str/includes? onclick "value: evt.target.closest('form').elements['filterVal'].value")
+          "Should send raw filter value from form element")
+      (is (not (str/includes? onclick "encodeURIComponent("))
+          "Should not encode filter value in Apply handler")
       ;; Should call @post to fetch data after updating signal
       (is (str/includes? onclick "@post")
           "Should call @post to fetch data"))))
@@ -388,6 +392,24 @@
     :else
     nil))
 
+(defn- find-filter-button-class
+  "Extracts the class attribute from the filter trigger button in rendered hiccup."
+  [hiccup]
+  (cond
+    (and (vector? hiccup)
+         (= :button.btn.btn-ghost.btn-xs.px-1 (first hiccup))
+         (map? (second hiccup)))
+    (:class (second hiccup))
+
+    (vector? hiccup)
+    (some find-filter-button-class hiccup)
+
+    (seq? hiccup)
+    (some find-filter-button-class hiccup)
+
+    :else
+    nil))
+
 (deftest render-includes-filter-type-in-signal-test
   (testing "includes type: 'string' in signal for :string column"
     (let [result (filter-menu/render {:col-key :name
@@ -437,3 +459,32 @@
           onclick (find-apply-button-onclick result)]
       (is (str/includes? onclick "type: 'string'")
           "Apply signal should default to type: 'string'"))))
+
+(deftest render-handles-vector-current-filter-value-test
+  (testing "non-empty vector value renders without throwing and marks filter as active"
+    (let [result (filter-menu/render {:col-key :status
+                                      :col-label "Status"
+                                      :col-type :enum
+                                      :current-filter-op "is-any-of"
+                                      :current-filter-value ["active" "pending"]
+                                      :table-id "test"
+                                      :data-url "/data"})
+          button-class (find-filter-button-class result)]
+      (is (some? result)
+          "Render should succeed when current-filter-value is a vector")
+      (is (= "text-primary" button-class)
+          "Non-empty vector should mark filter button as active")))
+
+  (testing "empty vector value renders without active filter styling"
+    (let [result (filter-menu/render {:col-key :status
+                                      :col-label "Status"
+                                      :col-type :enum
+                                      :current-filter-op "is-any-of"
+                                      :current-filter-value []
+                                      :table-id "test"
+                                      :data-url "/data"})
+          button-class (find-filter-button-class result)]
+      (is (some? result)
+          "Render should succeed when current-filter-value is an empty vector")
+      (is (not= "text-primary" button-class)
+          "Empty vector should not mark filter button as active"))))

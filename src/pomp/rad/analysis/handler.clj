@@ -2,6 +2,7 @@
   (:require [clojure.data.json :as json]
             [clojure.string :as str]
             [pomp.rad.datatable :as datatable]
+            [pomp.rad.datatable.state.filter :as datatable-filter]
             [starfederation.datastar.clojure.api :as d*]
             [starfederation.datastar.clojure.adapter.ring :refer [->sse-response on-open]]))
 
@@ -42,13 +43,14 @@
 
 (defn extract-filters
   [req {:analysis/keys [filter-source-path]}]
-  (or (when (seq filter-source-path)
-        (if-let [datatable-id (datatable-filter-path-id filter-source-path)]
-          (or (:filters (datatable/get-signals req datatable-id))
-              (get-in (request-signals req) [:datatable (keyword datatable-id) :filters])
-              (get-in (request-signals req) [:datatable datatable-id :filters]))
-          (get-in (request-signals req) filter-source-path)))
-      {}))
+  (datatable-filter/normalize-filters
+   (or (when (seq filter-source-path)
+         (if-let [datatable-id (datatable-filter-path-id filter-source-path)]
+           (or (:filters (datatable/get-signals req datatable-id))
+               (get-in (request-signals req) [:datatable (keyword datatable-id) :filters])
+               (get-in (request-signals req) [:datatable datatable-id :filters]))
+           (get-in (request-signals req) filter-source-path)))
+       {})))
 
 (defn build-context
   [req config]

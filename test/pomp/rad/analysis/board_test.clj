@@ -163,6 +163,32 @@
     (is (every? #(= filters (:filters %)) @sql-calls)
         "Expected each item recomputation to receive extracted filters")))
 
+(deftest make-board-handler-normalizes-scalar-is-any-of-in-query-context-test
+  (let [make-board (requiring-resolve 'pomp.rad.analysis.board/make-board)
+        sql-calls (atom [])
+        board (make-board
+               {:analysis/id "library-analysis"
+                :analysis/filter-source-path [:datatable :library :filters]
+                :table-name "books"
+                :sql/frequency-fn (fn [_ query-ctx]
+                                    (swap! sql-calls conj query-ctx)
+                                    [:deterministic-frequency-sql query-ctx])
+                :execute! (constantly [{:bucket "Fantasy" :count 1}])
+                :chart-definitions {:genre {:chart/id "genre-frequency"
+                                            :chart/type :frequency
+                                            :query/type :frequency
+                                            :bucket-column :genre}}
+                :board-items [{:chart-key :genre}]
+                :render-html-fn pr-str})
+        filters {:school [{:type "enum" :op "is-any-of" :value "Stoicism%2CPlatonism"}]}
+        response ((:handler board) (board-request filters))
+        _ (sse-response->string response)]
+    (is (= 1 (count @sql-calls))
+        "Expected one query context capture for the configured board item")
+    (is (= ["Stoicism" "Platonism"]
+           (get-in (first @sql-calls) [:filters :school 0 :value]))
+        "Expected board analysis query context to receive canonical vector tokens for is-any-of")))
+
 (deftest make-board-handler-honors-render-board-item-override-test
   (let [make-board (requiring-resolve 'pomp.rad.analysis.board/make-board)
         board ((var-get make-board)

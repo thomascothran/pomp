@@ -25,6 +25,44 @@
                               {"page" "2" "sort" "name"}))
         "ignores unrelated query params"))
 
+  (testing "normalizes URL-encoded scalar string for is-any-of"
+    (is (= {:school [{:type "string" :op "is-any-of" :value ["Socrates" "Plato"]}]}
+           (filter/next-state {:school [{:type "string" :op "is-any-of" :value "Socrates%2CPlato"}]} {}))
+        "decodes once and splits comma-separated string values"))
+
+  (testing "normalizes comma-separated scalar string with trimming for is-any-of"
+    (is (= {:school [{:type "string" :op "is-any-of" :value ["Stoicism" "Platonism"]}]}
+           (filter/next-state {:school [{:type "string" :op "is-any-of" :value " Stoicism, Platonism "}]} {}))
+        "splits comma-separated values and trims surrounding whitespace"))
+
+  (testing "drops empty tokens for is-any-of"
+    (is (= {:school [{:type "string" :op "is-any-of" :value ["Socrates" "Plato"]}]}
+           (filter/next-state {:school [{:type "string" :op "is-any-of" :value "Socrates,, ,Plato,"}]} {}))
+        "removes blank tokens after splitting"))
+
+  (testing "falls back to raw split when percent-decoding fails for is-any-of"
+    (is (= {:school [{:type "string" :op "is-any-of" :value ["Socrates%2" "Plato"]}]}
+           (filter/next-state {:school [{:type "string" :op "is-any-of" :value "Socrates%2,Plato"}]} {}))
+        "handles malformed encoded values without crashing"))
+
+  (testing "normalizes nil and blank string values to empty vector for is-any-of"
+    (is (= {:school [{:type "string" :op "is-any-of" :value []}]}
+           (filter/next-state {:school [{:type "string" :op "is-any-of" :value nil}]} {}))
+        "treats nil as no selected values")
+    (is (= {:school [{:type "string" :op "is-any-of" :value []}]}
+           (filter/next-state {:school [{:type "string" :op "is-any-of" :value "   "}]} {}))
+        "treats blank string as no selected values"))
+
+  (testing "keeps existing vector value unchanged for is-any-of"
+    (is (= {:school [{:type "string" :op "is-any-of" :value ["Socrates" "Plato"]}]}
+           (filter/next-state {:school [{:type "string" :op "is-any-of" :value ["Socrates" "Plato"]}]} {}))
+        "passes through existing collection values"))
+
+  (testing "leaves non-is-any-of operators unchanged"
+    (is (= {:name [{:type "string" :op "contains" :value " Stoicism, Platonism "}]}
+           (filter/next-state {:name [{:type "string" :op "contains" :value " Stoicism, Platonism "}]} {}))
+        "does not normalize values for other operators"))
+
   (testing "clearing all filters"
     (is (= {}
            (filter/next-state {:name [{:type "string" :op "contains" :value "john"}]

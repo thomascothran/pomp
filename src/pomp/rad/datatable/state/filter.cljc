@@ -1,5 +1,35 @@
 (ns pomp.rad.datatable.state.filter
-  (:require [clojure.set :as set]))
+  (:require [clojure.set :as set]
+            [clojure.string :as str]))
+
+(defn- decode-value [value]
+  (try
+    #?(:clj (java.net.URLDecoder/decode value "UTF-8")
+       :cljs (js/decodeURIComponent value))
+    (catch #?(:clj IllegalArgumentException :cljs :default) _
+      value)))
+
+(defn- normalize-is-any-of-value [value]
+  (cond
+    (nil? value) []
+    (coll? value) (vec value)
+    (string? value) (->> (str/split (decode-value value) #",")
+                         (map str/trim)
+                         (remove str/blank?)
+                         vec)
+    :else value))
+
+(defn- normalize-filter-spec [filter-spec]
+  (if (= "is-any-of" (:op filter-spec))
+    (update filter-spec :value normalize-is-any-of-value)
+    filter-spec))
+
+(defn normalize-filters
+  [signals]
+  (into {}
+        (map (fn [[column filters]]
+               [column (mapv normalize-filter-spec filters)]))
+        signals))
 
 (defn next-state
   "Computes the next filter state from current signals and query params.
@@ -16,7 +46,7 @@
   [signals query-params]
   (if (some? (get query-params "clearFilters"))
     {}
-    signals))
+    (normalize-filters signals)))
 
 (defn compute-patch
   [old-signals new-signals]

@@ -27,7 +27,15 @@
   (let [extract-filters (requiring-resolve 'pomp.rad.analysis.handler/extract-filters)
         expected-filters {:school [{:type "enum" :op "is" :value "Stoicism"}]
                           :verified [{:type "boolean" :op "is" :value "true"}]}
+        scalar-is-any-of-filters {:school [{:type "enum" :op "is-any-of" :value "Stoicism%2CPlatonism"}]}
+        expected-normalized-is-any-of {:school [{:type "enum" :op "is-any-of" :value ["Stoicism" "Platonism"]}]}
+        malformed-scalar-is-any-of-filters {:school [{:type "enum" :op "is-any-of" :value "Stoicism%2,Platonism"}]
+                                            :name [{:type "string" :op "contains" :value " Stoicism, Platonism "}]}
+        expected-malformed-fallback {:school [{:type "enum" :op "is-any-of" :value ["Stoicism%2" "Platonism"]}]
+                                     :name [{:type "string" :op "contains" :value " Stoicism, Platonism "}]}
         req {:body-params {:datatable {:philosophers-table {:filters expected-filters}}}}
+        req-with-scalar-is-any-of {:body-params {:datatable {:philosophers-table {:filters scalar-is-any-of-filters}}}}
+        req-with-malformed-scalar-is-any-of {:body-params {:datatable {:philosophers-table {:filters malformed-scalar-is-any-of-filters}}}}
         req-with-query-signals {:query-params {"datastar" "{\"datatable\":{\"philosophers-table\":{\"filters\":{\"school\":[{\"type\":\"enum\",\"op\":\"is\",\"value\":\"Stoicism\"}],\"verified\":[{\"type\":\"boolean\",\"op\":\"is\",\"value\":\"true\"}]}}}}"}}]
     (testing "resolves filters from :analysis/filter-source-path"
       (is (= expected-filters
@@ -41,6 +49,14 @@
     (testing "falls back to datastar query payload when :body-params is absent"
       (is (= expected-filters
              (extract-filters req-with-query-signals
+                              {:analysis/filter-source-path [:datatable :philosophers-table :filters]}))))
+    (testing "normalizes scalar is-any-of values to vector tokens"
+      (is (= expected-normalized-is-any-of
+             (extract-filters req-with-scalar-is-any-of
+                              {:analysis/filter-source-path [:datatable :philosophers-table :filters]}))))
+    (testing "malformed scalar is-any-of falls back to raw split and non-is-any-of stays unchanged"
+      (is (= expected-malformed-fallback
+             (extract-filters req-with-malformed-scalar-is-any-of
                               {:analysis/filter-source-path [:datatable :philosophers-table :filters]}))))))
 
 (deftest build-context-test

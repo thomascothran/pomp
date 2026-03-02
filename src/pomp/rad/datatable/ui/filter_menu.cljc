@@ -71,7 +71,7 @@
    2. table-filter-ops for col-type (table-level override) if provided
    3. default-filter-operations for col-type
    4. Falls back to :string operations for unknown types.
-   
+
    All results are normalized to [{:value :label} ...] format."
   [col-type col-filter-ops table-filter-ops]
   (let [;; Normalize :text to :string
@@ -92,6 +92,13 @@
               (get default-filter-operations :string))]
     (normalize-operations ops)))
 
+(defn- has-filter-value?
+  [v]
+  (cond
+    (string? v) (not (str/blank? v))
+    (coll? v) (boolean (seq v))
+    :else (some? v)))
+
 (defn render
   [{:keys [col-key col-label col-type col-filter-ops table-filter-ops
            current-filter-op current-filter-value table-id data-url]}]
@@ -108,7 +115,7 @@
                                first
                                :label)
                           (:label (first ops)))
-        has-filter? (or (not (str/blank? current-filter-value))
+        has-filter? (or (has-filter-value? current-filter-value)
                         (= current-op "is-empty")
                         (= current-op "is-not-empty"))
         ;; Signal path for this column's filters
@@ -131,7 +138,7 @@
        {:data-on:submit__prevent
         (str "document.getElementById('" popover-id "').hidePopover(); "
              signal-path " = [{type: '" filter-type-str "', op: evt.target.elements['filterOp'].value, value: evt.target.elements['filterVal'].value}]; "
-              "@post('" data-url "')")}
+             "@post('" data-url "')")}
        [:div.text-sm.font-semibold (str "Filter " col-label)]
        [:input {:type "hidden" :name "filterOp" :value current-op}]
        [:details.dropdown.w-full
@@ -156,12 +163,11 @@
           :disabled (not has-filter?)
           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
                               signal-path " = null; "
-                               "@post('" data-url "')")}
+                              "@post('" data-url "')")}
          "Clear"]
         [:button.btn.btn-sm.btn-primary.flex-1
          {:type "button"
           :data-on:click (str "document.getElementById('" popover-id "').hidePopover(); "
-                              signal-path " = [{type: '" filter-type-str "', op: evt.target.closest('form').elements['filterOp'].value, value: encodeURIComponent(evt.target.closest('form').elements['filterVal'].value)}]; "
-                               "@post('" data-url "')")}
+                              signal-path " = [{type: '" filter-type-str "', op: evt.target.closest('form').elements['filterOp'].value, value: evt.target.closest('form').elements['filterVal'].value}]; "
+                              "@post('" data-url "')")}
          "Apply"]]]])))
-
