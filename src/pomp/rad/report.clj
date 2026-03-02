@@ -54,9 +54,9 @@
   [{:keys [datatable-handlers analysis-handler]}]
   (fn [req]
     (let [datatable-handler (datatable-handler-for-request datatable-handlers req)]
-    (->sse-response req
-                    {on-open
-                     (fn [sse]
+      (->sse-response req
+                      {on-open
+                       (fn [sse]
                          (replay-sse-response! sse (datatable-handler req))
                          (replay-sse-response! sse (analysis-handler req))
                          (d*/close-sse! sse))}))))
@@ -65,11 +65,11 @@
   [{:keys [datatable-handlers]}]
   (fn [req]
     (let [datatable-handler (datatable-handler-for-request datatable-handlers req)]
-    (->sse-response req
-                    {on-open
-                     (fn [sse]
-                        (replay-sse-response! sse (datatable-handler req))
-                        (d*/close-sse! sse))}))))
+      (->sse-response req
+                      {on-open
+                       (fn [sse]
+                         (replay-sse-response! sse (datatable-handler req))
+                         (d*/close-sse! sse))}))))
 
 (defn make-report
   [{:keys [data-url datatable analysis] :as config}]
@@ -84,6 +84,6 @@
     {:datatable datatable-descriptor
      :analysis analysis-descriptor
      :handler (fn [req]
-                 (if (export-action? req)
-                   (export-handler req)
-                   (coordinated-handler req)))}))
+                (if (export-action? req)
+                  (export-handler req)
+                  (coordinated-handler req)))}))
