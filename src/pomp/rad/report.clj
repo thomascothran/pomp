@@ -1,4 +1,11 @@
 (ns pomp.rad.report
+  "Public API for composing datatable + analysis into one report endpoint.
+
+  `make-report` wires a datatable emitter set and an analysis board emitter behind
+  a single Ring handler so one Datastar request can refresh both table and charts.
+
+  Export requests (`?action=export`) are delegated to the datatable export path
+  and intentionally skip analysis refresh work."
   (:require [pomp.rad.analysis :as analysis]
             [pomp.rad.datatable :as datatable]
             [starfederation.datastar.clojure.adapter.ring :refer [->sse-response on-open]]
@@ -36,6 +43,27 @@
                           (d*/close-sse! sse))}))))
 
 (defn make-report
+  "Builds a composed report descriptor map.
+
+  Required keys in `config`:
+  - `:data-url` shared endpoint for report refresh/export requests
+  - `:datatable` config map used to build datatable emitters via
+    `pomp.rad.datatable/make-emitters`
+  - `:analysis` config map used to build analysis board descriptor via
+    `pomp.rad.analysis/make-board`
+
+  URL propagation:
+  - `:data-url` is injected into datatable config as `:data-url`
+  - `:data-url` is injected into analysis config as `:analysis-url`
+
+  Return value:
+  - `{:datatable datatable-config
+      :analysis analysis-descriptor
+      :handler ring-handler}`
+
+  Handler behavior:
+  - `?action=export`: emit datatable export events only, then close SSE
+  - otherwise: emit datatable update, then analysis board update, then close SSE"
   [{:keys [data-url datatable analysis] :as config}]
   (let [datatable-config (assoc datatable :data-url data-url)
         datatable-emitters (datatable/make-emitters datatable-config)
