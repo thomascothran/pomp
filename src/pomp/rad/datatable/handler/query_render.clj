@@ -74,7 +74,8 @@
                                  (seq (:search-string query-signals*)))
                           (table-search-query query-signals* request)
                           (rows-fn query-signals* request))))
-        count-signals (state/next-state current-signals query-params)
+        count-signals (assoc (state/next-state current-signals query-params)
+                             :columns columns)
         count-task (future
                      (when count-fn
                        (state/query-count count-signals req count-fn)))

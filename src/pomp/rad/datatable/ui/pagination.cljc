@@ -16,26 +16,26 @@
                           (zero? total-rows))
                      (and total-pgs
                           (>= (+ page-current 1) total-pgs)))]
-    [:div.flex.items-center.justify-between.mt-4.text-sm.opacity-70
-     [:div.flex.items-center.gap-4
-      #_(when (util/has-active-filters? filters)
-          [:button.btn.btn-sm.btn-ghost.text-error.opacity-100
-           {:data-on:click (str "@post('" data-url "?clearFilters=1')")}
-           "✕ Clear filters"])
-      [:div.flex.items-center.gap-1
-       [:select.select.select-ghost.select-sm.font-medium
-        {:data-on:change (str "@post('" data-url "?pageSize=' + evt.target.value)")}
-        (for [size page-sizes]
-          [:option {:value size :selected (= size page-size)} size])]
-       [:span.whitespace-nowrap "per page"]]]
-     [:div (if unknown-total?
-             (str start "–" end)
-             (str start "–" end " of " total-rows))]
-     [:div.flex.items-center.gap-1
-      [:button.btn.btn-ghost.btn-sm.btn-square
-       {:data-on:click (str "@post('" data-url "?page=first')")
-        :disabled on-first?}
-       "«"]
+    [:div.mt-4.flex.flex-col.gap-3.text-sm.opacity-70.sm:flex-row.sm:items-center.sm:justify-between
+     [:div.flex.items-center.gap-3.self-start
+       #_(when (util/has-active-filters? filters)
+           [:button.btn.btn-sm.btn-ghost.text-error.opacity-100
+            {:data-on:click (str "@post('" data-url "?clearFilters=1')")}
+            "✕ Clear filters"])
+       [:div.flex.flex-wrap.items-center.gap-2
+        [:select.select.select-ghost.select-sm.font-medium
+         {:data-on:change (str "@post('" data-url "?pageSize=' + evt.target.value)")}
+         (for [size page-sizes]
+           [:option {:value size :selected (= size page-size)} size])]
+        [:span.whitespace-nowrap "per page"]]]
+     [:div.self-start.whitespace-nowrap.sm:self-auto (if unknown-total?
+              (str start "–" end)
+              (str start "–" end " of " total-rows))]
+     [:div.flex.flex-wrap.items-center.gap-1.self-start.sm:self-auto
+       [:button.btn.btn-ghost.btn-sm.btn-square
+        {:data-on:click (str "@post('" data-url "?page=first')")
+         :disabled on-first?}
+        "«"]
       [:button.btn.btn-ghost.btn-sm.btn-square
        {:data-on:click (str "@post('" data-url "?page=prev')")
         :disabled on-first?}
