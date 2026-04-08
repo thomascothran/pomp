@@ -17,16 +17,18 @@
   - `:table-name` (unless `chart-spec` provides `:table-name`)
 
   Optional keys in `shared-context`:
+  - `:analysis/metrics` shared metric registry for analysis-only derived values
   - `:sql/frequency-fn`
   - `:sql/histogram-fn`
   - `:sql/null-count-fn`
 
   Required keys in `chart-spec` for default SQL flow:
   - one of `:query/type` or `:chart/type`
-  - `:bucket-column`
+  - `:bucket-column` for direct-column grouping/bucketing, or `:metric` for a named analysis metric
   - `:bucket-size` when histogram query needs bucketing
 
   Optional keys in `chart-spec`:
+  - `:metric` named lookup into `:analysis/metrics`
   - `:table-name` (overrides shared table)
   - `:rows->values-fn`
   - `:values->buckets-fn`
@@ -34,6 +36,9 @@
   - `:result-fn`
   - `:include-null-count?`
   - `:chart/spec` and `:chart/spec-config`
+
+  Built-in derived metric path:
+  - `{:metric/type :days-between :from :today :to-column ...}`
 
   The returned function has shape `(fn [context] {:chart/spec ... :chart/buckets ...})`."
   [shared-context chart-spec]
@@ -54,10 +59,11 @@
   - either `:analysis-fn` OR enough data to build one:
     - `:execute!`
     - one of `:query/type` or `:chart/type`
-    - `:bucket-column`
+    - `:bucket-column` or `:metric`
     - `:table-name`
 
   Optional keys:
+  - `:analysis/metrics` shared metric registry used by charts with `:metric`
   - `:render-card-fn`
   - `:render-chart-fn`
   - `:render-script-fn`
@@ -141,7 +147,7 @@
 
   Required keys in `concise-chart` for default query flow:
   - `:id` (or pass through `:chart/id`)
-  - `:bucket-column`
+  - `:bucket-column` or `:metric`
   - `:bucket-size` (required by default histogram SQL builder)
 
   Optional keys in `concise-chart`:
@@ -149,6 +155,7 @@
   - `:target-id` (or `:chart/target-id`)
   - `:spec` (or `:chart/spec-config`)
   - `:include-null-count?`
+  - `:metric` named lookup into shared `:analysis/metrics`
   - any additional `make-chart` / `make-analysis-fn` chart keys
 
   `concise-chart` and `overrides` follow the same semantics as
@@ -159,9 +166,9 @@
   `:chart/value-shape :histogram-range`, `:chart/value-sort :bucket-asc`.
 
   Example:
-  `(histogram-chart {:id :influence-histogram
-                     :title :influence-distribution
-                     :bucket-column :influence
+  `(histogram-chart {:id :due-date-histogram
+                     :title :due-date-distribution
+                     :metric :days-until-due
                      :bucket-size 10}
                     {:include-null-count? true})`"
   ([concise-chart]
@@ -208,6 +215,7 @@
     `:table-name`, `:execute!`, and chart query keys)
 
   Optional keys:
+  - `:analysis/metrics` shared metric registry used by charts with `:metric`
   - `:board-id`, `:board-class`, `:board-shell-class`, `:board-body-class`
   - `:default-wrapper-class-fn`, `:default-mount-class`
   - `:render-board-fn`, `:render-board-item-fn`, `:render-board-shell-fn`
@@ -215,11 +223,14 @@
   - per-item overrides (`:instance-id`, `:wrapper-class`, `:mount-class`, `:spec-config`)
 
   Example:
-  `(make-board {:analysis/id :philosophers
-                :analysis/filter-source-path [:datatable :philosophers :filters]
-                :chart-definitions {:school (frequency-chart {:id :school
-                                                              :bucket-column :school})}
-                :board-items [{:chart-key :school}]})`"
+   `(make-board {:analysis/id :philosophers
+                 :analysis/metrics {:days-until-death {:metric/type :days-between
+                                                       :from :today
+                                                       :to-column :death-date}}
+                 :analysis/filter-source-path [:datatable :philosophers :filters]
+                 :chart-definitions {:school (frequency-chart {:id :school
+                                                               :bucket-column :school})}
+                 :board-items [{:chart-key :school}]})`"
   ([shared-context board-config]
    (analysis.board/make-board shared-context board-config))
   ([config]

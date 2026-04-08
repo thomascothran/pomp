@@ -99,7 +99,7 @@
    (assoc board-context
           :body [:div {:id (board-body-id board-id)
                        :class (or board-body-class board-class)}
-                  (mapv render-board-item-fn board-items)])))
+                 (mapv render-board-item-fn board-items)])))
 
 (defn emit-board!
   [{:keys [sse req board-id board-class board-shell-class board-body-class
@@ -144,9 +144,9 @@
 
 (defn- normalize-board-item
   [{:keys [chart-definitions
-            make-chart-fn
-            default-wrapper-class-fn
-            default-mount-class]}
+           make-chart-fn
+           default-wrapper-class-fn
+           default-mount-class]}
    {:keys [chart-key] :as item}]
   (when-not chart-key
     (throw (ex-info "Board item requires :chart-key" {:item item})))
@@ -169,13 +169,14 @@
                       "chart-mount"
                       instance-id
                       chart-key)
-        chart-config (-> base-chart-config
-                         (assoc :chart/card-id card-id
-                                :chart/card-class default-card-class
-                                :chart/card-body-class default-card-body-class
-                                :chart/target-id mount-id
-                                :chart/target-class mount-class)
-                         (update :chart/spec-config merge (:spec-config item)))]
+        chart-config (cond-> (assoc base-chart-config
+                                    :chart/card-id card-id
+                                    :chart/card-class default-card-class
+                                    :chart/card-body-class default-card-body-class
+                                    :chart/target-id mount-id
+                                    :chart/target-class mount-class)
+                       (contains? item :spec-config)
+                       (update :chart/spec-config merge (:spec-config item)))]
     (assoc item
            :instance-id instance-id
            :wrapper-id wrapper-id
@@ -263,53 +264,54 @@
             render-board-fn
             render-board-item-fn
             render-board-shell-fn]
-      :as config}]
+     :as config}]
    (let [shared-chart-config (select-keys config [:analysis/id
-                                                   :analysis/filter-source-path
-                                                   :render-html-fn
-                                                   :table-name
-                                                   :execute!
-                                                   :sql/frequency-fn
-                                                   :sql/histogram-fn
-                                                   :sql/null-count-fn])
-         make-chart-fn (or (:make-chart-fn config)
-                           (fn [chart-config]
-                             (analysis.chart/make-chart
-                              (merge shared-chart-config chart-config))))
+                                                  :analysis/filter-source-path
+                                                  :analysis/metrics
+                                                  :render-html-fn
+                                                  :table-name
+                                                  :execute!
+                                                  :sql/frequency-fn
+                                                  :sql/histogram-fn
+                                                  :sql/null-count-fn])
+         make-chart-fn (let [make-chart-fn* (or (:make-chart-fn config)
+                                                analysis.chart/make-chart)]
+                         (fn [chart-config]
+                           (make-chart-fn* (merge shared-chart-config chart-config))))
          default-wrapper-class-fn* (or default-wrapper-class-fn
                                        (constantly default-wrapper-class-value))
          default-mount-class* (or default-mount-class
                                   default-mount-class-value)
-          render-board-item-fn* (or render-board-item-fn
-                                    default-render-board-item)
-           render-board-shell-fn* (or render-board-shell-fn
-                                      default-render-board-shell)
-           render-board-fn* (or render-board-fn
-                                default-render-board)
-           board-body-class* (or board-body-class
-                                 board-class
-                                 default-board-class)
-           board-shell-class* (or board-shell-class
-                                  default-board-shell-class)
-           data-on-signal-patch-filter* (or (:data-on-signal-patch-filter config)
-                                            (default-signal-patch-filter (:analysis/filter-source-path config)))
-           board-items* (mapv (partial normalize-board-item {:chart-definitions chart-definitions
-                                                            :make-chart-fn make-chart-fn
+         render-board-item-fn* (or render-board-item-fn
+                                   default-render-board-item)
+         render-board-shell-fn* (or render-board-shell-fn
+                                    default-render-board-shell)
+         render-board-fn* (or render-board-fn
+                              default-render-board)
+         board-body-class* (or board-body-class
+                               board-class
+                               default-board-class)
+         board-shell-class* (or board-shell-class
+                                default-board-shell-class)
+         data-on-signal-patch-filter* (or (:data-on-signal-patch-filter config)
+                                          (default-signal-patch-filter (:analysis/filter-source-path config)))
+         board-items* (mapv (partial normalize-board-item {:chart-definitions chart-definitions
+                                                           :make-chart-fn make-chart-fn
                                                            :default-wrapper-class-fn default-wrapper-class-fn*
                                                            :default-mount-class default-mount-class*})
                             board-items)
-          board-config (merge config
-                              {:board-id (or board-id default-board-id)
-                               :board-class board-body-class*
-                               :board-body-class board-body-class*
-                               :board-shell-class board-shell-class*
-                               :default-wrapper-class-fn default-wrapper-class-fn*
-                               :default-mount-class default-mount-class*
-                                :render-board-fn render-board-fn*
-                               :render-board-item-fn render-board-item-fn*
-                               :render-board-shell-fn render-board-shell-fn*
-                               :data-on-signal-patch-filter data-on-signal-patch-filter*
-                               :board-items board-items*})]
+         board-config (merge config
+                             {:board-id (or board-id default-board-id)
+                              :board-class board-body-class*
+                              :board-body-class board-body-class*
+                              :board-shell-class board-shell-class*
+                              :default-wrapper-class-fn default-wrapper-class-fn*
+                              :default-mount-class default-mount-class*
+                              :render-board-fn render-board-fn*
+                              :render-board-item-fn render-board-item-fn*
+                              :render-board-shell-fn render-board-shell-fn*
+                              :data-on-signal-patch-filter data-on-signal-patch-filter*
+                              :board-items board-items*})]
      (assoc board-config
             :emit! (fn [sse req]
                      (emit-board! (assoc board-config :sse sse :req req)))

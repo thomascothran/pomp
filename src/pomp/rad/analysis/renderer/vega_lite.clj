@@ -57,7 +57,8 @@
                "mark" {"type" "bar"}
                "encoding" {"x" {"field" "label"
                                 "type" "ordinal"
-                                "title" (or x-title "Bucket")}
+                                "title" (or x-title "Bucket")
+                                "sort" (mapv :label (or values []))}
                            "y" {"field" "value"
                                 "type" "quantitative"
                                 "title" (or y-title "Count")}

@@ -292,10 +292,10 @@
         select-clause (when (seq project-columns)
                         (str/join ", " (map #(col-name config %) project-columns)))
         base-sql (str "SELECT " (or select-clause "*") " FROM " table-name)
-         where-clause (combine-where-clauses
-                       (generate-where-clause config filters)
-                       (generate-global-search-clause config columns search-string)
-                       visibility-where-clauses)
+        where-clause (combine-where-clauses
+                      (generate-where-clause config filters)
+                      (generate-global-search-clause config columns search-string)
+                      visibility-where-clauses)
         order-clause (generate-order-clause config sort)
         limit-clause (generate-limit-clause page)
         ;; Build SQL string
@@ -317,10 +317,10 @@
   [config {:keys [columns filters search-string visibility-where-clauses]}]
   (let [table-name (:table-name config)
         base-sql (str "SELECT COUNT(*) AS total FROM " table-name)
-         where-clause (combine-where-clauses
-                       (generate-where-clause config filters)
-                       (generate-global-search-clause config columns search-string)
-                       visibility-where-clauses)
+        where-clause (combine-where-clauses
+                      (generate-where-clause config filters)
+                      (generate-global-search-clause config columns search-string)
+                      visibility-where-clauses)
         sql (if where-clause
               (str base-sql " " (first where-clause))
               base-sql)
@@ -350,17 +350,40 @@
           (rest where-clause))
     [(str "WHERE " predicate)]))
 
+(defn- metric-col-name
+  [config col-key]
+  (or (get-in config [:column-map col-key])
+      (some-> col-key name (str/replace "-" "_"))))
+
+(defn- resolve-histogram-source
+  [config {:keys [bucket-column metric]}]
+  (if bucket-column
+    (let [bucket-col (col-name config bucket-column)]
+      {:bucket-value-expr bucket-col
+       :null-column bucket-col})
+    (let [{:keys [metric/type from to-column]} (get-in config [:analysis/metrics metric])
+          to-col (metric-col-name config to-column)]
+      (case type
+        :days-between
+        (when (= from :today)
+          {:bucket-value-expr (str "(DATEDIFF('DAY', CURRENT_DATE, " to-col ") * 1.0)")
+           :null-column to-col})
+        nil))))
+
 (defn generate-histogram-sql
   "Generates a histogram query for numeric buckets.
    Excludes null bucket values and composes with datatable filters.
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [bucket-column bucket-size filters]}]
+  [config {:keys [bucket-size filters] :as query-context}]
   (let [table-name (:table-name config)
-        bucket-col (col-name config bucket-column)
-        bucket-expr (str "FLOOR(" bucket-col " / " bucket-size ") * " bucket-size)
+        {:keys [bucket-value-expr null-column]} (resolve-histogram-source config query-context)
+        raw-bucket-expr (str "FLOOR(" bucket-value-expr " / " bucket-size ") * " bucket-size)
+        bucket-expr (if (:metric query-context)
+                      (str "CAST(" raw-bucket-expr " AS INTEGER)")
+                      raw-bucket-expr)
         where-clause (append-where-predicate
                       (generate-where-clause config filters)
-                      (str bucket-col " IS NOT NULL"))
+                      (str null-column " IS NOT NULL"))
         base-sql (str "SELECT " bucket-expr " AS bucket, COUNT(*) AS count FROM " table-name)
         sql (str base-sql " " (first where-clause) " GROUP BY " bucket-expr)
         params (rest where-clause)]
@@ -370,12 +393,14 @@
   "Generates a query counting rows where bucket column is null.
    Composes with datatable filters.
    Returns [sql-string & params] suitable for next.jdbc."
-  [config {:keys [bucket-column filters]}]
+  [config {:keys [filters] :as query-context}]
   (let [table-name (:table-name config)
-        bucket-col (col-name config bucket-column)
+        {:keys [bucket-value-expr null-column]} (resolve-histogram-source config query-context)
         where-clause (append-where-predicate
                       (generate-where-clause config filters)
-                      (str bucket-col " IS NULL"))
+                      (if (:metric query-context)
+                        (str bucket-value-expr " IS NULL AND " null-column " IS NULL")
+                        (str null-column " IS NULL")))
         base-sql (str "SELECT COUNT(*) AS count FROM " table-name)
         sql (str base-sql " " (first where-clause))
         params (rest where-clause)]
@@ -398,9 +423,9 @@
       (if (seq group-by)
         (let [group-sort (first-group-order-sort group-by (:sort params))
               count-sql (generate-count-sql config {:columns columns
-                                                     :filters filters
-                                                     :search-string search-string
-                                                     :visibility-where-clauses visibility-where-clauses})
+                                                    :filters filters
+                                                    :search-string search-string
+                                                    :visibility-where-clauses visibility-where-clauses})
               total-rows (-> (execute! count-sql) first :total)
               total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
               clamped-current (cond
@@ -419,9 +444,9 @@
            :page {:size size :current clamped-current}})
         (let [current (if (nil? requested-current)
                         (let [count-sql (generate-count-sql config {:columns columns
-                                                                     :filters filters
-                                                                     :search-string search-string
-                                                                     :visibility-where-clauses visibility-where-clauses})
+                                                                    :filters filters
+                                                                    :search-string search-string
+                                                                    :visibility-where-clauses visibility-where-clauses})
                               total-rows (-> (execute! count-sql) first :total)
                               total-pgs (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))]
                           (max 0 (dec total-pgs)))
@@ -445,12 +470,12 @@
   [config stream-adapter!]
   (fn [{:keys [query columns request]} on-row! on-complete!]
     (let [query-sql (generate-query-sql config (-> query
-                                                    (assoc :project-columns columns)
-                                                    (assoc :visibility-where-clauses
-                                                           (resolve-visibility-where-clauses config query request :stream-rows))
-                                                    (assoc :page nil)))
+                                                   (assoc :project-columns columns)
+                                                   (assoc :visibility-where-clauses
+                                                          (resolve-visibility-where-clauses config query request :stream-rows))
+                                                   (assoc :page nil)))
           stream-fn (or stream-adapter!
-                         (throw (ex-info "stream-rows-fn requires a streaming adapter"
+                        (throw (ex-info "stream-rows-fn requires a streaming adapter"
                                         {:hint "Pass a stream adapter implementation via stream-adapter!"})))]
       (stream-fn query-sql on-row! on-complete!))))
 
@@ -462,9 +487,9 @@
   [config execute!]
   (fn [{:keys [columns filters search-string] :as params} request]
     (let [count-sql (generate-count-sql config {:columns columns
-                                                 :filters filters
-                                                 :search-string search-string
-                                                 :visibility-where-clauses (resolve-visibility-where-clauses config params request :count)})
+                                                :filters filters
+                                                :search-string search-string
+                                                :visibility-where-clauses (resolve-visibility-where-clauses config params request :count)})
           total-rows (-> (execute! count-sql) first :total)]
       {:total-rows total-rows})))
 
@@ -488,58 +513,58 @@
   [config execute!]
   (fn [{:keys [columns filters page group-by project-columns search-string] :as params} request]
     (let [visibility-where-clauses (resolve-visibility-where-clauses config params request :query)]
-    (if (seq group-by)
-      (let [size (:size page 10)
-            group-sort (first-group-order-sort group-by (:sort params))
-            count-sql (generate-count-sql config {:columns columns
-                                                  :filters filters
-                                                  :search-string search-string
-                                                  :visibility-where-clauses visibility-where-clauses})
-            total-rows (-> (execute! count-sql) first :total)
-            total-pages (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
-            requested-current (:current page)
-            clamped-current (cond
-                              (nil? requested-current) (max 0 (dec total-pages))
-                              (>= requested-current total-pages) (max 0 (dec total-pages))
-                              :else requested-current)
-            query-sql (generate-query-sql config {:columns columns
-                                                  :filters filters
-                                                  :project-columns project-columns
-                                                  :search-string search-string
-                                                  :visibility-where-clauses visibility-where-clauses
-                                                  :sort group-sort
-                                                  :page {:size size :current clamped-current}})
-            rows (execute! query-sql)]
-        {:rows rows
-         :total-rows total-rows
-         :page {:size size :current clamped-current}})
-      (let [sort-spec (:sort params)
-            ;; Get total count first
-            count-sql (generate-count-sql config {:columns columns
-                                                  :filters filters
-                                                  :search-string search-string
-                                                  :visibility-where-clauses visibility-where-clauses})
-            total-rows (-> (execute! count-sql) first :total)
-            ;; Calculate page clamping (same logic as in-memory)
-            size (:size page 10)
-            total-pages (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
-            current (:current page)
-            clamped-current (cond
-                              (nil? current) (max 0 (dec total-pages))
-                              (>= current total-pages) (max 0 (dec total-pages))
-                              :else current)
-             ;; Generate query with clamped page
-            query-sql (generate-query-sql config {:columns columns
-                                                  :filters filters
-                                                  :project-columns project-columns
-                                                  :search-string search-string
-                                                  :visibility-where-clauses visibility-where-clauses
-                                                  :sort sort-spec
-                                                  :page {:size size :current clamped-current}})
-            rows (execute! query-sql)]
-        {:rows rows
-         :total-rows total-rows
-         :page {:size size :current clamped-current}})))))
+      (if (seq group-by)
+        (let [size (:size page 10)
+              group-sort (first-group-order-sort group-by (:sort params))
+              count-sql (generate-count-sql config {:columns columns
+                                                    :filters filters
+                                                    :search-string search-string
+                                                    :visibility-where-clauses visibility-where-clauses})
+              total-rows (-> (execute! count-sql) first :total)
+              total-pages (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
+              requested-current (:current page)
+              clamped-current (cond
+                                (nil? requested-current) (max 0 (dec total-pages))
+                                (>= requested-current total-pages) (max 0 (dec total-pages))
+                                :else requested-current)
+              query-sql (generate-query-sql config {:columns columns
+                                                    :filters filters
+                                                    :project-columns project-columns
+                                                    :search-string search-string
+                                                    :visibility-where-clauses visibility-where-clauses
+                                                    :sort group-sort
+                                                    :page {:size size :current clamped-current}})
+              rows (execute! query-sql)]
+          {:rows rows
+           :total-rows total-rows
+           :page {:size size :current clamped-current}})
+        (let [sort-spec (:sort params)
+             ;; Get total count first
+              count-sql (generate-count-sql config {:columns columns
+                                                    :filters filters
+                                                    :search-string search-string
+                                                    :visibility-where-clauses visibility-where-clauses})
+              total-rows (-> (execute! count-sql) first :total)
+             ;; Calculate page clamping (same logic as in-memory)
+              size (:size page 10)
+              total-pages (if (zero? total-rows) 1 (int (Math/ceil (/ total-rows size))))
+              current (:current page)
+              clamped-current (cond
+                                (nil? current) (max 0 (dec total-pages))
+                                (>= current total-pages) (max 0 (dec total-pages))
+                                :else current)
+              ;; Generate query with clamped page
+              query-sql (generate-query-sql config {:columns columns
+                                                    :filters filters
+                                                    :project-columns project-columns
+                                                    :search-string search-string
+                                                    :visibility-where-clauses visibility-where-clauses
+                                                    :sort sort-spec
+                                                    :page {:size size :current clamped-current}})
+              rows (execute! query-sql)]
+          {:rows rows
+           :total-rows total-rows
+           :page {:size size :current clamped-current}})))))
 
 (defn save-fn
   "Creates a save function for cell edits.

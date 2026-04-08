@@ -155,13 +155,19 @@
                               (default-build-spec values chart-spec context))))
         result-fn (:result-fn chart-spec)
         table-name (or (:table-name chart-spec)
-                       (:table-name shared-context))]
+                       (:table-name shared-context))
+        analysis-metrics (:analysis/metrics shared-context)]
     (fn [{:analysis/keys [filters] :as context}]
-      (let [query-context (cond-> {:bucket-column (:bucket-column chart-spec)
-                                   :filters (or filters {})}
+      (let [query-context (cond-> {:filters (or filters {})}
+                            (some? (:bucket-column chart-spec))
+                            (assoc :bucket-column (:bucket-column chart-spec))
+                            (some? (:metric chart-spec))
+                            (assoc :metric (:metric chart-spec))
                             (contains? chart-spec :bucket-size)
                             (assoc :bucket-size (:bucket-size chart-spec)))
-            table-context {:table-name table-name}
+            table-context (cond-> {:table-name table-name}
+                            analysis-metrics
+                            (assoc :analysis/metrics analysis-metrics))
             query-type (default-query-type chart-spec)
             sqlvec (case query-type
                      :frequency (frequency-sql-fn table-context query-context)
@@ -219,6 +225,7 @@
                           (when (and execute! query-type*)
                             (make-analysis-fn (select-keys config [:table-name
                                                                    :execute!
+                                                                   :analysis/metrics
                                                                    :sql/frequency-fn
                                                                    :sql/histogram-fn
                                                                    :sql/null-count-fn])

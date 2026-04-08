@@ -39,19 +39,32 @@
                   :rows-fn rows!
                   :count-fn count!
                   :render-html-fn hiccup->html}
-                 :analysis
-                 {:analysis/id "books-analysis"
-                  :analysis/filter-source-path [:datatable :books-table :filters]
-                  :table-name "books"
-                  :execute! execute!
-                  :chart-definitions
-                  {:genre (analysis/frequency-chart
-                           {:id "genre-frequency"
-                            :title "Genre frequency"
-                            :bucket-column :genre})}
-                  :board-items [{:chart-key :genre}]
-                  :board-id "books-board"
-                  :render-html-fn hiccup->html}})]
+                  :analysis
+                  {:analysis/id "books-analysis"
+                   :analysis/filter-source-path [:datatable :books-table :filters]
+                   :table-name "books"
+                   :execute! execute!
+                   :analysis/metrics
+                   {:days-until-due {:metric/type :days-between
+                                     :from :today
+                                     :to-column :due-date
+                                     :label "Days until due"}}
+                   :chart-definitions
+                   {:genre (analysis/frequency-chart
+                            {:id "genre-frequency"
+                             :title "Genre frequency"
+                             :bucket-column :genre})
+                    :due-distribution (analysis/histogram-chart
+                                       {:id "due-distribution"
+                                        :title "Due Date Distribution"
+                                        :metric :days-until-due
+                                        :bucket-size 7
+                                        :spec {:x-title "Days from today"
+                                               :y-title "Count"}})}
+                   :board-items [{:chart-key :genre}
+                                 {:chart-key :due-distribution}]
+                   :board-id "books-board"
+                   :render-html-fn hiccup->html}})]
     [["/reports/books" page-handler]
      [data-url {:get (:handler rpt)
                 :post (:handler rpt)}]]))
@@ -89,7 +102,15 @@ Top-level `config` keys:
 Practical minimums for default behavior:
 
 - datatable: `:id`, `:columns`, `:rows-fn`, `:render-html-fn`.
-- analysis board: `:chart-definitions`, `:board-items`, `:render-html-fn` and (unless using custom `:make-chart-fn`) the normal analysis query keys (`:analysis/id`, `:analysis/filter-source-path`, `:table-name`, `:execute!`, plus chart query fields such as `:bucket-column`).
+- analysis board: `:chart-definitions`, `:board-items`, `:render-html-fn` and (unless using custom `:make-chart-fn`) the normal analysis query keys (`:analysis/id`, `:analysis/filter-source-path`, `:table-name`, `:execute!`, plus chart query fields such as `:bucket-column` or `:metric`).
+
+Analysis-specific notes:
+
+- shared analysis config can include `:analysis/metrics` for analysis-only derived values.
+- analysis-only metric source columns do not need matching datatable `:columns`; they only need to be available to the analysis query.
+- histogram charts may use either `:bucket-column` or chart-level `:metric`.
+- the built-in derived histogram example is `{:metric/type :days-between :from :today :to-column ...}`.
+- the demo reference is `dev/demo/datatable_charts.clj`, where `:days-until-due` drives the histogram.
 
 Common optional keys you will likely use:
 
