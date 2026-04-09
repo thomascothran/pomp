@@ -15,6 +15,11 @@
 (def influence-bucket-size 10)
 (def board-id "chart-grid")
 
+(defn- append-query-string
+  [url query-string]
+  (str url (when (seq query-string)
+             (str "?" query-string))))
+
 (defn- execute!
   [sqlvec]
   (jdbc/execute! (datatable-demo/get-datasource)
@@ -60,23 +65,25 @@
 
 (defn- page-handler
   [{:keys [analysis-url
-           board-id
-           board-class]} _req]
-  {:status 200
-   :headers {"Content-Type" "text/html"}
-   :body (->html
-          (app/with-app-layout
-            {:nav-title "Pomp Demo"}
-            [:div.p-8.space-y-6
-             [:h1.text-2xl.font-bold "Philosophers: Datatable + Analysis"]
-             [:div (merge {:id board-id
-                           :data-init (str "@post('" analysis-url "')")}
-                          (when board-class {:class board-class}))
-              [:div {:id (analysis.board/board-body-id board-id)}
-               [:div.text-sm.opacity-70 "Loading analysis board..."]]]
-             [:div#datatable-container
-              {:data-init (str "@get('" datatable-component-url "')")}
-              [:div {:id datatable-id}]]]))})
+            board-id
+            board-class]} req]
+  (let [data-url (append-query-string datatable-component-url (:query-string req))
+        analysis-url (append-query-string analysis-url (:query-string req))]
+    {:status 200
+     :headers {"Content-Type" "text/html"}
+     :body (->html
+            (app/with-app-layout
+              {:nav-title "Pomp Demo"}
+              [:div.p-8.space-y-6
+               [:h1.text-2xl.font-bold "Philosophers: Datatable + Analysis"]
+               [:div (merge {:id board-id
+                             :data-init (str "@post('" analysis-url "')")}
+                            (when board-class {:class board-class}))
+                [:div {:id (analysis.board/board-body-id board-id)}
+                 [:div.text-sm.opacity-70 "Loading analysis board..."]]]
+               [:div#datatable-container
+                {:data-init (str "@get('" data-url "')")}
+                [:div {:id datatable-id}]]]))}))
 
 (defn make-routes
   [_opts]

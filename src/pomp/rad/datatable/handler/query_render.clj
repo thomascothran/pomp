@@ -54,20 +54,28 @@
 
 (defn- query-render-open-fn
   [{:keys [req id columns rows-fn count-fn table-search-query data-url render-html-fn
-           page-sizes selectable? skeleton-rows render-row render-header render-cell
-           filter-operations render-table-search render-export raw-signals
-           query-params initial-signals-fn export-available?]}]
+            page-sizes selectable? skeleton-rows render-row render-header render-cell
+            filter-operations render-table-search render-export raw-signals
+            query-params initial-signals-fn export-available?]}]
   (let [initial-load? (empty? raw-signals)
+        malformed-filters-query-param? (and initial-load?
+                                           (handler-signals/malformed-filters-query-param? req))
         current-signals (handler-signals/current-signals {:raw-signals raw-signals
                                                           :initial-signals-fn initial-signals-fn
                                                           :req req})
+        normalize-query-signals (fn [signals]
+                                  (if (and malformed-filters-query-param?
+                                           (empty? (:filters signals)))
+                                    (dissoc signals :filters)
+                                    signals))
         columns-state (:columns current-signals)
         column-order (column-state/next-state (:columnOrder current-signals) columns query-params)
         ordered-cols (column-state/reorder columns column-order)
         visible-cols (column-state/filter-visible ordered-cols columns-state)
         run-rows-fn (fn [query-signals request]
-                      (let [project-columns (derive-project-columns columns ordered-cols columns-state query-signals)
-                            query-signals* (assoc query-signals
+                      (let [query-signals* (normalize-query-signals query-signals)
+                            project-columns (derive-project-columns columns ordered-cols columns-state query-signals*)
+                            query-signals* (assoc query-signals*
                                                   :columns columns
                                                   :project-columns project-columns)]
                         (if (and table-search-query
@@ -80,9 +88,12 @@
                      (when count-fn
                        (state/query-count count-signals req count-fn)))
         {:keys [signals rows]} (state/query-rows current-signals query-params req run-rows-fn)
+        signals (normalize-query-signals signals)
         group-by (:group-by signals)
         groups (when (seq group-by) (group-state/group-rows rows group-by))
-        filters-patch (filter-state/compute-patch (:filters current-signals) (:filters signals))
+        filters-patch (when (or (contains? current-signals :filters)
+                                (contains? signals :filters))
+                        (filter-state/compute-patch (:filters current-signals) (:filters signals)))
         export-render-fn (or render-export export-button/render)
         toolbar-right-controls [:div.flex.items-center.gap-2
                                 (when export-available?
@@ -94,15 +105,16 @@
                                                       :data-url data-url})]
         table-signals-patch (cond-> {:sort (:sort signals)
                                      :page (:page signals)
-                                     :filters filters-patch
                                      :groupBy (mapv name group-by)
                                      :openFilter ""
                                      :columnOrder column-order
                                      :dragging nil
                                      :dragOver nil}
+                               (some? filters-patch)
+                               (assoc :filters filters-patch)
                                (or (= (get query-params "action") "global-search")
-                                   (and table-search-query
-                                        (contains? current-signals :globalTableSearch)))
+                                    (and table-search-query
+                                         (contains? current-signals :globalTableSearch)))
                                (assoc :globalTableSearch (:search-string signals)))]
     (fn [sse]
       (when initial-load?

@@ -95,10 +95,27 @@ Example: hide a column by default and seed pagination for a saved view.
   :query-fn query-users
   :data-url "/api/users"
   :initial-signals-fn
-  (fn [_req]
+ (fn [_req]
     {:page {:size 25 :current 0}
      :columns {:internal-score {:visible false}}})})
 ```
+
+#### URL filter seeding via `filters` query param
+
+Datatable can also seed `:filters` from a `filters` query param on the first load.
+
+- The query param value must be JSON.
+- The decoded JSON must be a top-level object/map whose values are vectors of filter-spec maps, matching the datatable `:filters` shape.
+- It is only applied when the request does not already include table signals.
+- Malformed JSON, or JSON that does not decode to a top-level map, is ignored.
+
+Example URL shape (URL-encoded):
+
+```text
+/api/users?filters=%7B%22role%22%3A%5B%7B%22type%22%3A%22string%22%2C%22op%22%3A%22equals%22%2C%22value%22%3A%22Admin%22%7D%5D%7D
+```
+
+This is useful for linking to a pre-filtered table view. After the initial load, normal table signals control filter state.
 
 #### Identity column requirement
 
@@ -138,7 +155,7 @@ The `query-fn` is called by the datatable to fetch rows based on the current fil
 
 | Key        | Type                        | Description                              |
 |------------|-----------------------------|------------------------------------------|
-| `:filters` | `{keyword filter-spec}`     | Map of column-key to filter specification |
+| `:filters` | `{keyword [filter-spec ...]}` | Map of column-key to vectors of filter specifications |
 | `:sort`    | `[{:column str :direction str}]` | Vector of sort specs (currently uses first only) |
 | `:page`    | `{:size int :current int}`  | Pagination state |
 | `:group-by`| `[keyword ...]` (optional)  | Ordered columns to group by |

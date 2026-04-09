@@ -1000,8 +1000,87 @@
                 :body-params {:datatable {:test-table {:page {:size 25 :current 1}}}}})
       (is (zero? @initial-signals-calls)
           "Signal-bearing requests should ignore :initial-signals-fn")
-      (is (= {:size 25 :current 1} (:page @captured-query-signals))
-          "Request-provided page should win over seeded first-load defaults"))))
+       (is (= {:size 25 :current 1} (:page @captured-query-signals))
+           "Request-provided page should win over seeded first-load defaults"))))
+
+(deftest make-handlers-filters-query-param-first-load-seeding-test
+  (testing "first load seeds query-signals and patched signals from filters query param"
+    (let [captured-query-signals (atom nil)
+          expected-filters {:name [{:type "string" :op "contains" :value "Ada"}]}
+          filters-json (json/write-str expected-filters)
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [query-signals _]
+                                                (reset! captured-query-signals query-signals)
+                                                {:rows [] :total-rows 0 :page (:page query-signals)})
+                                     :data-url "/data"
+                                     :render-html-fn str})
+          table-signals (-> (handler {:query-params {"filters" filters-json}})
+                            sse-response->string
+                            first-signals-payload
+                            (get-in [:datatable :test-table]))]
+      (is (= expected-filters (:filters @captured-query-signals))
+          "First load should seed filters into rows-fn query-signals from the filters query param")
+      (is (= expected-filters (:filters table-signals))
+          "First load should patch seeded filters back to the client signals")))
+
+  (testing "first load ignores malformed filters query param JSON"
+    (let [captured-query-signals (atom nil)
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [query-signals _]
+                                                (reset! captured-query-signals query-signals)
+                                                {:rows [] :total-rows 0 :page (:page query-signals)})
+                                     :data-url "/data"
+                                     :render-html-fn str})
+          table-signals (-> (handler {:query-params {"filters" "{"}})
+                            sse-response->string
+                            first-signals-payload
+                            (get-in [:datatable :test-table]))]
+      (is (nil? (:filters @captured-query-signals))
+          "Malformed filters JSON should be ignored instead of seeding filters")
+      (is (nil? (:filters table-signals))
+          "Malformed filters JSON should not be patched back to the client signals")))
+
+  (testing "first load ignores valid filters JSON with a non-map top-level shape"
+    (let [captured-query-signals (atom nil)
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [query-signals _]
+                                                (reset! captured-query-signals query-signals)
+                                                {:rows [] :total-rows 0 :page (:page query-signals)})
+                                     :data-url "/data"
+                                     :render-html-fn str})
+          table-signals (-> (handler {:query-params {"filters" "[]"}})
+                            sse-response->string
+                            first-signals-payload
+                            (get-in [:datatable :test-table]))]
+      (is (nil? (:filters @captured-query-signals))
+          "Valid JSON arrays should be ignored instead of seeding filters")
+      (is (nil? (:filters table-signals))
+          "Valid JSON arrays should not be patched back to the client signals")))
+
+  (testing "signal-bearing requests do not let filters query param override request filters"
+    (let [captured-query-signals (atom nil)
+          query-param-filters {:name [{:type "string" :op "contains" :value "Ada"}]}
+          request-filters {:name [{:type "string" :op "contains" :value "Byron"}]}
+          handler (make-get-handler {:id "test-table"
+                                     :columns [{:key :name :label "Name" :type :string}]
+                                     :rows-fn (fn [query-signals _]
+                                                (reset! captured-query-signals query-signals)
+                                                {:rows [] :total-rows 0 :page (:page query-signals)})
+                                     :data-url "/data"
+                                     :render-html-fn str})
+          table-signals (-> (handler {:headers {"datastar-request" "true"}
+                                      :query-params {"filters" (json/write-str query-param-filters)}
+                                      :body-params {:datatable {:test-table {:filters request-filters}}}})
+                            sse-response->string
+                            first-signals-payload
+                            (get-in [:datatable :test-table]))]
+      (is (= request-filters (:filters @captured-query-signals))
+          "Signal-bearing requests should keep request filters instead of query-param seeds")
+      (is (= request-filters (:filters table-signals))
+          "Patched client filters should reflect the request signals, not the initial query param"))))
 
 (deftest extract-cell-edit-from-signals-test
   (testing "extracts a single edited cell directly from :cells"
